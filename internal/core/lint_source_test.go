@@ -103,7 +103,7 @@ func TestLintAttributesThreadIdentityAndLocationToAdapterSource(t *testing.T) {
 
 type lintSourceFake struct {
 	testSourceSetProvider
-	taskRecords      []TaskWithBody
+	taskRecords      []LoadedRecord[TaskWithBody]
 	taskProblems     []LoadProblem
 	epicProblems     []LoadProblem
 	auditProblems    []LoadProblem
@@ -116,11 +116,7 @@ type lintSourceFake struct {
 
 func (f *lintSourceFake) ReadLintTasks() ([]LoadedRecord[TaskWithBody], []LoadProblem, error) {
 	f.taskReads++
-	out := make([]LoadedRecord[TaskWithBody], 0, len(f.taskRecords))
-	for _, record := range f.taskRecords {
-		out = append(out, LoadedRecord[TaskWithBody]{Value: record, Source: RecordSource{ID: record.Task.ID, Location: record.Task.Path}})
-	}
-	return out, f.taskProblems, nil
+	return f.taskRecords, f.taskProblems, nil
 }
 
 func (f *lintSourceFake) ReadLintEpics() ([]LoadedRecord[domain.Epic], []LoadProblem, error) {
@@ -272,7 +268,6 @@ func TestLintAttributesPathlessGraphDiagnosticsToReadableRecords(t *testing.T) {
 		prerequisite := graphRecord("pathless-prerequisite", domain.StatusNextUp)
 		dependent := graphRecord("pathless-in-flight", domain.StatusInProgress, prerequisite.ID)
 		invalid := graphRecord("pathless-invalid", domain.StatusReadyToStart, "not-a-stable-id")
-		prerequisite.Path, dependent.Path, invalid.Path = "", "", ""
 
 		results := lintTaskRecords(t, prerequisite, dependent, invalid)
 		assertLintIssue(t, results, invalid.Slug, "depends_on", "not a stable task id")
@@ -283,7 +278,6 @@ func TestLintAttributesPathlessGraphDiagnosticsToReadableRecords(t *testing.T) {
 		left := graphRecord("pathless-cycle-left", domain.StatusReadyToStart)
 		right := graphRecord("pathless-cycle-right", domain.StatusReadyToStart, left.ID)
 		left.DependsOn = []string{right.ID}
-		left.Path, right.Path = "", ""
 
 		results := lintTaskRecords(t, left, right)
 		assertLintIssue(t, results, left.Slug, "depends_on", "dependency cycle")
@@ -295,7 +289,6 @@ func TestLintAttributesPathlessGraphDiagnosticsToReadableRecords(t *testing.T) {
 		owner := graphRecord("pathless-legacy-owner", domain.StatusReadyToStart)
 		owner.LegacyBlockedBy = []string{prerequisite.Slug}
 		owner.LegacyDependencyFields = []string{"blocked_by"}
-		prerequisite.Path, owner.Path = "", ""
 
 		results := lintTaskRecords(t, prerequisite, owner)
 		assertLintIssue(t, results, owner.Slug, "blocked_by", "legacy dependency field")
@@ -307,9 +300,14 @@ func TestLintRecordAttributionDoesNotCollideOnIDOrLocation(t *testing.T) {
 	second := graphRecord("portable-duplicate-second", domain.StatusReadyToStart, "bad-reference")
 	second.ID = first.ID
 	// An opaque or contradictory location is context, not the record join key.
-	first.Path, second.Path = "opaque://same", "opaque://same"
-
-	results := lintTaskRecords(t, first, second)
+	source := &locationLintSource{tasks: []LoadedRecord[TaskWithBody]{
+		{Value: TaskWithBody{Task: first}, Source: RecordSource{ID: first.ID, Location: "opaque://same"}},
+		{Value: TaskWithBody{Task: second}, Source: RecordSource{ID: second.ID, Location: "opaque://same"}},
+	}}
+	results, _, err := MustNewService(nil, WithLintSource(source)).Lint()
+	if err != nil {
+		t.Fatal(err)
+	}
 	assertLintIssue(t, results, first.Slug, "id", "duplicate stable task id")
 	assertLintIssue(t, results, second.Slug, "id", "duplicate stable task id")
 	assertLintIssue(t, results, second.Slug, "depends_on", "bad-reference")
@@ -358,9 +356,8 @@ func TestLintDistinguishesEqualReadableRecordsByOpaqueLocation(t *testing.T) {
 func TestLintUsesPathlessUnreadableIdentityInLifecycleDiagnosis(t *testing.T) {
 	unreadableID := "6g0000000005"
 	dependent := graphRecord("depends-on-pathless-unreadable", domain.StatusInProgress, unreadableID)
-	dependent.Path = ""
 	source := &lintSourceFake{
-		taskRecords: []TaskWithBody{{Task: dependent}},
+		taskRecords: []LoadedRecord[TaskWithBody]{{Value: TaskWithBody{Task: dependent}, Source: RecordSource{ID: dependent.ID}}},
 		taskProblems: []LoadProblem{{
 			EntityKind: EntityTask, EntityID: unreadableID,
 			EntitySlug: "unreadable", Message: "remote decode failed",
@@ -379,9 +376,9 @@ func TestLintUsesPathlessUnreadableIdentityInLifecycleDiagnosis(t *testing.T) {
 
 func lintTaskRecords(t *testing.T, tasks ...domain.Task) []LintResult {
 	t.Helper()
-	records := make([]TaskWithBody, len(tasks))
+	records := make([]LoadedRecord[TaskWithBody], len(tasks))
 	for index, task := range tasks {
-		records[index] = TaskWithBody{Task: task}
+		records[index] = LoadedRecord[TaskWithBody]{Value: TaskWithBody{Task: task}, Source: RecordSource{ID: task.ID}}
 	}
 	results, _, err := MustNewService(nil, WithLintSource(&lintSourceFake{taskRecords: records})).Lint()
 	if err != nil {

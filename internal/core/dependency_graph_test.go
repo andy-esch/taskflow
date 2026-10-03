@@ -17,7 +17,7 @@ import (
 func graphRecord(seed string, status domain.Status, dependencies ...string) domain.Task {
 	taskID := testutil.TaskID(seed)
 	return domain.Task{
-		ID: taskID, Slug: seed, Path: "tasks/" + taskID + "-" + seed + ".md",
+		ID: taskID, Slug: seed,
 		Status: status, Description: seed, Tags: []string{"graph"},
 		DependsOn: append([]string(nil), dependencies...),
 	}
@@ -25,7 +25,7 @@ func graphRecord(seed string, status domain.Status, dependencies ...string) doma
 
 // localTaskGraph is for tests that explicitly exercise local source edits. Bare
 // NewTaskGraph and TaskGraphRead.Tasks are read-only compatibility projections:
-// a semantic Task.Path must never be promoted into repair authority.
+// source location and repair authority come only from the test adapter below.
 func localTaskGraph(tasks []domain.Task, problems []domain.FileProblem) *TaskGraph {
 	return localTaskGraphWithSourceIDs(tasks, problems, nil)
 }
@@ -40,6 +40,7 @@ func localTaskGraphWithSourceIDs(tasks []domain.Task, problems []domain.FileProb
 	for _, task := range tasks {
 		record := localGuardedRecord(task)
 		if sourceID, ok := sourceIDs[task.Slug]; ok {
+			record = localGuardedRecordAt(task, "tasks/"+sourceID+"-"+task.Slug+".md")
 			record.Record.Source.ID = sourceID
 		}
 		read.GuardedRecords = append(read.GuardedRecords, record)
@@ -51,17 +52,27 @@ func localTaskGraphWithSourceIDs(tasks []domain.Task, problems []domain.FileProb
 }
 
 func localGuardedRecord(task domain.Task) VersionedRecord[domain.Task] {
+	return localGuardedRecordAt(task, graphFixturePath(task))
+}
+
+// graphFixturePath supplies test-adapter metadata for matching-ID fixtures.
+// Drift and custom locations are supplied separately rather than modifying a Task.
+func graphFixturePath(task domain.Task) string {
+	return "tasks/" + task.ID + "-" + task.Slug + ".md"
+}
+
+func localGuardedRecordAt(task domain.Task, path string) VersionedRecord[domain.Task] {
 	return VersionedRecord[domain.Task]{
 		Record: LoadedRecord[domain.Task]{Value: task, Source: RecordSource{
-			ID: task.ID, Location: task.Path, LocationIsPath: task.Path != "",
+			ID: task.ID, Location: path, LocationIsPath: path != "",
 		}},
-		LocalPath: task.Path,
+		LocalPath: path,
 	}
 }
 
 func localSourceRefForTask(task domain.Task) TaskGraphSourceRef {
 	return TaskGraphSourceRef{TaskID: task.ID, TaskSlug: task.Slug,
-		Location: task.Path, LocalPath: task.Path}
+		Location: graphFixturePath(task), LocalPath: graphFixturePath(task)}
 }
 
 func TestTaskGraphHealthAndDeterministicStructuralProblems(t *testing.T) {
@@ -484,7 +495,7 @@ func TestTaskGraphSupportedDeepChainEnvelope(t *testing.T) {
 		}
 		task := domain.Task{
 			ID: taskID, Slug: fmt.Sprintf("deep-%04d", i),
-			Path: "tasks/" + taskID + "-deep.md", Status: status,
+			Status: status,
 		}
 		if i < edges {
 			task.DependsOn = []string{fmt.Sprintf("%012d", i+1)}
@@ -729,11 +740,11 @@ func TestTaskGraphDuplicateIDsRetainPathFaithfulDiagnostics(t *testing.T) {
 		if problem.Code == ProblemDuplicateTaskID {
 			duplicates[problem.Path] = true
 		}
-		if problem.Code == ProblemInvalidDependencyID && problem.Path == second.Path {
+		if problem.Code == ProblemInvalidDependencyID && problem.Path == graphFixturePath(second) {
 			invalidOnSecond = true
 		}
 	}
-	if !duplicates[first.Path] || !duplicates[second.Path] || !invalidOnSecond {
+	if !duplicates[graphFixturePath(first)] || !duplicates[graphFixturePath(second)] || !invalidOnSecond {
 		t.Fatalf("path-faithful problems = %+v", graph.Problems())
 	}
 	lintByRecord := dependencyLintIssues(graph)
@@ -956,11 +967,11 @@ func TestTaskGraphSameSourceSnapshotComparesOpaqueUnreadableRevisions(t *testing
 func TestTaskGraphSameSourceSnapshotRejectsReadableUnreadableTransition(t *testing.T) {
 	task := graphRecord("representation-transition", domain.StatusReadyToStart)
 	readable := NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{{
-		Record:        LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: task.ID, Location: task.Path, LocationIsPath: true}},
-		SourceVersion: "opaque-readable-revision", LocalPath: task.Path,
+		Record:        LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: task.ID, Location: graphFixturePath(task), LocationIsPath: true}},
+		SourceVersion: "opaque-readable-revision", LocalPath: graphFixturePath(task),
 	}}})
 	unreadable := NewTaskGraphRead(TaskGraphRead{Problems: []TaskGraphLoadProblem{{
-		TaskID: task.ID, TaskSlug: task.Slug, Path: task.Path,
+		TaskID: task.ID, TaskSlug: task.Slug, Path: graphFixturePath(task),
 		Message: "row became unreadable", SourceVersion: "opaque-unreadable-revision",
 	}}})
 	if readable.SameSourceSnapshot(unreadable) || unreadable.SameSourceSnapshot(readable) {
@@ -1086,7 +1097,7 @@ func TestValidateTaskGraphMutationPlanPreservesSemanticWriteOrder(t *testing.T) 
 func TestValidateTaskGraphMutationSourceNamesGuardedRepairPath(t *testing.T) {
 	task := graphRecord("manual-repair", domain.StatusReadyToStart, "not-a-stable-id")
 	err := ValidateTaskGraphMutationSource(localTaskGraph([]domain.Task{task}, nil))
-	if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), task.Path) ||
+	if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), graphFixturePath(task)) ||
 		!strings.Contains(err.Error(), "field depends_on") ||
 		!strings.Contains(err.Error(), "tskflwctl task depend repair") ||
 		!strings.Contains(err.Error(), "source-level diagnosis") {

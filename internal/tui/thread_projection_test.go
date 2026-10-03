@@ -175,6 +175,7 @@ func (s *splitWorkspaceStore) OpenWorkspace(start string) (core.WorkspaceSource,
 type countingGraphSource struct {
 	sourceSet core.SourceSetID
 	tasks     []domain.Task
+	records   []core.LoadedRecord[domain.Task]
 	calls     int
 }
 
@@ -182,7 +183,7 @@ func (s *countingGraphSource) SourceSetID() core.SourceSetID { return s.sourceSe
 
 func (s *countingGraphSource) ReadTaskGraph() (core.TaskGraphRead, error) {
 	s.calls++
-	return core.TaskGraphRead{Tasks: s.tasks}, nil
+	return core.TaskGraphRead{Tasks: s.tasks, Records: s.records}, nil
 }
 
 type countingThreadStore struct {

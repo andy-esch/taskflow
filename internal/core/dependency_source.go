@@ -305,7 +305,7 @@ func resolveSourceTask(sources []TaskGraphSourceRef, source TaskGraphSourceRef) 
 }
 
 func sourceRefForTask(task domain.Task) TaskGraphSourceRef {
-	return TaskGraphSourceRef{TaskID: task.ID, TaskSlug: task.Slug, Location: task.Path}
+	return TaskGraphSourceRef{TaskID: task.ID, TaskSlug: task.Slug}
 }
 
 func taskGraphSourceRefForGuardedRecord(guarded VersionedRecord[domain.Task]) TaskGraphSourceRef {

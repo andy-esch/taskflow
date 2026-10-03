@@ -19,11 +19,11 @@ import (
 func emit(w io.Writer, v any) error { return EncodeJSON(w, v) }
 
 func loadedTask(t domain.Task) core.LoadedRecord[domain.Task] {
-	return core.LoadedRecord[domain.Task]{Value: t, Source: core.RecordSource{ID: t.ID, Location: t.Path}}
+	return core.LoadedRecord[domain.Task]{Value: t, Source: core.RecordSource{ID: t.ID}}
 }
 
 func loadedTaskBody(t domain.Task, body string) core.LoadedRecord[core.TaskWithBody] {
-	return core.LoadedRecord[core.TaskWithBody]{Value: core.TaskWithBody{Task: t, Body: body}, Source: core.RecordSource{ID: t.ID, Location: t.Path}}
+	return core.LoadedRecord[core.TaskWithBody]{Value: core.TaskWithBody{Task: t, Body: body}, Source: core.RecordSource{ID: t.ID}}
 }
 
 func loadedAuditBody(a domain.Audit, body string) core.LoadedRecord[core.AuditWithBody] {
@@ -146,7 +146,7 @@ func TestSummaryOpenAuditUsesSourceIdentity(t *testing.T) {
 func TestReadableLocationsAreOptionalAndNeverBecomePathsOrIdentity(t *testing.T) {
 	source := core.RecordSource{ID: "canonical", Location: "db://records/one"}
 	local := "/planning/records/local.md"
-	task := domain.Task{ID: "declared", Slug: "same", Path: local}
+	task := domain.Task{ID: "declared", Slug: "same"}
 	epic := domain.Epic{ID: "declared"}
 	audit := domain.Audit{ID: "declared", Slug: "same"}
 	research := domain.Research{ID: "declared", Slug: "same"}

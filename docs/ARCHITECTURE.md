@@ -281,8 +281,11 @@ adapter capabilities rather than leaked persistence.
   through the local file writer, and a URI-like location cannot become a repair target. Schema
   1.80 carries a pathless defect's raw declaration as diagnostic evidence, separate from an
   executable repair target; YAML repair plans may pair a local `path` with a `location` stale-context
-  check, but never use the latter as a selector. The future local-path capability split must stop
-  deriving repair permission from transitional domain `Path`.
+  check, but never use the latter as a selector. Repair authority comes only from an explicitly
+  supplied `VersionedRecord.LocalPath`; bare-task and ordinary loaded-record graph inputs remain
+  read-only. Semantic Task values contain no local path, filename identity, or source revision.
+  Local navigation requests a separate optional path capability, not the diagnostic location or
+  its presentation hint.
   Repository lint follows the same rule through its dedicated `LintSource` port. Its per-kind,
   resilient reads return decoded records with `LintLoadProblem` values carrying taskflow-owned
   entity kind, optional stable identity, optional location, and message. Core neither accepts

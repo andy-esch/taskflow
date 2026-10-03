@@ -32,11 +32,11 @@ func TestTaskGraphSourceViewsSeparateRawCanonicalAndProjectedDependencies(t *tes
 	}
 
 	declarations := mustSourceDeclarations(t, graph)
-	assertSourceDeclaration(t, declarations, owner, TaskDependencyDependsOn, beta.ID, 0, DependencyEdge{From: beta.ID, To: owner.ID})
-	assertSourceDeclaration(t, declarations, owner, TaskDependencyDependsOn, beta.ID, 1, DependencyEdge{From: beta.ID, To: owner.ID})
-	assertSourceDeclaration(t, declarations, owner, TaskDependencyBlockedBy, gamma.Slug, 0, DependencyEdge{From: gamma.ID, To: owner.ID})
-	assertSourceDeclaration(t, declarations, owner, TaskDependencyDependencies, beta.ID, 0, DependencyEdge{From: beta.ID, To: owner.ID})
-	assertSourceDeclaration(t, declarations, owner, TaskDependencyBlocks, alpha.Slug, 0, DependencyEdge{From: owner.ID, To: alpha.ID})
+	assertSourceDeclaration(t, declarations, localSourceRefForTask(owner), TaskDependencyDependsOn, beta.ID, 0, DependencyEdge{From: beta.ID, To: owner.ID})
+	assertSourceDeclaration(t, declarations, localSourceRefForTask(owner), TaskDependencyDependsOn, beta.ID, 1, DependencyEdge{From: beta.ID, To: owner.ID})
+	assertSourceDeclaration(t, declarations, localSourceRefForTask(owner), TaskDependencyBlockedBy, gamma.Slug, 0, DependencyEdge{From: gamma.ID, To: owner.ID})
+	assertSourceDeclaration(t, declarations, localSourceRefForTask(owner), TaskDependencyDependencies, beta.ID, 0, DependencyEdge{From: beta.ID, To: owner.ID})
+	assertSourceDeclaration(t, declarations, localSourceRefForTask(owner), TaskDependencyBlocks, alpha.Slug, 0, DependencyEdge{From: owner.ID, To: alpha.ID})
 	reversed := cloneTasks(tasks)
 	slices.Reverse(reversed)
 	if got := mustSourceDeclarations(t, localTaskGraph(reversed, nil)); !reflect.DeepEqual(got, declarations) {
@@ -44,14 +44,14 @@ func TestTaskGraphSourceViewsSeparateRawCanonicalAndProjectedDependencies(t *tes
 	}
 
 	records := mustSourceRecords(t, graph)
-	ownerRecord := sourceRecordFor(t, records, owner.Path)
+	ownerRecord := sourceRecordFor(t, records, graphFixturePath(owner))
 	ownerRecord.Source.TaskID = "mutated"
 	ownerRecord.Fields[0].Values[0] = "mutated"
-	if fresh := sourceRecordFor(t, mustSourceRecords(t, graph), owner.Path); fresh.Source.TaskID != owner.ID || fresh.Fields[0].Values[0] != beta.ID {
+	if fresh := sourceRecordFor(t, mustSourceRecords(t, graph), graphFixturePath(owner)); fresh.Source.TaskID != owner.ID || fresh.Fields[0].Values[0] != beta.ID {
 		t.Fatalf("source query leaked mutable storage: %+v", fresh)
 	}
 	tasks[0].DependsOn[0] = "input-mutated"
-	if fresh := sourceRecordFor(t, mustSourceRecords(t, graph), owner.Path); fresh.Fields[0].Values[0] != beta.ID {
+	if fresh := sourceRecordFor(t, mustSourceRecords(t, graph), graphFixturePath(owner)); fresh.Fields[0].Values[0] != beta.ID {
 		t.Fatalf("constructor retained input alias: %+v", fresh)
 	}
 }
@@ -68,13 +68,13 @@ func TestTaskGraphSourceDeclarationsOnlyNameEdgesInTheSemanticProjection(t *test
 	representative := graphRecord("projected-edge-duplicate-a", domain.StatusCompleted, target.ID)
 	shadow := graphRecord("projected-edge-duplicate-b", domain.StatusCompleted, target.ID)
 	shadow.ID = representative.ID
-	representative.Path = "tasks/a-representative.md"
-	shadow.Path = "tasks/b-shadow.md"
+	representativeRecord := localGuardedRecordAt(representative, "tasks/a-representative.md")
+	shadowRecord := localGuardedRecordAt(shadow, "tasks/b-shadow.md")
 
 	graph := NewTaskGraphRead(TaskGraphRead{
 		GuardedRecords: []VersionedRecord[domain.Task]{
-			localGuardedRecord(shadow), localGuardedRecord(owner),
-			localGuardedRecord(target), localGuardedRecord(representative),
+			shadowRecord, localGuardedRecord(owner),
+			localGuardedRecord(target), representativeRecord,
 		},
 		Problems: []TaskGraphLoadProblem{{
 			TaskID: unreadableID, TaskSlug: "projected-edge-unreadable",
@@ -82,15 +82,15 @@ func TestTaskGraphSourceDeclarationsOnlyNameEdgesInTheSemanticProjection(t *test
 		}},
 	})
 	declarations := mustSourceDeclarations(t, graph)
-	assertSourceDeclaration(t, declarations, owner, TaskDependencyDependsOn, target.ID, 0,
+	assertSourceDeclaration(t, declarations, localSourceRefForTask(owner), TaskDependencyDependsOn, target.ID, 0,
 		DependencyEdge{From: target.ID, To: owner.ID})
-	assertSourceDeclaration(t, declarations, representative, TaskDependencyDependsOn, target.ID, 0,
+	assertSourceDeclaration(t, declarations, taskGraphSourceRefForGuardedRecord(representativeRecord), TaskDependencyDependsOn, target.ID, 0,
 		DependencyEdge{From: target.ID, To: representative.ID})
-	assertSourceDeclarationWithoutEdge(t, declarations, owner, TaskDependencyDependsOn, danglingID)
-	assertSourceDeclarationWithoutEdge(t, declarations, owner, TaskDependencyDependsOn, unreadableID)
-	assertSourceDeclarationWithoutEdge(t, declarations, owner, TaskDependencyDependsOn, "invalid-token")
-	assertSourceDeclarationWithoutEdge(t, declarations, owner, TaskDependencyBlockedBy, "missing-legacy-target")
-	assertSourceDeclarationWithoutEdge(t, declarations, shadow, TaskDependencyDependsOn, target.ID)
+	assertSourceDeclarationWithoutEdge(t, declarations, localSourceRefForTask(owner), TaskDependencyDependsOn, danglingID)
+	assertSourceDeclarationWithoutEdge(t, declarations, localSourceRefForTask(owner), TaskDependencyDependsOn, unreadableID)
+	assertSourceDeclarationWithoutEdge(t, declarations, localSourceRefForTask(owner), TaskDependencyDependsOn, "invalid-token")
+	assertSourceDeclarationWithoutEdge(t, declarations, localSourceRefForTask(owner), TaskDependencyBlockedBy, "missing-legacy-target")
+	assertSourceDeclarationWithoutEdge(t, declarations, taskGraphSourceRefForGuardedRecord(shadowRecord), TaskDependencyDependsOn, target.ID)
 	for _, declaration := range declarations {
 		if declaration.HasProjectedEdge && !slices.Contains(graph.outgoing[declaration.ProjectedEdge.From], declaration.ProjectedEdge.To) {
 			t.Fatalf("source declaration claims edge absent from semantic graph: %+v outgoing=%+v", declaration, graph.outgoing)
@@ -140,23 +140,23 @@ func TestTaskGraphLegacyShadowDeclarationsDoNotEnterSemanticProjection(t *testin
 			representative := graphRecord("legacy-shadow-owner-a", domain.StatusCompleted)
 			shadow := graphRecord("legacy-shadow-owner-b", domain.StatusCompleted)
 			shadow.ID = representative.ID
-			representative.Path = "tasks/a-legacy-representative.md"
-			shadow.Path = "tasks/b-legacy-shadow.md"
 			test.configure(&shadow, peer)
 			shadow.LegacyDependencyFields = []string{string(test.field)}
+			representativeRecord := localGuardedRecordAt(representative, "tasks/a-legacy-representative.md")
+			shadowRecord := localGuardedRecordAt(shadow, "tasks/b-legacy-shadow.md")
 
-			graph := localTaskGraph([]domain.Task{shadow, peer, representative}, nil)
+			graph := NewTaskGraphRead(TaskGraphRead{GuardedRecords: []VersionedRecord[domain.Task]{shadowRecord, localGuardedRecord(peer), representativeRecord}})
 			test.assert(t, graph, representative, peer)
 			foundDiagnostic := false
 			for _, diagnostic := range graph.LegacyDiagnostics() {
-				if diagnostic.TaskPath == shadow.Path && diagnostic.Field == string(test.field) {
+				if diagnostic.TaskPath == shadowRecord.LocalPath && diagnostic.Field == string(test.field) {
 					foundDiagnostic = true
 				}
 			}
 			if !foundDiagnostic {
 				t.Fatalf("shadow legacy source evidence disappeared: %+v", graph.LegacyDiagnostics())
 			}
-			assertSourceDeclarationWithoutEdge(t, mustSourceDeclarations(t, graph), shadow, test.field, peer.ID)
+			assertSourceDeclarationWithoutEdge(t, mustSourceDeclarations(t, graph), taskGraphSourceRefForGuardedRecord(shadowRecord), test.field, peer.ID)
 		})
 	}
 }
@@ -182,7 +182,7 @@ func TestTaskGraphSourceSimulationPreservesRawInvalidAndDanglingIntent(t *testin
 	if got := graph.Prerequisites(owner.ID); !slices.Equal(got, sortedUnique(owner.DependsOn)) {
 		t.Fatalf("fail-closed behavior prerequisites = %v, want raw canonical values %v", got, sortedUnique(owner.DependsOn))
 	}
-	assertRawValues(t, graph, owner.Path, TaskDependencyDependsOn, owner.DependsOn)
+	assertRawValues(t, graph, graphFixturePath(owner), TaskDependencyDependsOn, owner.DependsOn)
 
 	simulated, err := graph.SimulateSourceEdits([]TaskGraphSourceEdit{
 		{Action: TaskGraphSourceDropDeclaration, Source: source, Field: TaskDependencyDependsOn, Value: "human-authored-slug"},
@@ -191,8 +191,8 @@ func TestTaskGraphSourceSimulationPreservesRawInvalidAndDanglingIntent(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertRawValues(t, simulated, owner.Path, TaskDependencyDependsOn, []string{prerequisite.ID})
-	assertRawValues(t, graph, owner.Path, TaskDependencyDependsOn, owner.DependsOn)
+	assertRawValues(t, simulated, graphFixturePath(owner), TaskDependencyDependsOn, []string{prerequisite.ID})
+	assertRawValues(t, graph, graphFixturePath(owner), TaskDependencyDependsOn, owner.DependsOn)
 	if simulated.Health() != GraphHealthy {
 		t.Fatalf("simulated health = %s problems=%+v", simulated.Health(), simulated.Problems())
 	}
@@ -213,9 +213,9 @@ func TestTaskGraphSourceSimulationPreservesUntouchedInvalidLiteralsVerbatim(t *t
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertRawValues(t, simulated, owner.Path, TaskDependencyDependsOn,
+	assertRawValues(t, simulated, graphFixturePath(owner), TaskDependencyDependsOn,
 		[]string{target.ID, "human-authored-slug", "  spaced literal  "})
-	assertRawValues(t, simulated, owner.Path, TaskDependencyBlockedBy, []string{" legacy literal "})
+	assertRawValues(t, simulated, graphFixturePath(owner), TaskDependencyBlockedBy, []string{" legacy literal "})
 }
 
 func TestTaskGraphSourceDedupeIsRetryStableAndExactDropNamesAnOccurrence(t *testing.T) {
@@ -232,14 +232,14 @@ func TestTaskGraphSourceDedupeIsRetryStableAndExactDropNamesAnOccurrence(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertRawValues(t, dropped, owner.Path, TaskDependencyDependsOn, []string{alpha.ID, alpha.ID, beta.ID})
+	assertRawValues(t, dropped, graphFixturePath(owner), TaskDependencyDependsOn, []string{alpha.ID, alpha.ID, beta.ID})
 
 	dedupe := TaskGraphSourceEdit{Action: TaskGraphSourceDedupe, Source: source, Field: TaskDependencyDependsOn, Value: alpha.ID}
 	deduped, err := graph.SimulateSourceEdits([]TaskGraphSourceEdit{dedupe})
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertRawValues(t, deduped, owner.Path, TaskDependencyDependsOn, []string{alpha.ID, beta.ID})
+	assertRawValues(t, deduped, graphFixturePath(owner), TaskDependencyDependsOn, []string{alpha.ID, beta.ID})
 	retried, err := deduped.SimulateSourceEdits([]TaskGraphSourceEdit{dedupe})
 	if err != nil {
 		t.Fatal(err)
@@ -284,9 +284,9 @@ func TestTaskGraphSourceSimulationRemovesOnlyNamedLegacyState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	assertRawValues(t, simulated, owner.Path, TaskDependencyBlockedBy, []string{alpha.ID})
-	assertRawValues(t, simulated, owner.Path, TaskDependencyDependencies, []string{gamma.ID})
-	assertRawValues(t, simulated, owner.Path, TaskDependencyBlocks, []string{delta.ID})
+	assertRawValues(t, simulated, graphFixturePath(owner), TaskDependencyBlockedBy, []string{alpha.ID})
+	assertRawValues(t, simulated, graphFixturePath(owner), TaskDependencyDependencies, []string{gamma.ID})
+	assertRawValues(t, simulated, graphFixturePath(owner), TaskDependencyBlocks, []string{delta.ID})
 
 	empty := graphRecord("source-empty-legacy", domain.StatusReadyToStart)
 	empty.LegacyDependencyFields = []string{"blocked_by", "dependencies", "blocks"}
@@ -297,7 +297,7 @@ func TestTaskGraphSourceSimulationRemovesOnlyNamedLegacyState(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if fields := sourceRecordFor(t, mustSourceRecords(t, cleaned), empty.Path).Fields; len(fields) != 2 ||
+	if fields := sourceRecordFor(t, mustSourceRecords(t, cleaned), graphFixturePath(empty)).Fields; len(fields) != 2 ||
 		fields[0].Field != TaskDependencyDependencies || fields[1].Field != TaskDependencyBlocks {
 		t.Fatalf("empty legacy cleanup changed unrelated field presence: %+v", fields)
 	} else if fields[0].Values == nil || fields[1].Values == nil {
@@ -334,7 +334,7 @@ func TestTaskGraphSourceSimulationSeparatesDeclarationAndEmptyLegacyFieldRemoval
 	if err != nil {
 		t.Fatal(err)
 	}
-	field := sourceRecordFor(t, mustSourceRecords(t, valuesRemoved), owner.Path).Fields[0]
+	field := sourceRecordFor(t, mustSourceRecords(t, valuesRemoved), graphFixturePath(owner)).Fields[0]
 	if field.Field != TaskDependencyBlockedBy || field.Values == nil || len(field.Values) != 0 {
 		t.Fatalf("declaration drop also removed or obscured legacy field presence: %+v", field)
 	}
@@ -362,8 +362,8 @@ func TestTaskGraphSourceSimulationRetainsDuplicateAndUnreadableRecords(t *testin
 	duplicateB.DependsOn = []string{owner.ID}
 	versioned := func(task domain.Task, revision string) VersionedRecord[domain.Task] {
 		return VersionedRecord[domain.Task]{
-			Record:        LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: task.ID, Location: task.Path, LocationIsPath: true}},
-			SourceVersion: revision, LocalPath: task.Path,
+			Record:        LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: task.ID, Location: graphFixturePath(task), LocationIsPath: true}},
+			SourceVersion: revision, LocalPath: graphFixturePath(task),
 		}
 	}
 	readProblem := TaskGraphLoadProblem{
@@ -393,7 +393,7 @@ func TestTaskGraphSourceSimulationRetainsDuplicateAndUnreadableRecords(t *testin
 			t.Fatalf("unreadable prerequisite was misclassified as missing: %+v", graphProblem)
 		}
 	}
-	assertRawValues(t, simulated, owner.Path, TaskDependencyDependsOn, []string{unreadableID})
+	assertRawValues(t, simulated, graphFixturePath(owner), TaskDependencyDependsOn, []string{unreadableID})
 
 	if _, err := graph.SimulateSourceEdits([]TaskGraphSourceEdit{{
 		Action: TaskGraphSourceDedupe, Source: TaskGraphSourceRef{TaskID: duplicateA.ID},
@@ -412,8 +412,8 @@ func TestTaskGraphSourceSimulationRetainsDuplicateAndUnreadableRecords(t *testin
 	if len(mustSourceRecords(t, targeted)) != len(mustSourceRecords(t, graph)) {
 		t.Fatalf("path-qualified edit lost a duplicate-ID record: %+v", mustSourceRecords(t, targeted))
 	}
-	assertRawValues(t, targeted, duplicateA.Path, TaskDependencyDependsOn, duplicateA.DependsOn)
-	assertRawValues(t, targeted, duplicateB.Path, TaskDependencyDependsOn, nil)
+	assertRawValues(t, targeted, graphFixturePath(duplicateA), TaskDependencyDependsOn, duplicateA.DependsOn)
+	assertRawValues(t, targeted, graphFixturePath(duplicateB), TaskDependencyDependsOn, nil)
 }
 
 func TestTaskGraphSourceSimulationRejectsMalformedEditIntent(t *testing.T) {
@@ -445,8 +445,8 @@ func TestTaskGraphSourceSnapshotCASIncludesEveryDuplicateIDRecord(t *testing.T) 
 	second.ID = first.ID
 	versioned := func(task domain.Task, revision string) VersionedRecord[domain.Task] {
 		return VersionedRecord[domain.Task]{
-			Record:        LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: task.ID, Location: task.Path, LocationIsPath: true}},
-			SourceVersion: revision, LocalPath: task.Path,
+			Record:        LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: task.ID, Location: graphFixturePath(task), LocationIsPath: true}},
+			SourceVersion: revision, LocalPath: graphFixturePath(task),
 		}
 	}
 	firstRecord, secondRecord := versioned(first, "first-revision"), versioned(second, "second-revision")
@@ -531,7 +531,7 @@ func TestTaskGraphSourceDeclarationsProjectEveryLegacyCycleDirection(t *testing.
 				t.Fatalf("legacy cycle health=%s problems=%+v", graph.Health(), graph.Problems())
 			}
 			source := test.source(owner, peer)
-			assertSourceDeclaration(t, mustSourceDeclarations(t, graph), source, test.field,
+			assertSourceDeclaration(t, mustSourceDeclarations(t, graph), localSourceRefForTask(source), test.field,
 				map[TaskDependencyField]string{
 					TaskDependencyBlockedBy: "cycle-owner", TaskDependencyDependencies: "cycle-owner", TaskDependencyBlocks: "cycle-peer",
 				}[test.field], 0, DependencyEdge{From: owner.ID, To: peer.ID})
@@ -548,10 +548,10 @@ func TestTaskGraphSourceDeclarationsProjectEveryLegacyCycleDirection(t *testing.
 	}
 }
 
-func assertSourceDeclaration(t *testing.T, declarations []TaskGraphSourceDeclaration, source domain.Task, field TaskDependencyField, value string, occurrence int, edge DependencyEdge) {
+func assertSourceDeclaration(t *testing.T, declarations []TaskGraphSourceDeclaration, source TaskGraphSourceRef, field TaskDependencyField, value string, occurrence int, edge DependencyEdge) {
 	t.Helper()
 	for _, declaration := range declarations {
-		if declaration.Source == localSourceRefForTask(source) && declaration.Field == field &&
+		if declaration.Source == source && declaration.Field == field &&
 			declaration.Value == value && declaration.Occurrence == occurrence {
 			if !declaration.HasProjectedEdge || declaration.ProjectedEdge != edge {
 				t.Fatalf("declaration %+v projected edge = %+v/%t, want %+v", declaration, declaration.ProjectedEdge, declaration.HasProjectedEdge, edge)
@@ -559,20 +559,20 @@ func assertSourceDeclaration(t *testing.T, declarations []TaskGraphSourceDeclara
 			return
 		}
 	}
-	t.Fatalf("missing declaration source=%+v field=%s value=%q occurrence=%d in %+v", localSourceRefForTask(source), field, value, occurrence, declarations)
+	t.Fatalf("missing declaration source=%+v field=%s value=%q occurrence=%d in %+v", source, field, value, occurrence, declarations)
 }
 
-func assertSourceDeclarationWithoutEdge(t *testing.T, declarations []TaskGraphSourceDeclaration, source domain.Task, field TaskDependencyField, value string) {
+func assertSourceDeclarationWithoutEdge(t *testing.T, declarations []TaskGraphSourceDeclaration, source TaskGraphSourceRef, field TaskDependencyField, value string) {
 	t.Helper()
 	for _, declaration := range declarations {
-		if declaration.Source == localSourceRefForTask(source) && declaration.Field == field && declaration.Value == value {
+		if declaration.Source == source && declaration.Field == field && declaration.Value == value {
 			if declaration.HasProjectedEdge || declaration.ProjectedEdge != (DependencyEdge{}) {
 				t.Fatalf("declaration %+v unexpectedly claims a projected edge", declaration)
 			}
 			return
 		}
 	}
-	t.Fatalf("missing declaration source=%+v field=%s value=%q in %+v", localSourceRefForTask(source), field, value, declarations)
+	t.Fatalf("missing declaration source=%+v field=%s value=%q in %+v", source, field, value, declarations)
 }
 
 func sourceRecordFor(t *testing.T, records []TaskGraphSourceRecord, location string) TaskGraphSourceRecord {

@@ -210,7 +210,6 @@ func TestValidateTaskLifecycleReopenReportsUnsoundDescendants(t *testing.T) {
 func TestValidateCreateAndStartRequiresHealthyCandidateAndProducesExactFrom(t *testing.T) {
 	graph := NewTaskGraph(nil, nil)
 	task := graphRecord("new", domain.StatusReadyToStart)
-	task.Path = ""
 	task.Description = "new task"
 	task.Tags = []string{"test"}
 	plan := TaskLifecyclePlan{To: domain.StatusInProgress, Create: &TaskLifecycleCreation{Task: task, Body: "# New\n"}}

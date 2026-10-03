@@ -63,7 +63,7 @@ var sampleTasks = []domain.Task{
 func taskRecords(tasks []domain.Task) []core.LoadedRecord[domain.Task] {
 	out := make([]core.LoadedRecord[domain.Task], 0, len(tasks))
 	for _, task := range tasks {
-		out = append(out, core.LoadedRecord[domain.Task]{Value: task, Source: core.RecordSource{ID: task.ID, Location: task.Path}})
+		out = append(out, core.LoadedRecord[domain.Task]{Value: task, Source: core.RecordSource{ID: task.ID}})
 	}
 	return out
 }
@@ -147,7 +147,7 @@ func TestReadableListHumanDistinguishesOpaqueLocations(t *testing.T) {
 		render func(*bytes.Buffer, core.RecordSource) error
 	}{
 		{"task", func(out *bytes.Buffer, src core.RecordSource) error {
-			return TasksReadHuman(out, NewStyle(false), []core.LoadedRecord[domain.Task]{{Value: domain.Task{Slug: "same", Path: local, Status: domain.StatusNextUp}, Source: src}})
+			return TasksReadHuman(out, NewStyle(false), []core.LoadedRecord[domain.Task]{{Value: domain.Task{Slug: "same", Status: domain.StatusNextUp}, Source: src}})
 		}},
 		{"epic", func(out *bytes.Buffer, src core.RecordSource) error {
 			return EpicsHuman(out, NewStyle(false), []core.EpicSummary{{Epic: domain.Epic{ID: "same"}, Source: src}})

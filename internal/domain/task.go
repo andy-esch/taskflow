@@ -1,10 +1,9 @@
 package domain
 
-// Task is a planning task. The source identity lives in the adapter read;
-// Path is retained temporarily for legacy local callers.
+// Task is a planning task. Source identity and location belong to the adapter
+// read envelope; optional local actions request a separate path capability.
 type Task struct {
 	Slug string `yaml:"-"`
-	Path string `yaml:"-"` // transitional local source location; removed in the next slice
 	// Title is the first non-fenced H1 in the Markdown body. It is derived by
 	// adapters rather than duplicated in frontmatter; callers must fall back to
 	// Slug when an adapter cannot provide body-derived presentation data.

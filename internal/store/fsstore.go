@@ -432,6 +432,5 @@ func parseTask(content []byte, path string) (domain.Task, error) {
 	if title, ok := domain.FirstH1(string(body)); ok {
 		t.Title = title
 	}
-	t.Path = path
 	return t, nil
 }

@@ -226,7 +226,6 @@ func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (core.TaskCreat
 	if err != nil && !committed {
 		return core.TaskCreationReceipt{}, err
 	}
-	t.Path = creation.path
 	return core.TaskCreationReceipt{Task: t, Local: localCreateOutcome(creation.path, dryRun), DryRun: dryRun, Committed: committed}, err
 }
 

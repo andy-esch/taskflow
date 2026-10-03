@@ -86,7 +86,11 @@ func TestSetFields_AcceptsAuditedWithoutForce(t *testing.T) {
 	if err != nil {
 		t.Fatalf("task no longer reloads after setting audited (corrupted): %v", err)
 	}
-	raw, err := os.ReadFile(record.Value.Task.Path)
+	path, err := svc.TaskPath(record.Source.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read task file: %v", err)
 	}

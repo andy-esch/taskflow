@@ -131,8 +131,8 @@ type TaskGraphLoadProblem struct {
 type TaskGraphRead struct {
 	// GuardedRecords is the authoritative representation for adapters that can
 	// supply complete snapshot evidence. Records and Tasks remain transitional
-	// read-only compatibility projections; they cannot gain a local repair path
-	// merely because their domain values happen to contain Path.
+	// read-only compatibility projections; only guarded records can supply
+	// local repair paths and revision evidence.
 	GuardedRecords []VersionedRecord[domain.Task]
 	Records        []LoadedRecord[domain.Task]
 	Tasks          []domain.Task
@@ -184,8 +184,8 @@ func taskGraphLoadProblemFromLoadProblem(problem LoadProblem) TaskGraphLoadProbl
 }
 
 // TaskGraphReadFromFiles adapts a legacy task list for read-only graph queries.
-// Bare semantic tasks may carry a legacy local path, but cannot supply guarded
-// repair authority; local stores supply that in versioned records.
+// Bare tasks supply their declared ID but no location or guarded repair evidence.
+// Adapters use loaded or versioned records when independent source identity matters.
 func TaskGraphReadFromFiles(tasks []domain.Task, problems []domain.FileProblem) TaskGraphRead {
 	read := TaskGraphRead{
 		Records:  make([]LoadedRecord[domain.Task], 0, len(tasks)),
@@ -193,7 +193,7 @@ func TaskGraphReadFromFiles(tasks []domain.Task, problems []domain.FileProblem) 
 	}
 	for _, task := range tasks {
 		read.Records = append(read.Records, LoadedRecord[domain.Task]{
-			Value: task, Source: RecordSource{ID: task.ID, Location: task.Path},
+			Value: task, Source: RecordSource{ID: task.ID},
 		})
 	}
 	for _, problem := range problems {
@@ -204,7 +204,7 @@ func TaskGraphReadFromFiles(tasks []domain.Task, problems []domain.FileProblem) 
 
 // taskGraphRecords normalizes the compatibility Tasks projection into portable
 // records. New adapters populate Records directly; older focused fakes remain
-// usable while the staged migration removes domain source metadata.
+// usable for behavior-only graph queries without source location or authority.
 func taskGraphRecords(read TaskGraphRead) []LoadedRecord[domain.Task] {
 	if read.GuardedRecords != nil {
 		records := make([]LoadedRecord[domain.Task], 0, len(read.GuardedRecords))
@@ -219,7 +219,7 @@ func taskGraphRecords(read TaskGraphRead) []LoadedRecord[domain.Task] {
 	records := make([]LoadedRecord[domain.Task], 0, len(read.Tasks))
 	for _, task := range read.Tasks {
 		records = append(records, LoadedRecord[domain.Task]{
-			Value: task, Source: RecordSource{ID: task.ID, Location: task.Path},
+			Value: task, Source: RecordSource{ID: task.ID},
 		})
 	}
 	return records

@@ -8,13 +8,11 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
-// A portable adapter may return a record carrying stale or meaningless local
-// navigation data during migration. Creation outcomes must come solely from the
-// operation receipt, never from that record's Path field.
+// Portable creation outcomes carry semantic values without a local outcome.
+// Thread keeps a transitional path until its separate mutation migration.
 type pathlessCreationStore struct{ *fakeStore }
 
 func (s *pathlessCreationStore) CreateTask(task domain.Task, _ string, dry bool) (TaskCreationReceipt, error) {
-	task.Path = "/not-the-task-outcome"
 	return TaskCreationReceipt{Task: task, DryRun: dry, Committed: !dry}, nil
 }
 
@@ -51,7 +49,7 @@ func TestCreateReceiptsDoNotInferLocalPathsFromDomainRecords(t *testing.T) {
 	svc := MustNewService(adapter, WithClock(fixedClock("2026-09-27")), WithIDGen(func() string { return "6gdx7mn9f0a5" }))
 	for _, dry := range []bool{true, false} {
 		task, err := svc.NewTask(NewTaskParams{Title: "Created", Epic: "01-domain", Tags: []string{"test"}, DryRun: dry})
-		if err != nil || task.Task.Path == "" || task.Local != (LocalCreateOutcome{}) || task.Committed == dry {
+		if err != nil || task.Task.ID == "" || task.Local != (LocalCreateOutcome{}) || task.Committed == dry {
 			t.Fatalf("pathless task receipt=%+v err=%v", task, err)
 		}
 		epic, err := svc.NewEpic(NewEpicParams{Title: "Created", Description: "goal", Status: domain.EpicStatusActive, Priority: "medium", DryRun: dry})
