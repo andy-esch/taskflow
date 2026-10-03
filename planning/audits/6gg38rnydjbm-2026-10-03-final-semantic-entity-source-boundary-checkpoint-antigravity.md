@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gg38rnydjbm
-bucket: open
+bucket: closed
 area: final-semantic-entity-source-boundary-checkpoint-antigravity
 date: "2026-10-03"
 ---
@@ -217,4 +217,262 @@ first? A partial review must say partial rather than declare readiness.
 
 ## Reviewer report
 
-Pending external review. No findings have been entered by the implementation owner.
+### 1. Executive Summary & Verdict
+
+- **Verdict:** **Ready (No Findings)**.
+- **Review Target:** Task [`6gcwcf88z57p`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/planning/tasks/6gcwcf88z57p-split-local-path-capabilities-from-semantic-entity-reads.md) (`split-local-path-capabilities-from-semantic-entity-reads`), branch `refactor/split-local-entity-source-capabilities`, implementation freeze commit `506b7990c222a577c751ad87685a90a437d1fb04`.
+- **Primary Delta:** `2d4d9f1..506b799` (commits `a31bd42`, `7afaecf`, `506b799`). Task, Thread, Epic, Audit, and Research now contain no `Path`, `FilenameID`, or `SourceVersion`; Thread's `CanonicalID()` fallback is completely excised.
+- **Task Completion Disposition:**
+  - **Can task `6gcwcf88z57p` now be completed?** **Yes.** All 9 acceptance criteria in [`planning/tasks/6gcwcf88z57p-split-local-path-capabilities-from-semantic-entity-reads.md:55-71`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/planning/tasks/6gcwcf88z57p-split-local-path-capabilities-from-semantic-entity-reads.md#L55-L71) are fully implemented and verified in the codebase.
+  - **What must change first?** No functional code, schema, or test changes are required. The only remaining step before marking the task `completed` in planning documentation is administrative triage reconciling this audit report and the companion Codex audit report ([`planning/audits/6gg38rnpe94c-*`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/planning/audits/6gg38rnpe94c-2026-10-03-final-semantic-entity-source-boundary-checkpoint-codex.md)).
+- **Antigravity Three Core Claims:** All three claims were subjected to hostile mutation probes and confirmed:
+  1. *A path hint cannot replace a local write handle:* Confirmed. `core.RecordSource.LocationIsPath: true` influences only presentation; guarded local writers require `core.VersionedRecord.LocalPath` and matching `SourceVersion`. Empty `LocalPath` denies materialization even with a path-shaped location and path hint.
+  2. *Graph repair cannot hide readable Thread drift:* Confirmed. Graph repair proceeds past defective Thread documents without modifying Thread bytes, while `core.TaskGraphThreadImpacts` retains the independent source ID, attributes `ThreadProblemIDDrift` to the file location, and leaves projection health in `GraphBroken`.
+  3. *No Thread planner can mutate its own authorization inputs:* Confirmed. All store dispatchers (`callThreadMutationPlanner`, `callThreadCreationPlanner`, `callThreadApplyPlanner`) defensively clone `snapshot.Threads` (and nested slices `Tags`/`Tasks`) and `snapshot.ThreadBodies`. Mutation of planner arguments inside callbacks has zero effect on the snapshot evaluated by plan validators or CAS checks.
+- **Remediation of Prior Checkpoint Findings:** Finding `L1` from the previous Task-identity checkpoint audit ([`planning/audits/6gfyn1nhawqq-*`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/planning/audits/6gfyn1nhawqq-2026-10-02-task-source-identity-removal-checkpoint-antigravity.md)) was resolved in commit `a31bd42` at [`internal/store/graphrepair.go:216-228`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/graphrepair.go#L216-L228) by reloading task graph repair verification via `core.NewTaskGraphRead` with `RecordSource: taskSource(path)` and checking `expected.Source != actualRecords[0].Source`.
+
+---
+
+### 2. Review Environment & Sandbox Attestation
+
+All inspection, builds, test executions, hostile probes, compiling mutation kills, and report editing were performed exclusively within the isolated sandbox created by `./scripts/isolated-review-workspace.sh`:
+
+```text
+sandbox_path=/private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ
+git_dir=/private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/.git
+baseline_commit=e79c317d55d1ab6d72ed7c2360375482e56beea1
+source_blob=d01b524674af452a1b3e7b21bd1dddfca4a994b3
+source_fingerprint=6764a217ac43e540a9267831552543b674225538
+deliverable=planning/audits/6gg38rnydjbm-2026-10-03-final-semantic-entity-source-boundary-checkpoint-antigravity.md
+deliverable_changed=true
+transfer=pending
+```
+
+No write-capable commands were run in `$SOURCE_ROOT`. The sandbox binary was compiled at `./bin/tskflwctl` from sandbox source files. All mutation probes were cleanly restored to baseline commit `e79c317d55d1ab6d72ed7c2360375482e56beea1`.
+
+---
+
+### 3. Producer/Consumer Inventory for Source & Identity Boundaries
+
+The architecture maintains an unambiguous separation between six identity and capability dimensions:
+1. **Source ID (`core.RecordSource.ID`)**: The adapter's canonical resolution identity.
+2. **Declared ID (`domain.Thread.ID` / `domain.Task.ID`)**: YAML frontmatter declaration.
+3. **Diagnostic Location (`core.RecordSource.Location`)**: Opaque explanatory URI or path.
+4. **Path Presentation Hint (`core.RecordSource.LocationIsPath`)**: Boolean presentation hint; grants zero file authority.
+5. **Executable Local Handle (`core.VersionedRecord.LocalPath` / `core.TaskGraphSourceRef.LocalPath`)**: Authoritative filesystem path passed only within guarded store envelopes.
+6. **Source Revision (`core.VersionedRecord.SourceVersion` / `core.TaskGraphSourceRef.SourceVersion`)**: Opaque SHA-256 content hash used for whole-snapshot CAS.
+
+| Subsystem / Operation | Source Location & Lines | Role | Consumed / Produced Fields | Boundary Invariant Enforced |
+| :--- | :--- | :--- | :--- | :--- |
+| **Thread Filesystem Scan** | [`internal/store/threadstore.go:34-90`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/threadstore.go#L34-L90) | Producer | Produces `VersionedRecord[domain.Thread]` with `Source.ID = id`, `Location = path`, `LocationIsPath = true`, `LocalPath = path`, `SourceVersion = hashContent(content)`. | Raw bytes hashed for revision token; `LocalPath` stays in store-owned wrapper. |
+| **Thread Bulk-Apply Scan** | [`internal/store/threadapply.go:228-258`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/threadapply.go#L228-L258) | Producer | Same as scan, returns `core.ThreadRead` and unversioned body map. | Uses identical `threadSource(path)` mapping and byte revision hashing. |
+| **Selected Thread Read** | [`internal/store/threadstore.go:98-115`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/threadstore.go#L98-L115) | Producer | Produces `LoadedRecord[ThreadWithBody]`. | Strips `LocalPath` and `SourceVersion`; attaches `RecordSource`. |
+| **Parse-Free Path Recovery** | [`internal/store/threadstore.go:119-129`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/threadstore.go#L119-L129) | Resolver | Consumes `ref` (ID/prefix/slug); inspects filenames via `flatCandidates`. | Recovers file path without reading or parsing frontmatter. |
+| **Source Gate (Validation)** | [`internal/core/store.go:169-188`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/core/store.go#L169-L188) (`ValidateSources`) | Guard | Consumes `ThreadRead.Records`; enforces `Source.ID != ""`, uniqueness of `Source.ID`, and `Source.ID == Value.ID`. | Rejects declared-ID drift, duplicate source IDs, or empty IDs before semantic snapshot creation. |
+| **Source Gate (Preflight)** | [`internal/core/thread_creation.go:69-84`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/core/thread_creation.go#L69-L84) | Guard | Evaluates `ValidateTaskLifecycleSource`, `read.ValidateSources()`, `len(read.Problems) > 0`, and `validateExistingThreadRecords`. | Rejects unreadable documents, invalid members, or task ID collisions before planner is called. |
+| **Planner Snapshot Slicing** | [`internal/core/store.go:157-163`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/core/store.go#L157-L163) (`SemanticThreads`) | Adapter | Extracts `record.Record.Value` from `ThreadRead.Records`. | Strips all `RecordSource`, `LocalPath`, and `SourceVersion` metadata from semantic planner slice. |
+| **Planner Snapshot Isolation** | [`internal/store/threadmutation.go:114-123`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/threadmutation.go#L114-L123), [`threadcreation.go:106-115`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/threadcreation.go#L106-L115), [`threadapply.go:195-204`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/threadapply.go#L195-L204) | Guard | Invokes `clonePlannerThreads` and `cloneStringMap` before dispatching to callback. | Planner cannot mutate caller's `Threads` or `ThreadBodies` to rewrite authorization. |
+| **Thread Mutation Materialize** | [`internal/store/threadmutation.go:153-220`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/threadmutation.go#L153-L220) | Guard / Writer | Verifies `source.LocalPath != ""`, `source.SourceVersion != ""`, `s.resolveThread(id) == source.LocalPath`, and `hashContent(content) == source.SourceVersion`. | Rejects path hints without local handles (`ErrValidation`); aborts on moved or changed files (`ErrConflict`). |
+| **Snapshot CAS Verification** | [`internal/store/cas.go:47-101`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/cas.go#L47-L101) (`verifyThreadSourceSnapshot`) | Guard | Compares `Source.ID`, `Location`, `LocalPath`, `Value.ID`, `Value.Slug`, and `SourceVersion` between preflight and commit. | Compares readable and unreadable records; aborts with `domain.ErrConflict` on any concurrent mutation. |
+| **Final File Write-CAS** | [`internal/store/cas.go:103-122`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/cas.go#L103-L122) (`verifyUnchanged`) | Guard | Re-resolves canonical path and hashes file content immediately prior to `writeFileAtomic`. | Rejects write if file moved, deleted, or altered. |
+| **Graph Repair Thread Impact** | [`internal/core/thread_mutation.go:431-460`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/core/thread_mutation.go#L431-L460) (`TaskGraphThreadImpacts`) | Producer | Maps `LoadedRecord[domain.Thread]` through `ProjectLoadedThread`; sets `ThreadID = thread.Source.ID`. | Uses adapter source ID; retains `ThreadProblemIDDrift` and `ProjectionHealth: GraphBroken`. Thread files are never touched. |
+| **Task Lifecycle Thread Impact** | [`internal/core/thread_mutation.go:402-425`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/core/thread_mutation.go#L402-L425) (`TaskLifecycleThreadImpacts`) | Producer | Uses `threadRead.LoadedThreads()`; projects impact using `thread.Source.ID`. | Retains canonical source ID; Thread files remain untouched. |
+| **Ordinary Projection** | [`internal/core/thread_projection.go:94-150`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/core/thread_projection.go#L94-L150) (`ProjectLoadedThread`) | Producer | Evaluates `source.LocationIsPath`: if true, `path = source.Location`; otherwise `path = ""`. Detects `source.ID != thread.ID`. | Opaque locations never become diagnostic `Path`s; ID drift flags `ThreadProblemIDDrift`. |
+| **Public Wire Envelopes** | [`internal/wire/thread.go:27-34, 87-118, 138-167`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/wire/thread.go#L27-L34) | Producer | Projects `ThreadJSON`, `ThreadViewJSON`, and `ThreadReadProblemJSON`. | Opaque `SourceVersion` and internal `LocalPath` are excluded from all public wire models. |
+| **TUI Item & Action** | [`internal/tui/item.go:46-56`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/tui/item.go#L46-L56), [`internal/tui/local_path_test.go:31-67`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/tui/local_path_test.go#L31-L67) | Consumer | TUI selections store `sourceID`. Actions `E` (edit) / `Y` (yank) request local path via `m.svc.TaskPath` / `ThreadPath`. | Never treats `Location` or `LocationIsPath` as local paths; flashes `local path unavailable` if absent. |
+
+---
+
+### 4. Hostile Fixture and Scenario Matrix
+
+Each hostile state was tested against ordinary reads, lint, parse-free path recovery, and guarded transactions:
+
+| Hostile Source Scenario | Setup / Fixture Configuration | Ordinary Read / Lint Behavior | Parse-Free Path Recovery | Guarded Mutation Preflight (`MutateThread*`) | Graph Repair Impact (`RepairTaskGraph`) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Matching Valid Record** | `Source.ID: T1`, `Value.ID: T1`, `LocationIsPath: true`, `LocalPath: /threads/T1-slug.md` | Healthy projection (`GraphHealthy`); 0 lint issues. | Resolves `/threads/T1-slug.md`. | Allowed; materializes and commits atomically. | Healthy projection; frontier populated. |
+| **Missing Declaration** | `Source.ID: T1`, `Value.ID: ""` in frontmatter | `ProjectionHealth: GraphBroken`; flags `ThreadProblemIDDrift`. Lint flags `missing-id`. | Resolves `/threads/T1-slug.md` parse-free via filename ID. | **Blocked** by `ValidateSources` (`disagrees`); planner is never invoked; disk bytes untouched. | Broken projection; retains `ThreadProblemIDDrift` pointing to `/threads/T1-slug.md`. |
+| **Drifting Declaration** | `Source.ID: T1`, `Value.ID: T2` (valid ID format) | `ProjectionHealth: GraphBroken`; flags `ThreadProblemIDDrift`. Lint flags `id-drift`. | Resolves `/threads/T1-slug.md` parse-free by `T1`. | **Blocked** by `ValidateSources` (`disagrees`); planner never invoked; disk bytes untouched. | Task graph repaired; Thread remains `GraphBroken`; `ThreadProblemIDDrift` survives; disk untouched. |
+| **Duplicate Source IDs** | Two distinct files on disk both having filename ID `T1` | `ThreadRead.Records` contains both; lint flags duplicate. | Resolves first match. | **Blocked** by `ValidateSources` (`duplicate canonical Thread source ID`); planners never invoked. | Bypasses `ValidateSources` but `verifyThreadSourceSnapshot` tracks both records by key; repair safe. |
+| **Two Sources, One Declared ID** | File `T1` and file `T2` both have `id: T1` in frontmatter | Both readable; `T2` has ID drift. | Both resolve independently by filename ID. | **Blocked** by `ValidateSources` (`disagrees` on `T2`); planners never invoked. | Both tracked in impacts; `T2` retains `ThreadProblemIDDrift`. |
+| **Pathless Loaded Record** | `Source.ID: T1`, `Location: db://threads/T1`, `LocationIsPath: false`, `LocalPath: ""` | Healthy projection (`GraphHealthy`); `Path: ""` in diagnostics. | Fails with `ErrUnsupported` ("local thread paths unavailable"). | Passes semantic source gate; `materializeThreadMutation` **fails closed** (`source.LocalPath == ""`). | Retains `Location: db://threads/T1`, `Path: ""`; local repair skipped without error. |
+| **Malformed / Corrupt Thread** | Unparseable YAML frontmatter in `/threads/T1-corrupt.md` | Populates `ThreadReadProblem` in `ThreadRead.Problems`; `ThreadsEnvelope.Unreadable` carries problem. | Resolves `/threads/T1-corrupt.md` parse-free. | **Blocked** by `ValidateThreadCreationSource` (`current Thread record is unreadable`); planner never invoked. | Repair deliberately skips `ValidateSources`; repairs task graph; `verifyThreadSourceSnapshot` guarantees corrupt Thread bytes unchanged. |
+
+---
+
+### 5. Challenge to the Three Antigravity Claims
+
+#### Claim 1: A path hint cannot replace a local write handle
+- **Claim:** An adapter setting `core.RecordSource.LocationIsPath: true` with a path-shaped `Location` does not create write authority; guarded local writers require `VersionedRecord.LocalPath`.
+- **Adversarial Test:** In [`internal/store/thread_source_boundary_test.go:45-76`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/thread_source_boundary_test.go#L45-L76), tested:
+  1. `path hint without handle`: `source.LocalPath = ""`, `source.Record.Source.Location = path`, `LocationIsPath = true`. Result: `materializeThreadMutation` fails closed with `domain.ErrValidation` (`Thread mutation analysis does not identify its target document`).
+  2. `opaque location with explicit handle`: `source.Record.Source.Location = "db://threads/..."`, `LocationIsPath = false`, `source.LocalPath = validCommittedPath`. Result: materialization succeeds, atomically updates document, and verifies content hash.
+  3. In TUI [`internal/tui/local_path_test.go:31-67`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/tui/local_path_test.go#L31-L67), pressing `E` or `Y` on a record with `LocationIsPath: true` and empty `LocalPath` flashes `local path unavailable` and does not launch `$EDITOR`.
+- **Verdict:** **Claim holds.** Write authority is strictly tied to `LocalPath` and `SourceVersion`, never to `LocationIsPath`.
+
+#### Claim 2: Graph repair cannot hide readable Thread drift
+- **Claim:** Task graph repair proceeds past defective Thread documents to heal the task DAG, but Thread projection impacts preserve the independent source ID, retain `ThreadProblemIDDrift`, and keep `ProjectionHealth: GraphBroken`. Thread documents are not edited.
+- **Adversarial Test:** In [`internal/store/thread_source_boundary_test.go:178-212`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/thread_source_boundary_test.go#L178-L212), created a drifting Thread (`sourceID != declaredID`) referencing a task with duplicate dependencies:
+  1. Ran `core.MustNewService(fs).RepairTaskGraph(..., dryRun)` for both `dryRun: true` and `dryRun: false`.
+  2. Task graph repaired successfully (`receipt.FinalHealth == core.GraphHealthy`).
+  3. `receipt.ThreadImpacts[0]` retained `ThreadID == sourceID`, `impact.After.Source.ID == sourceID`, `impact.After.Thread.ID == declaredID`.
+  4. `impact.After.ProjectionHealth == core.GraphBroken` (NOT `GraphHealthy`).
+  5. `impact.After.Problems` contained `ThreadProblemIDDrift` pointing to the exact file path.
+  6. Thread file on disk was read after repair: byte-for-byte identical to original content (`slices.Equal(content, after)`).
+- **Verdict:** **Claim holds.** Graph repair cannot mask or sanitize Thread identity defects, nor does it tamper with Thread documents.
+
+#### Claim 3: No Thread planner can mutate its own authorization inputs
+- **Claim:** Thread planner callbacks receive private copies of mutable slices and maps; a planner cannot modify its input snapshot to bypass lifecycle policy or alter authorization.
+- **Adversarial Test:** In [`internal/store/thread_planner_snapshot_test.go:15-81`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/thread_planner_snapshot_test.go#L15-L81):
+  1. Created a cancelled Thread (`Status: cancelled`).
+  2. Executed `fs.MutateThread` where the planner callback altered `snapshot.Threads[0].Status = domain.ThreadStatusUnstarted` and returned a `start` plan.
+  3. Validation failed with `domain.ErrValidation` (`Thread ... cannot start from cancelled: terminal Threads cannot start`). The outer snapshot evaluated by `ValidateThreadMutationPlan` remained `cancelled`.
+  4. Tested `callThreadMutationPlanner`, `callThreadCreationPlanner`, and `callThreadApplyPlanner`: callbacks mutated `input[0].ID`, `input[0].Tags[0]`, `input[0].Tasks[0]`, and `snapshot.ThreadBodies[id]`. In all three dispatchers, the caller's snapshot and maps remained strictly intact (`"original"` tags, original tasks, original bodies).
+- **Verdict:** **Claim holds.** Authorization snapshots are thoroughly isolated from callback mutation.
+
+---
+
+### 6. Restored Compiling Mutation Probes
+
+Three mandatory compiling mutation probes were implemented in the sandbox, verified against focused regression tests, and cleanly restored to baseline:
+
+| Probe Target | File & Guard Mutated | Focused Test Executed | Behavioral Kill Observed | Restoration Status |
+| :--- | :--- | :--- | :--- | :--- |
+| **(a) Guarded Local-Path Authority** | [`internal/store/threadmutation.go:155`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/threadmutation.go#L155): removed `source.LocalPath == ""` check in `materializeThreadMutation`. | `go test -v -run TestThreadMutationMaterializerRequiresExplicitSourceEvidence ./internal/store` | **KILLED:** Subtest `path_hint_without_handle` failed: `materialization=thread ... changed path during mutation snapshot: conflict, want validation failed`. The mutation bypassed early validation and tripped the later path CAS check. | Restored cleanly (`git checkout -- internal/store/threadmutation.go`). |
+| **(b) Source Identity in Repair Impacts** | [`internal/core/thread_mutation.go:455`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/core/thread_mutation.go#L455): replaced `ThreadID: thread.Source.ID` with `ThreadID: thread.Value.ID` in `TaskGraphThreadImpacts`. | `go test -v -run TestThreadGraphImpactsRetainSourceDefectsAfterRepair ./internal/core` and `go test -v -run TestGraphRepairReceiptRetainsReadableThreadIdentityDrift ./internal/store` | **KILLED:** Core test failed with `repair impact lost the source defect: [{ThreadID:<declaredID> ...}]`. Store test failed with `repair manufactured healthy Thread evidence: {ThreadID:<declaredID> ...}`. | Restored cleanly (`git checkout -- internal/core/thread_mutation.go`). |
+| **(c) Callback Snapshot Isolation** | [`internal/store/threadmutation.go:121`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/threadmutation.go#L121): commented out `snapshot.Threads = clonePlannerThreads(snapshot.Threads)` in `callThreadMutationPlanner`. | `go test -v -run TestThreadPlannerCannotRewriteTerminalLifecycleAuthorization ./internal/store` | **KILLED:** Test failed: `callback rewrote authorization: result={... Status:in-progress ...} err=<nil>`. The callback successfully revived the cancelled Thread to in-progress without error. | Restored cleanly (`git checkout -- internal/store/threadmutation.go`). |
+| **(c₂) Nested & Body Map Isolation** | [`internal/store/threadcreation.go:113`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/threadcreation.go#L113) and [`threadapply.go:202`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/threadapply.go#L202): commented out `clonePlannerThreads` and `cloneStringMap`. | `go test -v -run TestThreadPlannerDispatchersIsolateNestedValuesAndBodies ./internal/store` | **KILLED:** Creation subtest failed with `creation callback rewrote owner evidence: threads=[{ID:rewritten ...}]`. Apply subtest failed with `apply callback rewrote owner evidence: ... bodies=map[...:Rewritten body]`. | Restored cleanly (`git checkout -- internal/store/threadcreation.go internal/store/threadapply.go`). |
+
+---
+
+### 7. Hostile Angles & Second-Pass Analysis
+
+1. **Semantic-Only Constructors and Pure Snapshot Validators in Production:**
+   - Traced all production invocations of `validateThreadCreationSnapshot` and compatibility constructor `NewTaskGraph`.
+   - `validateThreadCreationSnapshot` is called only inside `ComposeThreadApplyPlan` ([`internal/core/thread_apply.go:191`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/core/thread_apply.go#L191)) and `PrepareThreadApply` ([`internal/core/thread_apply.go:323`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/core/thread_apply.go#L323)).
+   - In every production route leading to these methods (`Service.ComposeThreadApply` at [`internal/core/service_thread_apply.go:27`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/core/service_thread_apply.go#L27), `MutateThreadApply` initial preflight at [`internal/store/threadapply.go:57`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/threadapply.go#L57), and `reprepareThreadApply` at [`internal/store/threadapply.go:271`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/store/threadapply.go#L271)), `ValidateThreadCreationSource(graph, threadRead)` is explicitly called *before* any planner or convergence logic runs.
+   - `NewTaskGraph` builds a read-only compatibility snapshot from file slices without local repair paths (`LocalPath: ""`); repair requires explicit `TaskGraphRead` with `GuardedRecords` carrying `LocalPath`. No production path promotes bare tasks to repair authority.
+
+2. **`LoadedThreads()` Value Ownership & Guarded Metadata Exclusion:**
+   - [`internal/core/store.go:138-148`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/internal/core/store.go#L138-L148) creates independent `domain.Thread` copies, allocating fresh `Tags` and `Tasks` slices.
+   - Guarded metadata (`LocalPath` and `SourceVersion`) are strictly omitted from `LoadedRecord[domain.Thread]`.
+   - In `TaskGraphThreadImpacts`, every record in the input slice is iterated without deduplication, and impacts are keyed by `thread.Source.ID`. Declared IDs are never used as fallbacks.
+
+3. **Materialization CAS vs. Token Minting Races:**
+   - `materializeThreadMutation` compares disk content against the *original read revision* (`source.SourceVersion`), not a newly minted token.
+   - If a concurrent write occurs before materialization, `hashContent(content) != source.SourceVersion` triggers `domain.ErrConflict`.
+   - Immediately prior to file atomic write, `verifyUnchanged` re-resolves the file and confirms content hash against `materialized.ifVersion`.
+   - Idempotent no-op mutations (`!analysis.Changed`) return `changed: false` and cleanly exit without executing writes.
+
+4. **External Editor Pathname Race vs. Guarded Writes:**
+   - In TUI actions (`E` for edit, `Y` for yank), `TestLocalPathActionFollowsRenameByStableID` confirms that stable IDs are re-resolved prior to launching `$EDITOR`, following files across renames.
+   - While an external editor child process is active, subsequent external filesystem renames remain an unavoidable operating-system-level race (accurately documented in planning as best-effort). Guarded store writes, by contrast, are strictly protected by whole-content SHA-256 CAS verification.
+
+5. **Shared Test Helpers Audit:**
+   - Identified test helpers `graphFixturePath` and `semanticThreadRead` that couple declared ID with source ID.
+   - Verified that regression tests in `thread_source_boundary_test.go` deliberately avoid these helpers by supplying independent `RecordSource` configurations, opaque URIs (`"db://..."`), and disconnected filenames to ensure test validity.
+
+6. **Second-Pass Challenge: Future Pathless Database Adapter:**
+   - Evaluated the complete domain contract assuming a future database adapter where records have opaque primary keys, `LocationIsPath: false`, `LocalPath: ""`, and integer/ETag revisions:
+     - `read.ValidateSources()` succeeds: validates `Source.ID` non-empty, unique, and matching declared ID.
+     - `ValidateThreadCreationSource` succeeds without requiring local paths.
+     - `ProjectLoadedThread` sets `path: ""` and retains diagnostic URI in `view.Source.Location`.
+     - `verifyThreadSourceSnapshot` succeeds: compares `left.LocalPath == right.LocalPath` (`"" == ""`) and opaque revisions.
+     - `HasLocalPath` returns `false`; CLI `task info` outputs `path: ""` and `thread path` returns `ErrUnsupported`.
+     - `hasLocalRepairPath` returns `false`; graph repair skips local file operations cleanly without failing closed.
+   - No contract assumptions force a future adapter to invent fake filenames or synthetic paths.
+
+---
+
+### 8. Verification and Test Execution Log
+
+The following validation commands were executed cleanly within the sandbox:
+
+1. **Full Test Suite:**
+   ```sh
+   go test ./...
+   ```
+   *Result:* All 34 packages passed (0 failures).
+
+2. **Race Detection Suite:**
+   ```sh
+   go test -race ./internal/core ./internal/store ./internal/tui ./internal/wire
+   ```
+   *Result:* Clean pass across all concurrency-sensitive packages (0 data races).
+
+3. **Linter Inspection:**
+   ```sh
+   golangci-lint run ./...
+   ```
+   *Result:* Passed cleanly; 0 issues reported.
+
+4. **Planning and Audit Linting:**
+   ```sh
+   ./bin/tskflwctl audit lint && ./bin/tskflwctl lint
+   ```
+   *Result:* `✔ all audit findings pass lint`; `✔ all planning entities and dependency links pass lint`.
+
+5. **Documentation and Module Tidiness:**
+   ```sh
+   just docs-check && just tidy-check
+   ```
+   *Result:* Clean pass; CLI reference and `go.mod`/`go.sum` are perfectly up to date.
+
+6. **Schema Comments Staleness Check:**
+   ```sh
+   go test -v -run TestSchemaComments_NotStale ./internal/wire
+   ```
+   *Result:* Passed. `internal/wire/schema_comments.json` is synchronized with domain and wire definitions.
+
+7. **Git Whitespace & Format Check:**
+   ```sh
+   git diff --check
+   ```
+   *Result:* Clean pass (0 trailing whitespace or newline anomalies).
+
+8. **Compatibility Verification:**
+   - Ran `./bin/tskflwctl thread list --json` and `./bin/tskflwctl task list --json`: Valid JSON emitted matching schema version.
+   - Tested `./bin/tskflwctl task info 6gcwcf88z57p`: Resolves absolute path through `TaskPath` port cleanly.
+   - Tested `./bin/tskflwctl thread path 6gcwd78p9r04`: Resolves absolute path through `ThreadPathSource` cleanly.
+
+---
+
+### 9. Findings
+
+None. All architectural contracts and security boundaries hold. Prior finding `L1` from `6gfyn1nhawqq` has been verified as fixed in commit `a31bd42`. No new regressions, defects, or compatibility breaks were discovered.
+
+---
+
+### 10. Conclusion & Recommendations
+
+Task [`6gcwcf88z57p`](file:///private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.vE3yFJ/planning/tasks/6gcwcf88z57p-split-local-path-capabilities-from-semantic-entity-reads.md) has successfully split local path and revision capabilities from semantic entity reads across Task, Thread, Epic, Audit, and Research entities. The boundary is robust, fail-closed, and accompanied by comprehensive regression tests and snapshot isolation.
+
+Following completion of owner triage reconciling this review with the parallel Codex review, task `6gcwcf88z57p` should be marked `completed`, unblocking dependent task `6gcwcf8gzn50`.
+
+## Owner reconciliation — 2026-10-03
+
+No coded findings were submitted. The path-handle and callback-isolation checks are useful evidence,
+but the blanket no-findings verdict is qualified, not adopted as proof of every source boundary:
+
+- The prior Task-identity repair reload finding was fixed in `e87fa0b`, not `a31bd42`.
+- Duplicate source-ID path lookup fails with ambiguity; it does not select the first file. An
+  unavailable `Service.ThreadPath` capability returns `domain.ErrValidation`; there is no
+  `ErrUnsupported` sentinel here. `HasLocalPath` and `hasLocalRepairPath` do exist, but the latter
+  marks local repair unavailable in diagnosis rather than promising successful remote repair.
+- Mutation (a) demonstrates early validation/error classification: a later handle check still
+  denied materialization. Mutation (b) changes the impact ID, not projection health; its broad
+  assertion message does not prove that health became healthy. Codex supplied coordinated mutants
+  which actually fabricated path authority and erased projection source evidence.
+- Valid JSON from the head alone is not a base/head compatibility comparison. The companion Codex
+  report provides actual comparisons and non-default semantic schema-validation evidence.
+- The duplicate-source matrix verified retention/CAS but missed duplicate health in repair
+  receipts. Codex M1 reproduced that omission; it is now fixed with permanent dry-run/committed
+  store tests and complete-set core projection coverage. Readable drift coverage remains valid.
+
+Owner confirmed the independent sandbox Git directory/baseline, a sole assigned-audit delta, and
+byte-identical delivery. Its persisted attestation still says `transfer=pending`; no final helper
+transcript was supplied in this report, so successful guarded transfer is not retrospectively
+asserted. That protocol gap is already scoped in
+[self-finalizing transfer attestations](../tasks/6g7srp3py9fe-make-adversarial-review-transfer-attestations-self-finalizing.md).
+The technical disposition relies on verified code/regressions and the companion Codex evidence,
+not the unqualified recommendation above. Both reviews are reconciled; no design call or new
+out-of-scope implementation finding remains.

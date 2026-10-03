@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gcwcf88z57p
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Remove local path, filename identity, and revision evidence from semantic entity values and expose local navigation explicitly.
 effort: 3-5 days
@@ -13,6 +13,7 @@ created: "2026-09-23"
 depends_on: [6gcwcf80v8hg, 6gdx7mcqm371, 6gdx7mcqq67d, 6gdx7mcrq8s8, 6ge1bacd3bd2]
 updated_at: "2026-10-03"
 started_at: "2026-10-01"
+completed_at: "2026-10-03"
 ---
 
 # Split local source capabilities from semantic entity reads
@@ -77,6 +78,13 @@ retain their stronger version evidence outside the domain values.
 
 ## Progress
 
+- Final checkpoint reviews are reconciled. Codex exposed a pre-existing repair receipt defect:
+  duplicate Thread sources retained their IDs/locations but lost duplicate health qualification.
+  List, graph-repair impacts, and lifecycle impacts now share complete-source-set projection before
+  filtering changed entries. Regressions cover dry-run/committed repair, unchanged duplicate
+  siblings, opaque sources, completed inconsistency, and unchanged Thread bytes. Antigravity's
+  no-findings report is qualified with explicit evidence corrections in its owner reconciliation.
+  Full tests, core/store/TUI/wire race checks, and lint pass; all acceptance criteria are met.
 - Thread `Path`/`FilenameID` and `CanonicalID()` are removed. Filesystem ordinary, selected, and
   bulk-apply scans attach independent source identity/location and guarded local paths/revisions.
   Creation, membership/lifecycle, task-lifecycle, and bulk-apply source gates now consume the full
@@ -87,9 +95,8 @@ retain their stronger version evidence outside the domain values.
   cancelled Thread. Mutation, creation, and apply callbacks now receive private copies of Thread
   values and nested slices; apply bodies are copied too. Separate regression tests cover the policy
   bypass and all three callback dispatchers. Full tests, affected-package race checks, and lint pass.
-  Implementation ACs are met; keep the task in progress until final checkpoint review is reconciled.
-  The final Codex and Antigravity briefs below cover the Task/Thread removal delta, remaining
-  source-aware consumers, compatibility, and compiling hostile mutation probes.
+  The final Codex and Antigravity reviews below cover the Task/Thread removal delta, remaining
+  source-aware consumers, compatibility, and compiling hostile mutation probes; both are reconciled.
 - `domain.Task` now contains no path, filename identity, or source revision. Filesystem scans and
   creation receipts retain their explicit source/local metadata; bare-task graph compatibility
   inputs provide no location or repair authority. Test fixtures now carry paths in loaded/guarded
