@@ -1,80 +1,14 @@
 package cli
 
 import (
-	"path/filepath"
 	"sort"
 	"strings"
 
 	"github.com/spf13/cobra"
 
-	"github.com/andy-esch/taskflow/internal/config"
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
-	"github.com/andy-esch/taskflow/internal/id"
-	"github.com/andy-esch/taskflow/internal/store"
 )
-
-// flatSlug returns the human slug of a flat task filename stem `<id>-<slug>` by
-// slicing the fixed 12-char id, or "" when the name is not id-led (a README/stray,
-// not a completion candidate). Parse-free — it reads only the filename, so a task
-// with malformed frontmatter still completes (you complete it precisely to fix it).
-func flatSlug(stem string) string {
-	if len(stem) > id.Length+1 && stem[id.Length] == '-' && id.Valid(stem[:id.Length]) {
-		return stem[id.Length+1:]
-	}
-	return ""
-}
-
-// flatCompletions returns the completion candidates among the id-led .md files in matches,
-// honoring the flat layout's resolution model (ADR-0003 §4): a task/audit resolves on its
-// slug OR its id prefix. So it offers the human slug when it uniquely matches toComplete,
-// but falls back to the full `<id>-<slug>` stem when the slug is a DUPLICATE (to keep the
-// suggestion unambiguous) or when toComplete is an id-prefix / full stem (which the bare
-// slug can't match). excluded is keyed by slug; already-typed args are dropped by either form.
-func flatCompletions(matches []string, toComplete string, excluded map[string]bool, args []string) []string {
-	taken := map[string]bool{}
-	for _, arg := range args {
-		taken[arg] = true // a stem/id typed on the command line
-		if s := flatSlug(arg); s != "" {
-			taken[s] = true // …and its slug form
-		}
-	}
-	stems := make([]string, 0, len(matches))
-	slugCount := map[string]int{}
-	for _, m := range matches {
-		stem := strings.TrimSuffix(filepath.Base(m), ".md")
-		if flatSlug(stem) != "" {
-			stems = append(stems, stem)
-			slugCount[flatSlug(stem)]++
-		}
-	}
-	var out []string
-	offer := func(v string) {
-		if v == "" || taken[v] {
-			return
-		}
-		taken[v] = true
-		out = append(out, v)
-	}
-	for _, stem := range stems {
-		slug := flatSlug(stem)
-		if excluded[slug] {
-			continue
-		}
-		switch {
-		case strings.HasPrefix(slug, toComplete):
-			if slugCount[slug] == 1 {
-				offer(slug) // unique slug → the readable form
-			} else {
-				offer(stem) // duplicate slug → disambiguate by the id-led stem
-			}
-		case strings.HasPrefix(stem, toComplete):
-			offer(stem) // an id-prefix or full-stem query the bare slug can't match
-		}
-	}
-	sort.Strings(out)
-	return out
-}
 
 // completeFunc is cobra's ValidArgsFunction shape.
 type completeFunc = func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective)
@@ -158,133 +92,56 @@ func isCompletionCommand(cmd *cobra.Command) bool {
 	}
 }
 
-// planningRoot resolves the planning root for completion, tolerant of being
-// outside a repo (returns ok=false). It does its own discovery rather than
-// relying on the lazily-built service, so completion works even when
-// PersistentPreRunE found no repo.
-func (a *App) planningRoot() (string, bool) {
-	start, err := a.startDir()
-	if err != nil {
-		return "", false
-	}
-	cfg, err := config.Discover(start)
-	if err != nil {
-		return "", false
-	}
-	return cfg.Root, true
-}
-
-// slugsFromGlobs returns the .md filename stems matching any pattern, keeping
-// only those with the typed prefix and dropping any already on the command
-// line. It parses no YAML — the slug *is* the filename — so completion is fast
-// and works even when a file's frontmatter is malformed (the case you most want
-// to complete while fixing it). Because status/bucket *is* the directory, the
-// caller selects which dirs to glob to filter by state — still without parsing.
-func slugsFromGlobs(patterns []string, prefix string, taken []string) []string {
-	seen := make(map[string]bool, len(taken))
-	for _, t := range taken {
-		seen[t] = true
-	}
-	var out []string
-	for _, pat := range patterns {
-		matches, err := filepath.Glob(pat)
+// entityCompleter delegates planning data and candidate policy to the application.
+// Composition is deferred until Cobra has parsed the completed command's flags.
+// Injected services, missing capabilities, and failed discovery never cause a
+// controller to open a filesystem fallback.
+func (a *App) entityCompleter(kind core.EntityKind, excludedState string) completeFunc {
+	return func(_ *cobra.Command, args []string, prefix string) ([]string, cobra.ShellCompDirective) {
+		svc := a.Svc
+		if a.CompletionService != nil {
+			var err error
+			svc, err = a.CompletionService()
+			if err != nil {
+				return nil, cobra.ShellCompDirectiveNoFileComp
+			}
+		}
+		if svc == nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
+		candidates, err := svc.CompleteEntities(core.CompletionRequest{
+			Kind: kind, Prefix: prefix, Args: args, ExcludeState: excludedState,
+		})
 		if err != nil {
-			continue
+			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
-		for _, m := range matches {
-			slug := strings.TrimSuffix(filepath.Base(m), ".md")
-			if slug == "" || seen[slug] || !strings.HasPrefix(slug, prefix) {
-				continue
-			}
-			seen[slug] = true
-			out = append(out, slug)
-		}
+		return candidates, cobra.ShellCompDirectiveNoFileComp
 	}
-	sort.Strings(out)
-	return out
 }
 
-// taskCompleter completes task slugs whose status (== their directory) is not
-// `exclude`, so `task start` won't offer already-in-progress tasks. An empty
-// exclude offers every task.
+// taskCompleter excludes only records observed in the destination status.
+// Malformed records with unknown state stay addressable for repair.
 func (a *App) taskCompleter(exclude domain.Status) completeFunc {
-	return func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		root, ok := a.planningRoot()
-		if !ok {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-		// Status lives in frontmatter under the flat layout (ADR-0003 §4), so honoring
-		// `exclude` means parsing — but only when a status-aware verb asks for it.
-		// Malformed files (absent from ListTasks) are never excluded: you complete them
-		// precisely to fix them.
-		excluded := map[string]bool{}
-		if exclude != "" {
-			tasks, _, _ := store.NewFS(root).ListTasks()
-			for _, tk := range tasks {
-				if tk.Status == exclude {
-					excluded[tk.Slug] = true
-				}
-			}
-		}
-		matches, _ := filepath.Glob(filepath.Join(root, domain.TasksDir, "*.md"))
-		return flatCompletions(matches, toComplete, excluded, args), cobra.ShellCompDirectiveNoFileComp
-	}
+	return a.entityCompleter(core.EntityTask, string(exclude))
 }
 
-// completeThreadSlugs offers the human slug when unique and the id-led stem
-// when disambiguation is required, matching task completion and resolution.
-func (a *App) completeThreadSlugs(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	root, ok := a.planningRoot()
-	if !ok {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-	matches, _ := filepath.Glob(filepath.Join(root, domain.ThreadsDir, "*.md"))
-	return flatCompletions(matches, toComplete, map[string]bool{}, args), cobra.ShellCompDirectiveNoFileComp
+func (a *App) completeThreadSlugs(cmd *cobra.Command, args []string, prefix string) ([]string, cobra.ShellCompDirective) {
+	return a.entityCompleter(core.EntityThread, "")(cmd, args, prefix)
 }
 
-// auditCompleter completes audit slugs whose bucket (== their directory) is not
-// `exclude`, so `audit reopen` won't offer already-open audits. An empty
-// exclude offers every audit.
+// auditCompleter excludes records observed in the destination bucket.
 func (a *App) auditCompleter(exclude domain.AuditBucket) completeFunc {
-	return func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		root, ok := a.planningRoot()
-		if !ok {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-		// Bucket lives in frontmatter under the flat layout, so honoring `exclude` means
-		// parsing — only when a bucket-aware verb asks. Malformed audits (absent from
-		// ListAudits) are never excluded.
-		excluded := map[string]bool{}
-		if exclude != "" {
-			audits, _, _ := store.NewFS(root).ListAudits()
-			for _, au := range audits {
-				if au.Bucket == exclude {
-					excluded[au.Slug] = true
-				}
-			}
-		}
-		matches, _ := filepath.Glob(filepath.Join(root, domain.AuditsDir, "*.md"))
-		return flatCompletions(matches, toComplete, excluded, args), cobra.ShellCompDirectiveNoFileComp
-	}
+	return a.entityCompleter(core.EntityAudit, string(exclude))
 }
 
-// completeTaskSlugs completes every task slug (any status). Used by show/set/
-// move, where the current status doesn't constrain the choice.
-func (a *App) completeTaskSlugs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	return a.taskCompleter("")(cmd, args, toComplete)
+func (a *App) completeTaskSlugs(cmd *cobra.Command, args []string, prefix string) ([]string, cobra.ShellCompDirective) {
+	return a.taskCompleter("")(cmd, args, prefix)
 }
 
-// completeAuditSlugs completes every audit slug (any bucket). Used by audit show.
-func (a *App) completeAuditSlugs(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	return a.auditCompleter("")(cmd, args, toComplete)
+func (a *App) completeAuditSlugs(cmd *cobra.Command, args []string, prefix string) ([]string, cobra.ShellCompDirective) {
+	return a.auditCompleter("")(cmd, args, prefix)
 }
 
-// completeEpicIDs completes epic ids (epics live flat in epics/).
-func (a *App) completeEpicIDs(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	root, ok := a.planningRoot()
-	if !ok {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-	ids := slugsFromGlobs([]string{filepath.Join(root, domain.EpicsDir, "*.md")}, toComplete, args)
-	return ids, cobra.ShellCompDirectiveNoFileComp
+func (a *App) completeEpicIDs(cmd *cobra.Command, args []string, prefix string) ([]string, cobra.ShellCompDirective) {
+	return a.entityCompleter(core.EntityEpic, "")(cmd, args, prefix)
 }

@@ -63,6 +63,10 @@ type App struct {
 	// receipts so an explicit cross-repo write cannot hide how its target was chosen.
 	selectedSpace string
 	Svc           *core.Service
+	// CompletionService defers composition until Cobra has parsed the completed
+	// command's flags. Its initial __complete hook runs before -C/--space are known.
+	// Tests/other composition roots can inject a portable service without discovery.
+	CompletionService func() (*core.Service, error)
 	// SpaceSvc is the repo-independent application boundary for registry catalog,
 	// selection, and mutation use cases.
 	SpaceSvc *core.SpaceRegistryService
@@ -77,12 +81,9 @@ type App struct {
 	// ConfigSvc is the framework-free configuration application core shared by
 	// Cobra, both TUI contexts, and future adapters.
 	ConfigSvc *core.ConfigurationService
-	// Fixer/Layout/Linter are the narrow fs/text ports that aren't core use cases:
-	// `lint --fix` calls Fixer, the TUI watcher reads Layout, and `lint --links` calls
-	// Linter — none route through the Service (see core.Fixer/core.Layout/core.Linter).
-	Fixer  core.Fixer
+	// Layout remains an explicit local watcher capability; planning repair,
+	// body-link checking, and completion are application use cases on Svc.
 	Layout core.Layout
-	Linter core.Linter
 	// commandSafety is bound from the final runnable Cobra command before any
 	// discovery or use-case execution. Persistence adapters consult it at their
 	// write boundaries, making the command annotation an enforced invariant.
@@ -258,6 +259,12 @@ func newRootCmd(in io.Reader, out, errOut io.Writer) (*cobra.Command, *App) {
 	app := &App{
 		Out: out, ErrOut: errOut, In: in, Th: design.Default(),
 	}
+	app.CompletionService = func() (*core.Service, error) {
+		if err := app.resolve(); err != nil {
+			return nil, err
+		}
+		return app.Svc, nil
+	}
 	spaceAdapter := spacestore.New(spacestore.WithMutationAuthorization(app.authorizeMutation))
 	spaceSvc := core.NewSpaceRegistryService(spaceAdapter)
 	app.ConfigSvc = core.NewConfigurationService(
@@ -338,11 +345,10 @@ func (a *App) repoPreRun(cmd *cobra.Command, _ []string) error {
 		return err
 	}
 	a.setStyle()
-	// Shell completion ('__complete') runs this hook too. Outside a planning repo,
-	// resolve() errors — which would abort completion. Stay silent there; completion
-	// funcs do their own forgiving discovery (see completion.go).
+	// Cobra invokes this before parsing the command being completed. Defer repo
+	// composition to CompletionService so -C/--space cannot silently target cwd.
+	// Missing discovery stays silent on that protocol path.
 	if isCompletionCommand(cmd) {
-		_ = a.resolve()
 		return nil
 	}
 	if err := a.resolve(); err != nil {
@@ -356,7 +362,7 @@ func (a *App) repoPreRun(cmd *cobra.Command, _ []string) error {
 // startDir is the single source of the discovery start directory. An explicit --space
 // selects the exact registered entry point; -C selects a path; otherwise TSKFLW_SPACE
 // may select an entry point before falling back to cwd. resolve() (fatal), config/TUI
-// adapters, and completion's planningRoot() (forgiving) share it so the "where do we
+// adapters, and deferred completion composition (forgiving) share it so the "where do we
 // start discovery" contract can't drift between consumers.
 func (a *App) startDir() (string, error) {
 	spaceFlag := strings.TrimSpace(a.Space)
@@ -437,8 +443,8 @@ func (a *App) resolveFrom(start string) error {
 	a.resolveTheme()
 	a.Style = a.Style.WithPalette(a.Th.Dark)
 	a.Prompt = prompt.NewTTY(a.In, a.ErrOut, a.Th)
-	// One *FS satisfies all the core ports; the Service gets the use-case Store,
-	// the adapters get the narrow Fixer/Layout/Linter (see the App field comment).
+	// One *FS supplies the application ports, including optional planning repair,
+	// link checking, and parse-free completion. Only watcher layout bypasses Svc.
 	discoveryStart := cfg.Dir
 	if discoveryStart == "" {
 		discoveryStart = cfg.Root
@@ -454,9 +460,7 @@ func (a *App) resolveFrom(start string) error {
 	if err != nil {
 		return err
 	}
-	a.Fixer = fs
 	a.Layout = fs
-	a.Linter = fs
 	return nil
 }
 
@@ -474,10 +478,18 @@ func (a *App) authorizeMutation() error {
 // TSKFLW_NO_LINK_WARN. The `doctor` command reports the same findings explicitly,
 // so its own PreRunE overrides the root hook that calls this.
 func (a *App) warnLinks() {
-	if envEnabled("TSKFLW_NO_LINK_WARN") {
+	if envEnabled("TSKFLW_NO_LINK_WARN") || a.Cfg == nil || a.ConfigSvc == nil {
 		return
 	}
-	for _, p := range config.CheckLinks(a.Cfg) {
+	start := a.Cfg.Dir
+	if start == "" {
+		start = a.Cfg.Root
+	}
+	problems, err := a.ConfigSvc.RepositoryLinkProblems(start)
+	if err != nil {
+		return // ambient warnings remain best-effort; doctor reports diagnosis failures
+	}
+	for _, p := range problems {
 		fmt.Fprintf(a.ErrOut, "%s %s\n", a.Style.Warn("⚠"), p.Message)
 	}
 }

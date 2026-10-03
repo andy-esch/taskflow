@@ -80,25 +80,27 @@ subpackages. It is today's composition root: `NewRootCmd` constructs
 commands launch `tui`/`configui`. Forbidding those imports would move wiring without
 improving the boundary.
 
-The 2026-08-21 audit of direct primary-to-secondary edges classified the remaining
-ones as follows:
+The direct primary-to-secondary edges, updated after the portable entity and CLI
+planning-data migrations, are classified as follows:
 
 | Edge | Classification | Disposition |
 | --- | --- | --- |
 | `cli -> configstore`, `cli -> spacestore`, `cli -> workspacestore`, `cli -> store` construction | Composition root | Intentional; secondary adapters are injected into consumer-owned core ports. |
-| `cli -> store` through `Fixer`, `Linter`, `Layout`, and completion | Narrow fs/text adapter capability | Intentional today; these are not planning use cases. The broader reusable workspace decision is tracked separately. |
+| `cli -> core.Service` for repair, body-link lint, and entity completion | Application use cases | `RepairPlanning`, `LintWithLinks`, and `CompleteEntities` own orchestration; optional secondary capabilities are source-set checked. Controllers never construct a fallback store. |
+| CLI/TUI watcher access through `Layout` | Explicit local capability | Intentional: watcher directories are process integration, not semantic entity data. |
 | `cli -> config` for discovery/init/maintenance | Adapter orchestration | Atlas workspace opening now uses `core.WorkspaceService`; `ui` additionally reads `config.ErrNoConfig` to tell an ordinary discovery miss from a broken config. The deferred [`reusable-workspace-discovery-seam`](../planning/tasks/6fgcr2403sjn-reusable-workspace-discovery-seam-lift-init-doctor-fix-off-the-cli.md) retains only init/doctor/fix work that still lacks another consumer. |
 | `cli -> userconfig` for initial presentation-preference loading | Adapter orchestration | Intentional today; registry catalog, selection, mutations, completion, and diagnosis all use `core.SpaceRegistryService`. |
 | `tui -> configui` | Focused primary-adapter composition | Intentional: the full TUI embeds the same configuration editor launched by `config edit`. |
 | `tui -> editor` / `os/exec` | Narrow process/terminal capability | Intentional; planning data still flows only through `core.Service`. |
 
-No new architecture task is needed for these edges: the two material seams already
-have explicit trigger-scoped work, and the remaining edges are composition or narrow
-adapter capabilities rather than leaked persistence.
+The remaining broad CLI composition exception is tracked by
+[controller-boundary enforcement](../planning/tasks/6gcwcf8rxe72-isolate-cli-composition-wiring-and-enforce-controller-boundaries.md);
+the reusable-workspace task retains its separately triggered init/doctor scope.
 
 - **`internal/domain`** — entities + invariants (`Task`, `Status`). No fs, no
-  cobra logic (the one pragmatic concession: `Task`/`Thread`/`Epic`/`Audit`/`Research` carry a
-  `Path` the store stamps, so callers can locate the source file). Frontmatter **is** the
+  Cobra logic, local paths, filename identities, or guarded revisions. Application
+  reads carry source evidence in `LoadedRecord`; local navigation uses explicit
+  optional path ports. Frontmatter **is** the
   authoritative status/bucket (ADR-0003 §4): tasks, audits, and research are stored
   **flat and id-led** — `tasks/<id>-<slug>.md`, `audits/<id>-<slug>.md`,
   `research/<id>-<slug>.md`, `threads/<id>-<slug>.md` — with no status/bucket directory to mirror or drift against
@@ -132,10 +134,22 @@ adapter capabilities rather than leaked persistence.
 - **`internal/core`** — use cases (`Service`) + the ports it needs, defined here
   at the consumer. `Store` (composed of
   `TaskStore`/`EpicStore`/`AuditStore`/`ResearchStore`) is the *use-case* port the
-  `Service` depends on; the three fs/text operations that aren't use cases live in
-  narrow sibling ports — `Fixer` (frontmatter repair), `Linter` (link integrity),
-  and `Layout` (watch paths) — so a second `Store` and the test fakes don't carry
-  them. `SpaceRegistryService` owns the repo-independent catalog, grouping, explicit
+  `Service` depends on. Optional planning maintenance uses sibling `Fixer` and
+  `Linter` ports through `RepairPlanning` and `LintWithLinks`; parse-free resolution
+  candidates use `CompletionSource` through `CompleteEntities`. These capabilities
+  share the service's checked source set without widening the aggregate `Store`.
+  Repair keeps frontmatter-before-body ordering, dry-run semantics, and a completed
+  prefix even when later repair or post-lint fails; the application never retries a
+  multi-file repair wholesale. Completion counts aliases before state exclusion,
+  retains damaged records, and accepts adapter-owned selectors rather than paths.
+  Human search labels are selectors only when the source certifies them; the filesystem
+  source shares resolver enumeration, uses bare canonical IDs, checks case-folded aliases
+  and ID precedence, and omits duplicate canonical IDs. Already-selected identity is
+  separate from alias counts so selecting one source does not hide same-label siblings.
+  Cobra defers completion composition until the completed command's `-C`/`--space`
+  flags have been parsed; discovery/capability failures remain silent, with no local
+  fallback. `Layout` is separately supplied for filesystem watching.
+  `SpaceRegistryService` owns the repo-independent catalog, grouping, explicit
   selection, label policy, and mutation receipts through `SpaceRegistryStore`.
   `SpaceOverviewService` composes that catalog with `SpaceOverviewStore`, whose only job
   is opening the narrow read-only `PlanningSummarySource` needed for a dashboard scan,
@@ -291,7 +305,7 @@ adapter capabilities rather than leaked persistence.
   Local navigation requests a separate optional path capability, not the diagnostic location or
   its presentation hint.
   Repository lint follows the same rule through its dedicated `LintSource` port. Its per-kind,
-  resilient reads return decoded records with `LintLoadProblem` values carrying taskflow-owned
+  resilient reads return decoded records with `LoadProblem` values carrying taskflow-owned
   entity kind, optional stable identity, optional location, and message. Core neither accepts
   `FileProblem` through this port nor parses a location to recover identity. The CLI maps the
   neutral problem deliberately: human output leads with identity, while schema 1.73 keeps the
@@ -310,24 +324,24 @@ adapter capabilities rather than leaked persistence.
   entity scan. Publication canonically orders diagnostics by kind and explicit fields rather than
   inheriting adapter return order. Human cross-space status renders the space-qualified identity,
   location/repair path, and message before returning the existing partial-result exit. The
-  aggregate `SummaryStore` remains a transitional local compatibility port: filesystem adapters
-  recover identity before returning `FileProblem`, and core only maps the supplied fields. A later
-  entity-read design pass owns replacing that aggregate contract rather than letting dashboard code
-  parse paths.
+  dashboard data now uses portable task, epic, and audit snapshots rather than `FileProblem`;
+  `SummaryStore` supplies epic reads, while tasks and audits use their dedicated snapshot ports.
+  Source identity and optional diagnostics are supplied at the adapter boundary, never
+  inferred from a path by dashboard code.
   Per-space failures remain data in the projection; the CLI renders the complete sweep
   before applying its partial-failure exit policy. Pure; unit-testable without fs.
 - **`internal/store`** — the secondary adapter: tasks as
   `<root>/tasks/<id>-<slug>.md` (flat, id-led). Splits frontmatter with a zero-dep byte
   scanner; parses YAML with `go.yaml.in/yaml/v3`. One `*FS` satisfies the entity
-  `Store`, the narrow `Fixer`/`Linter`/`Layout` ports, and the guarded graph and
+  `Store`, the optional `Fixer`/`Linter`/`CompletionSource` ports, `Layout`, and the guarded graph and
   lifecycle mutation capabilities. Its `ReadTaskGraph` adapter translates file diagnostics into
   neutral record identity in the same task scan. Its `LintSource` and `AuditSnapshotSource`
   implementations similarly adapt the existing body-aware and entity scans once at the filesystem
   boundary; they do not re-scan records to manufacture portable diagnostics. Exact-path
   `FileProblem` values remain on
   local list, fixer, and guarded-mutation paths where filesystem repair evidence is the contract.
-  The Service gets the use-case ports; CLI lint and
-  the TUI watcher get their narrower capabilities wired directly. It owns the *layout*
+  The Service gets all planning-data ports; only
+  the TUI watcher receives `Layout` directly. It owns the *layout*
   knowledge — `WatchPaths()`
   hands the TUI watcher its dir set so the path convention isn't reconstructed
   outside the store. Task dependency fields are graph-owned: generic create/set/edit
@@ -628,10 +642,10 @@ not for hypothetical future flexibility. The specifics:
   tests run against an in-memory `fakeStore` (`core/service_epic_test.go`), so
   rollup/validation logic is tested with no filesystem. That's a real second
   implementation now, plus the shipped TUI is a second primary adapter over the
-  same core. The port stays *use-case-only*: `FixFrontmatter` and `WatchPaths`
-  (fs/text operations, not use cases) were split off into the narrow `Fixer` and
-  `Layout` ports the adapters wire to the FS directly, so the `Store` the fakes
-  implement carries no presentation-adjacent baggage.
+  same core. Optional maintenance and completion remain narrow sibling ports
+  consumed by named application use cases, not mandatory methods on every `Store`.
+  `WatchPaths` stays on the separately wired local `Layout` capability, so portable
+  reads do not imply filesystem watching.
 - **Frontmatter logic is already cohesive.** `frontmatter.go` (parse + surgical
   write), `fix.go` (text repair), `diagnose.go` (error diagnosis) are all one
   package (`store`), split into files by concern — idiomatic Go. `domain/

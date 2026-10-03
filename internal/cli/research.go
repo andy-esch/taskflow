@@ -3,7 +3,6 @@ package cli
 import (
 	"fmt"
 	"io"
-	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -345,12 +344,7 @@ func newResearchPathCmd(app *App) *cobra.Command {
 	}
 }
 
-// completeResearchSlugs completes research slugs from the flat, id-led filenames.
+// completeResearchSlugs uses the same portable completion use case as other entities.
 func (a *App) completeResearchSlugs(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-	root, ok := a.planningRoot()
-	if !ok {
-		return nil, cobra.ShellCompDirectiveNoFileComp
-	}
-	matches, _ := filepath.Glob(filepath.Join(root, domain.ResearchDir, "*.md"))
-	return flatCompletions(matches, toComplete, nil, args), cobra.ShellCompDirectiveNoFileComp
+	return a.entityCompleter(core.EntityResearch, "")(nil, args, toComplete)
 }

@@ -77,6 +77,10 @@ func TestReadOnlyCommandCannotReachAnyMutatingApplicationBoundary(t *testing.T) 
 			_, err := app.Svc.SetFields("alpha", map[string]any{"priority": "high"}, false, dryRun)
 			return err
 		}},
+		{"planning-repair", func(app *App, _ string, dryRun bool) error {
+			_, err := app.Svc.RepairPlanning(dryRun)
+			return err
+		}},
 		{"task-lifecycle", func(app *App, _ string, dryRun bool) error {
 			_, err := app.Svc.Move("alpha", domain.StatusInProgress, dryRun, core.TaskLifecycleOverrideNone)
 			return err

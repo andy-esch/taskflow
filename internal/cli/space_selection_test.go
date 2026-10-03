@@ -214,4 +214,14 @@ func TestComplete_GlobalSpaceAndSelectedEntities(t *testing.T) {
 	if got := complete(t, "--space", "planning", "task", "show", ""); !has(got, "alpha") {
 		t.Errorf("entity completion did not discover through selected space: %v", got)
 	}
+	if got := complete(t, "--space", "implementation", "task", "show", ""); len(got) != 1 || got[0] != "alpha" {
+		t.Errorf("entity completion did not follow selected pointer: %v", got)
+	}
+	if got := complete(t, "--space", "missing", "task", "show", ""); len(got) != 0 {
+		t.Errorf("bad explicit space fell back to cwd: %v", got)
+	}
+	t.Setenv("TSKFLW_SPACE", "missing")
+	if got := complete(t, "--space", "planning", "task", "show", ""); len(got) != 1 || got[0] != "alpha" {
+		t.Errorf("completion flag did not override environment: %v", got)
+	}
 }

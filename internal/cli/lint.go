@@ -40,19 +40,16 @@ func newLintCmd(app *App) *cobra.Command {
 }
 
 func runLint(app *App, links bool) error {
-	results, problems, err := app.Svc.Lint()
+	var results []core.LintResult
+	var problems []core.LoadProblem
+	var err error
+	if links {
+		results, problems, err = app.Svc.LintWithLinks()
+	} else {
+		results, problems, err = app.Svc.Lint()
+	}
 	if err != nil {
 		return err
-	}
-	// --links adds cross-reference integrity: a body link to a missing file surfaces as a
-	// neutral load diagnostic, flowing through the same render + exit path. Opt-in, since a tree can
-	// accumulate pre-existing danglers that would otherwise noise up the default gate.
-	if links {
-		danglers, err := app.Linter.DanglingLinks()
-		if err != nil {
-			return err
-		}
-		problems = append(problems, danglers...)
 	}
 	if app.JSON {
 		if err := render.LintJSON(app.Out, results, problems); err != nil {
@@ -77,17 +74,11 @@ func runLint(app *App, links bool) error {
 }
 
 func runLintFix(app *App, dryRun bool) error {
-	results, err := app.Fixer.FixFrontmatter(dryRun)
-	// Body repairs run after frontmatter: the frontmatter pass can rename a file to
-	// heal a broken id, and the body pass resolves audits by slug.
-	if err == nil {
-		var headerFixes []domain.FixResult
-		headerFixes, err = app.Svc.FixFindingHeaders(dryRun)
-		results = append(results, headerFixes...)
-	}
+	repaired, err := app.Svc.RepairPlanning(dryRun)
+	results := repaired.Fixes
 	if err != nil {
-		// A mid-run write failure still repaired earlier files: report that partial
-		// progress before surfacing the error, so the user can reconcile what landed.
+		// A later repair or post-lint failure can follow durable edits: report that
+		// prefix (or dry-run proposals) so the user can reconcile what landed.
 		if len(results) > 0 {
 			if app.JSON {
 				_ = render.FixJSON(app.Out, results, nil, nil, dryRun, app.workspace())
@@ -110,10 +101,7 @@ func runLintFix(app *App, dryRun bool) error {
 	// report-only; some task issues aren't auto-fixable) and unreadable records would
 	// otherwise exit 0 in silence, leaving the tree broken while claiming success.
 	// Re-lint and surface BOTH the leftover results and problems, with plain lint's exit.
-	results2, problems, err := app.Svc.Lint()
-	if err != nil {
-		return err
-	}
+	results2, problems := repaired.LintResults, repaired.Problems
 	if app.JSON {
 		// One envelope carrying what was fixed plus what couldn't be (leftover lint
 		// findings + unreadable records) — a --json consumer must never parse the prose
