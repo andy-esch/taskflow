@@ -119,9 +119,11 @@ retain their stronger version evidence outside the domain values.
   confirm that ID before acting, and reject results after a selection, list-generation, or workspace
   change. Detail hyperlinks use a separately resolved path; pathless semantic records cannot supply
   editor paths by accident.
-- The remaining domain-field removal is concentrated in task and Thread compatibility constructors,
-  Thread mutation planning/materialization, and their tests. Task and Thread `Path` and
-  `FilenameID` must stay until those consumers have explicit source envelopes or local receipts.
+- Task filename identity now lives only in loaded source records, not `domain.Task`; graph tests
+  supply distinct source IDs explicitly when frontmatter IDs drift or are missing. The remaining
+  domain-field removal is `Task.Path` and Thread `Path`/`FilenameID`, concentrated in compatibility
+  constructors, Thread mutation planning/materialization, and their tests. Those callers still need
+  explicit source envelopes or local receipts.
 
 ## Related
 
