@@ -345,11 +345,10 @@ type ResearchStore interface {
 }
 
 // Store is the use-case persistence port the Service depends on. It is
-// deliberately narrow: only the task/epic/audit/research use cases live here. The three
-// fs/text operations that aren't use cases (frontmatter repair, link checks,
-// and watch-path layout) are split into Fixer/Linter/Layout below so a second
-// Store implementation — and the test fakes — don't pay for methods the core
-// never calls. NewService also requires a non-zero SourceSetProvider witness at
+// deliberately narrow: only the task/epic/audit/research persistence lives here.
+// Optional repair, body-link, and completion capabilities are selected separately
+// by Service; Layout remains a local watcher capability. A second Store need not
+// implement optional workflows. NewService requires a non-zero SourceSetProvider witness at
 // runtime; keeping that check at composition lets one complete adapter and
 // independently supplied narrow ports share the same rule.
 type Store interface {
@@ -365,20 +364,22 @@ type SummaryStore interface {
 	ReadEpics() (EpicRead, error)
 }
 
-// Fixer is the frontmatter-repair port. It is an fs/text operation, not a core
-// use case, so it sits beside Store rather than inside it; the CLI's `lint --fix`
-// wires it directly to the FS instead of routing through the Service.
+// Fixer is the optional frontmatter-repair persistence port. RepairPlanning owns
+// orchestration; the adapter owns safe edits, authorization, and partial results.
 type Fixer interface {
 	// FixFrontmatter applies safe text-level frontmatter repairs across all
-	// task and epic files (or previews them when dryRun is true).
+	// planning documents (or previews them when dryRun is true).
+	// An error must retain the completed/proposed prefix; callers must not retry
+	// the multi-document operation wholesale. Authorization belongs to the adapter.
 	FixFrontmatter(dryRun bool) ([]domain.FixResult, error)
 }
 
-// Linter is the cross-link integrity port. Like Fixer it's an fs/text operation, not a
-// core use case, so `lint --links` wires it directly to the FS rather than through the
-// Service.
+// Linter is the optional body cross-link integrity port used by LintWithLinks.
+// Diagnostics stay adapter neutral; a non-filesystem adapter may check its own
+// reference model without exposing local paths.
 type Linter interface {
-	// DanglingLinks reports every body markdown link whose target .md file is missing.
+	// DanglingLinks reports unresolved body references. The filesystem adapter
+	// checks local markdown links whose target .md file is missing.
 	DanglingLinks() ([]LoadProblem, error)
 }
 

@@ -25,6 +25,9 @@ type Service struct {
 	researchPaths         ResearchPathSource
 	researchPathsExplicit bool
 	lintReads             LintSource
+	frontmatterRepairs    Fixer
+	bodyLinks             Linter
+	completions           CompletionSource
 	auditReads            AuditSnapshotSource
 	auditReadsExplicit    bool
 	taskGraphs            TaskGraphSource
@@ -53,6 +56,34 @@ type Service struct {
 // common aggregate-store call compact while permitting independently injected
 // ports; NewService validates the final composition after every option runs.
 type Option func(*Service)
+
+// WithFrontmatterRepairer supplies optional ordinary frontmatter maintenance.
+func WithFrontmatterRepairer(repairer Fixer) Option {
+	return func(s *Service) {
+		if !isNilCapability(repairer) {
+			s.frontmatterRepairs = repairer
+		}
+	}
+}
+
+// WithBodyLinkSource supplies optional cross-reference integrity diagnostics.
+func WithBodyLinkSource(source Linter) Option {
+	return func(s *Service) {
+		if !isNilCapability(source) {
+			s.bodyLinks = source
+		}
+	}
+}
+
+// WithCompletionSource supplies parse-free resolution candidates independently
+// of ordinary reads. NewService verifies that it addresses the same source set.
+func WithCompletionSource(source CompletionSource) Option {
+	return func(s *Service) {
+		if !isNilCapability(source) {
+			s.completions = source
+		}
+	}
+}
 
 // WithTaskGraphSource supplies the read-only task snapshot capability used by
 // graph queries and Thread projections. Production defaults it from the
@@ -293,6 +324,15 @@ func NewService(store Store, opts ...Option) (*Service, error) {
 	}
 	s := &Service{store: store, templates: builtinTemplates{}, now: time.Now, newID: id.New, newIDAt: id.NewAt, maxRetries: defaultMaxRetries, retrySleep: defaultRetrySleep}
 	if store != nil {
+		if repairer, ok := store.(Fixer); ok && !isNilCapability(repairer) {
+			s.frontmatterRepairs = repairer
+		}
+		if source, ok := store.(Linter); ok && !isNilCapability(source) {
+			s.bodyLinks = source
+		}
+		if source, ok := store.(CompletionSource); ok && !isNilCapability(source) {
+			s.completions = source
+		}
 		if paths, ok := store.(TaskPathSource); ok && !isNilCapability(paths) {
 			s.taskPaths = paths
 		}
@@ -369,6 +409,9 @@ func (s *Service) validateSourceSets() error {
 		{"audit paths", s.auditPaths},
 		{"research paths", s.researchPaths},
 		{"lint reads", s.lintReads},
+		{"frontmatter repairs", s.frontmatterRepairs},
+		{"body link checks", s.bodyLinks},
+		{"entity completion", s.completions},
 		{"audit snapshots", s.auditReads},
 		{"task graph reads", s.taskGraphs},
 		{"task graph mutations", s.graphMutations},
