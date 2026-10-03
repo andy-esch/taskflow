@@ -1064,7 +1064,7 @@ func TestAtlasWorkLandingWidensWhenTaskLeavesWorkingViewBeforeOpen(t *testing.T)
 	tm, cmd := m.Update(press("enter"))
 	m = tm.(Model)
 	if _, err := core.MustNewService(adapter.trees[root]).Move(
-		row.Task.CanonicalID(), domain.StatusCompleted, false,
+		row.Task.ID, domain.StatusCompleted, false,
 		core.TaskLifecycleOverrideAcceptanceCriteria,
 	); err != nil {
 		t.Fatalf("complete selected Atlas task: %v", err)
@@ -1074,9 +1074,9 @@ func TestAtlasWorkLandingWidensWhenTaskLeavesWorkingViewBeforeOpen(t *testing.T)
 	if m.onAtlas || m.cur().kind != entityTasks {
 		t.Fatalf("landing did not enter the task tab: atlas=%v tab=%v", m.onAtlas, m.cur().kind)
 	}
-	if m.cur().statusView != "all" || m.selectedKey() != row.Task.CanonicalID() {
+	if m.cur().statusView != "all" || m.selectedKey() != row.Task.ID {
 		t.Fatalf("landing = view:%q key:%q, want :all key:%q",
-			m.cur().statusView, m.selectedKey(), row.Task.CanonicalID())
+			m.cur().statusView, m.selectedKey(), row.Task.ID)
 	}
 	if m.flashErr || !strings.Contains(m.flash, "showing :all") {
 		t.Fatalf("fallback explanation = err:%v flash:%q", m.flashErr, m.flash)

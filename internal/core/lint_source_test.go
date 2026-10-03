@@ -118,7 +118,7 @@ func (f *lintSourceFake) ReadLintTasks() ([]LoadedRecord[TaskWithBody], []LoadPr
 	f.taskReads++
 	out := make([]LoadedRecord[TaskWithBody], 0, len(f.taskRecords))
 	for _, record := range f.taskRecords {
-		out = append(out, LoadedRecord[TaskWithBody]{Value: record, Source: RecordSource{ID: record.Task.CanonicalID(), Location: record.Task.Path}})
+		out = append(out, LoadedRecord[TaskWithBody]{Value: record, Source: RecordSource{ID: record.Task.ID, Location: record.Task.Path}})
 	}
 	return out, f.taskProblems, nil
 }
@@ -305,7 +305,7 @@ func TestLintAttributesPathlessGraphDiagnosticsToReadableRecords(t *testing.T) {
 func TestLintRecordAttributionDoesNotCollideOnIDOrLocation(t *testing.T) {
 	first := graphRecord("portable-duplicate-first", domain.StatusReadyToStart)
 	second := graphRecord("portable-duplicate-second", domain.StatusReadyToStart, "bad-reference")
-	second.ID, second.FilenameID = first.ID, first.FilenameID
+	second.ID = first.ID
 	// An opaque or contradictory location is context, not the record join key.
 	first.Path, second.Path = "opaque://same", "opaque://same"
 

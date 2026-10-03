@@ -103,7 +103,7 @@ func TestSpaceOverviewUsesPlanningStoresGraphSnapshot(t *testing.T) {
 
 func TestSpaceOverviewWorkRetainsPortableTaskSource(t *testing.T) {
 	const sourceID = "portable-task-source"
-	task := domain.Task{ID: "declared-id", FilenameID: "local-fallback", Slug: "work", Status: domain.StatusInProgress}
+	task := domain.Task{ID: "declared-id", Slug: "work", Status: domain.StatusInProgress}
 	root := "/planning"
 	registry := NewSpaceRegistryService(&fakeSpaceRegistryStore{entries: []SpaceEntryPoint{{
 		ID: "planning", PlanningID: "planning", Role: SpaceRoleDirect, State: SpaceStateOK, Root: root,

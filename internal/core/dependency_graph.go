@@ -590,13 +590,6 @@ func taskExists(tasks map[string]domain.Task, taskID string) bool {
 	return ok
 }
 
-func canonicalTaskID(task domain.Task) string {
-	if task.FilenameID != "" {
-		return task.FilenameID
-	}
-	return task.ID
-}
-
 func cloneTask(task domain.Task) domain.Task {
 	task.Tags = append([]string(nil), task.Tags...)
 	task.DependsOn = append([]string(nil), task.DependsOn...)

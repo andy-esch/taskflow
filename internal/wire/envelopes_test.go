@@ -100,7 +100,7 @@ func TestPathlessRepairDefectsExposeDiagnosticDeclarationsNotActions(t *testing.
 
 func TestOrdinaryReadEnvelopesPreferSourceIdentityForEveryEntity(t *testing.T) {
 	source := core.RecordSource{ID: "source-id", Location: "db://records/misleading-name"}
-	task := domain.Task{ID: "declared-id", FilenameID: "stale-filename-id", Slug: "task"}
+	task := domain.Task{ID: "declared-id", Slug: "task"}
 	epic := domain.Epic{ID: "stale-epic", Description: "epic"}
 	audit := domain.Audit{ID: "declared-id", Slug: "audit"}
 	research := domain.Research{ID: "declared-id", Slug: "research"}

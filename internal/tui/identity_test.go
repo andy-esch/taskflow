@@ -495,7 +495,7 @@ func TestEntityRegistryRejectsEmptyOrDuplicateCanonicalKeys(t *testing.T) {
 
 func TestEntityRowsUsePortableSourceIDsNotDomainFallbacks(t *testing.T) {
 	const sourceID = "portable-source-id"
-	task := domain.Task{ID: "frontmatter-id", FilenameID: "filename-id", Slug: "task"}
+	task := domain.Task{ID: "frontmatter-id", Slug: "task"}
 	audit := domain.Audit{ID: "frontmatter-id", Slug: "audit"}
 	research := domain.Research{ID: "frontmatter-id", Slug: "research"}
 	items := []entityItem{

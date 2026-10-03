@@ -231,7 +231,7 @@ func (s *portableEpicSummarySource) ReadEpics() (EpicRead, error) {
 
 func TestSummaryBareProjectionsUseLoadedSourceIdentity(t *testing.T) {
 	tasks := &neutralTaskGraphSource{read: TaskGraphRead{Records: []LoadedRecord[domain.Task]{{
-		Value:  domain.Task{ID: "stale-task", FilenameID: "old-task", Slug: "task", Status: domain.StatusInProgress},
+		Value:  domain.Task{ID: "stale-task", Slug: "task", Status: domain.StatusInProgress},
 		Source: RecordSource{ID: "6g0000000001", Location: "db://tasks/one"},
 	}}}}
 	epics := &portableEpicSummarySource{read: EpicRead{Records: []LoadedRecord[domain.Epic]{{

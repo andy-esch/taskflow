@@ -305,7 +305,7 @@ func resolveSourceTask(sources []TaskGraphSourceRef, source TaskGraphSourceRef) 
 }
 
 func sourceRefForTask(task domain.Task) TaskGraphSourceRef {
-	return TaskGraphSourceRef{TaskID: canonicalTaskID(task), TaskSlug: task.Slug, Location: task.Path}
+	return TaskGraphSourceRef{TaskID: task.ID, TaskSlug: task.Slug, Location: task.Path}
 }
 
 func taskGraphSourceRefForGuardedRecord(guarded VersionedRecord[domain.Task]) TaskGraphSourceRef {
@@ -427,7 +427,7 @@ func dependencyFieldOrder(field TaskDependencyField) int {
 
 func taskSourceSortKey(task domain.Task) string {
 	return strings.Join([]string{
-		canonicalTaskID(task), task.Slug,
+		task.ID, task.Slug,
 		strings.Join(task.DependsOn, "\x00"), strings.Join(task.LegacyBlockedBy, "\x00"),
 		strings.Join(task.LegacyDependencies, "\x00"), strings.Join(task.LegacyBlocks, "\x00"),
 	}, "\x01")

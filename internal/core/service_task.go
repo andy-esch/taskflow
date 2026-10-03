@@ -184,8 +184,8 @@ func taskGraphLoadProblemFromLoadProblem(problem LoadProblem) TaskGraphLoadProbl
 }
 
 // TaskGraphReadFromFiles adapts a legacy task list for read-only graph queries.
-// Task.Path may describe the record, but it is not guarded repair authority;
-// local stores supply that independently in VersionedRecord.LocalPath.
+// Bare semantic tasks may carry a legacy local path, but cannot supply guarded
+// repair authority; local stores supply that in versioned records.
 func TaskGraphReadFromFiles(tasks []domain.Task, problems []domain.FileProblem) TaskGraphRead {
 	read := TaskGraphRead{
 		Records:  make([]LoadedRecord[domain.Task], 0, len(tasks)),
@@ -193,7 +193,7 @@ func TaskGraphReadFromFiles(tasks []domain.Task, problems []domain.FileProblem) 
 	}
 	for _, task := range tasks {
 		read.Records = append(read.Records, LoadedRecord[domain.Task]{
-			Value: task, Source: RecordSource{ID: task.CanonicalID(), Location: task.Path},
+			Value: task, Source: RecordSource{ID: task.ID, Location: task.Path},
 		})
 	}
 	for _, problem := range problems {
@@ -219,7 +219,7 @@ func taskGraphRecords(read TaskGraphRead) []LoadedRecord[domain.Task] {
 	records := make([]LoadedRecord[domain.Task], 0, len(read.Tasks))
 	for _, task := range read.Tasks {
 		records = append(records, LoadedRecord[domain.Task]{
-			Value: task, Source: RecordSource{ID: task.CanonicalID(), Location: task.Path},
+			Value: task, Source: RecordSource{ID: task.ID, Location: task.Path},
 		})
 	}
 	return records

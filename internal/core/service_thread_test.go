@@ -197,7 +197,7 @@ func TestServiceThreadCommittedFailureIsNotRetried(t *testing.T) {
 
 func TestServiceLintIncludesThreadIntegrityAndCrossKindIdentity(t *testing.T) {
 	task := domain.Task{
-		ID: "6g3q4rtmv4ak", FilenameID: "6g3q4rtmv4ak", Slug: "task", Path: "tasks/6g3q4rtmv4ak-task.md",
+		ID: "6g3q4rtmv4ak", Slug: "task", Path: "tasks/6g3q4rtmv4ak-task.md",
 		Status: domain.StatusCompleted, Epic: "01-e", Created: "2026-08-29",
 	}
 	threadStore := &threadReadFake{

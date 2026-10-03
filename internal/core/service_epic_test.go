@@ -191,7 +191,7 @@ func fakeSourceID(id, slug string, index int) string {
 func loadedTasks(tasks []domain.Task) []LoadedRecord[domain.Task] {
 	out := make([]LoadedRecord[domain.Task], 0, len(tasks))
 	for i, task := range tasks {
-		out = append(out, LoadedRecord[domain.Task]{Value: task, Source: testSource(fakeSourceID(task.CanonicalID(), task.Slug, i), task.Path)})
+		out = append(out, LoadedRecord[domain.Task]{Value: task, Source: testSource(fakeSourceID(task.ID, task.Slug, i), task.Path)})
 	}
 	return out
 }
@@ -265,7 +265,7 @@ func (f *fakeStore) ReadTask(ref string) (LoadedRecord[TaskWithBody], error) {
 	if err != nil {
 		return LoadedRecord[TaskWithBody]{}, err
 	}
-	return LoadedRecord[TaskWithBody]{Value: TaskWithBody{Task: task, Body: body}, Source: testSource(fakeSourceID(task.CanonicalID(), task.Slug, 0), task.Path)}, nil
+	return LoadedRecord[TaskWithBody]{Value: TaskWithBody{Task: task, Body: body}, Source: testSource(fakeSourceID(task.ID, task.Slug, 0), task.Path)}, nil
 }
 
 func (f *fakeStore) ReadEpics() (EpicRead, error) {
@@ -332,7 +332,7 @@ func (f *fakeStore) ReadLintTasks() ([]LoadedRecord[TaskWithBody], []LoadProblem
 	records, problems, err := f.ListTasksWithBodies()
 	loaded := make([]LoadedRecord[TaskWithBody], 0, len(records))
 	for i, record := range records {
-		loaded = append(loaded, LoadedRecord[TaskWithBody]{Value: record, Source: testSource(fakeSourceID(record.Task.CanonicalID(), record.Task.Slug, i), record.Task.Path)})
+		loaded = append(loaded, LoadedRecord[TaskWithBody]{Value: record, Source: testSource(fakeSourceID(record.Task.ID, record.Task.Slug, i), record.Task.Path)})
 	}
 	return loaded, testLintLoadProblems(EntityTask, problems), err
 }

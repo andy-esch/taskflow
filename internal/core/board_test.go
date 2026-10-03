@@ -128,7 +128,7 @@ func TestBoard_PreservesPathlessTaskLoadProblemIdentity(t *testing.T) {
 
 func TestBoard_BareProjectionUsesExplicitSourceIdentity(t *testing.T) {
 	source := &neutralTaskGraphSource{read: TaskGraphRead{Records: []LoadedRecord[domain.Task]{{
-		Value:  domain.Task{ID: "stale-declaration", FilenameID: "stale-file-id", Slug: "task", Status: domain.StatusInProgress},
+		Value:  domain.Task{ID: "stale-declaration", Slug: "task", Status: domain.StatusInProgress},
 		Source: RecordSource{ID: "6g0000000001", Location: "db://tasks/misleading"},
 	}}}}
 	board, err := MustNewService(&fakeStore{}, WithTaskGraphSource(source)).Board()
@@ -146,7 +146,7 @@ func TestBoard_BareProjectionUsesExplicitSourceIdentity(t *testing.T) {
 
 func TestEmptyExplicitTaskSourceIDNeverBecomesEligible(t *testing.T) {
 	read := TaskGraphRead{Records: []LoadedRecord[domain.Task]{{
-		Value:  domain.Task{ID: "6g0000000001", FilenameID: "stale-id", Slug: "orphan", Status: domain.StatusReadyToStart},
+		Value:  domain.Task{ID: "6g0000000001", Slug: "orphan", Status: domain.StatusReadyToStart},
 		Source: RecordSource{Location: "db://tasks/misleading-id"},
 	}}}
 	graph := NewTaskGraphRead(read)

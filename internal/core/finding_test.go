@@ -381,7 +381,7 @@ func TestServiceLintIncludesUnreadableThreadInDuplicateIdentity(t *testing.T) {
 	betaPath := "threads/" + shared + "-beta.md"
 	threadStore := &threadReadFake{
 		threads: []domain.Thread{{
-			ID: shared, FilenameID: shared, Slug: "alpha", Path: alphaPath,
+			ID: shared, Slug: "alpha", Path: alphaPath,
 			Status: domain.ThreadStatusUnstarted, Description: "readable Thread",
 			Goal: "prove duplicate identity lint", Created: "2026-09-07",
 		}},

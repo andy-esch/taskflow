@@ -159,7 +159,7 @@ func TestColumnRegistriesMatchFullWireValues(t *testing.T) {
 	assertRegistryMatchesFullWire(t, "task", "tasks", TaskReadColumns(), TasksJSON,
 		[]registryFixture[core.LoadedRecord[domain.Task]]{
 			{name: "present", item: core.LoadedRecord[domain.Task]{Value: domain.Task{
-				ID: "6ga000000099", FilenameID: "6ga000000098", Slug: "task-present", Status: domain.StatusInProgress,
+				ID: "6ga000000099", Slug: "task-present", Status: domain.StatusInProgress,
 				Tier: 2, Priority: "high", Epic: "20-cli", Updated: "2026-09-14",
 				Description: "present task", RevisitAt: "2026-10-01",
 			}, Source: core.RecordSource{ID: "6ga000000001", Location: "db://tasks/present"}}},
@@ -392,7 +392,7 @@ func wireScalarString(raw json.RawMessage) (string, error) {
 
 func TestTaskTierZeroProjectionIsLintInvalidCompatibility(t *testing.T) {
 	task := domain.Task{
-		ID: "6ga000000009", FilenameID: "6ga000000009", Slug: "missing-tier",
+		ID: "6ga000000009", Slug: "missing-tier",
 		Status: domain.StatusReadyToStart, Epic: "20-cli", Priority: "medium", Effort: "S",
 		Created: "2026-09-14", Description: "lint-invalid tier fixture", Tags: []string{"contract"},
 	}

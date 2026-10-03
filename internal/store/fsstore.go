@@ -391,7 +391,7 @@ func (s *FS) taskCandidates() ([]candidate, error) {
 // is skipped silently.
 func parseTask(content []byte, path string) (domain.Task, error) {
 	base := filepath.Base(path)
-	fnID, slug, ok := splitFlatName(strings.TrimSuffix(base, ".md"))
+	_, slug, ok := splitFlatName(strings.TrimSuffix(base, ".md"))
 	if !ok {
 		reason, kind := entityNameProblem(base)
 		return domain.Task{}, fmt.Errorf("%w: %q %s", kind, base, reason)
@@ -432,7 +432,6 @@ func parseTask(content []byte, path string) (domain.Task, error) {
 	if title, ok := domain.FirstH1(string(body)); ok {
 		t.Title = title
 	}
-	t.FilenameID = fnID
 	t.Path = path
 	return t, nil
 }

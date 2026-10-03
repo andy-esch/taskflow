@@ -237,7 +237,7 @@ func compareString(left, right string) int {
 
 func fixedGraphRecord(id, slug string, status domain.Status, dependencies ...string) domain.Task {
 	return domain.Task{
-		ID: id, FilenameID: id, Slug: slug, Path: "tasks/" + id + "-" + slug + ".md",
+		ID: id, Slug: slug, Path: "tasks/" + id + "-" + slug + ".md",
 		Status: status, Description: slug, Tags: []string{"graph"},
 		DependsOn: append([]string(nil), dependencies...),
 	}

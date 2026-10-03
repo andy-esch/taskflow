@@ -501,7 +501,6 @@ func TestTaskGraphRepairPreservesShadowAndUnreadableEvidence(t *testing.T) {
 	representative := graphRecord("repair-shadow-a", domain.StatusNextUp, prerequisite.ID, prerequisite.ID)
 	shadow := graphRecord("repair-shadow-b", domain.StatusNextUp, "shadow-invalid")
 	shadow.ID = representative.ID
-	shadow.FilenameID = representative.ID
 	representative.Path = "tasks/a-representative.md"
 	shadow.Path = "tasks/b-shadow.md"
 	unreadable := TaskGraphLoadProblem{TaskID: testutil.TaskID("repair-shadow-unreadable"), Path: "tasks/unreadable.md", Message: "bad yaml", SourceVersion: "raw-v1"}
@@ -527,7 +526,6 @@ func TestTaskGraphRepairAutoRemovesSelfDeclarationFromDuplicateIDShadow(t *testi
 	representative := graphRecord("repair-shadow-self-primary", domain.StatusNextUp)
 	shadow := graphRecord("repair-shadow-self-secondary", domain.StatusNextUp)
 	shadow.ID = representative.ID
-	shadow.FilenameID = representative.ID
 	representative.Path = "tasks/a-primary.md"
 	shadow.Path = "tasks/b-shadow.md"
 	shadow.DependsOn = []string{shadow.ID}

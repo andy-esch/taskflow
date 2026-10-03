@@ -3608,7 +3608,7 @@ func TestThreadProjectionStatesRemainVisuallyDistinct(t *testing.T) {
 		sort.Strings(taskIDs)
 		id := testutil.TaskID("thread-" + name)
 		return domain.Thread{
-			ID: id, FilenameID: id, Slug: name, Status: status,
+			ID: id, Slug: name, Status: status,
 			Description: name, Goal: "exercise " + name, Created: "2026-09-02",
 			Tasks: taskIDs,
 		}

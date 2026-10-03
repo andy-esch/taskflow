@@ -13,12 +13,12 @@ func TestValidateThreadCreationSourceRejectsCrossKindAndMissingMember(t *testing
 	task := graphRecord("member", domain.StatusReadyToStart)
 	graph := NewTaskGraph([]domain.Task{task}, nil)
 	existing := threadRecord(domain.ThreadStatusUnstarted, task.ID)
-	existing.ID, existing.FilenameID = task.ID, task.ID
+	existing.ID = task.ID
 	if err := ValidateThreadCreationSource(graph, []domain.Thread{existing}, nil); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("cross-kind error = %v", err)
 	}
 
-	existing.ID, existing.FilenameID = testutil.TaskID("existing-thread"), testutil.TaskID("existing-thread")
+	existing.ID = testutil.TaskID("existing-thread")
 	existing.Tasks = []string{testutil.TaskID("missing")}
 	if err := ValidateThreadCreationSource(graph, []domain.Thread{existing}, nil); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("missing-member error = %v", err)

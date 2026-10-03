@@ -1,10 +1,10 @@
 package domain
 
-// Task is a planning task. Fields tagged `yaml:"-"` are derived by the store
-// (filename, path) and are not part of the markdown frontmatter.
+// Task is a planning task. The source identity lives in the adapter read;
+// Path is retained temporarily for legacy local callers.
 type Task struct {
 	Slug string `yaml:"-"`
-	Path string `yaml:"-"`
+	Path string `yaml:"-"` // transitional local source location; removed in the next slice
 	// Title is the first non-fenced H1 in the Markdown body. It is derived by
 	// adapters rather than duplicated in frontmatter; callers must fall back to
 	// Slug when an adapter cannot provide body-derived presentation data.
@@ -15,15 +15,9 @@ type Task struct {
 	// (FrontmatterStatusIssues).
 	StatusFellBack bool `yaml:"-"`
 
-	// ID is the stable 12-char identifier (ADR-0003 §3): it leads the flat filename
-	// (tasks/<id>-<slug>.md) and is the primary resolution key.
+	// ID is the declared stable identifier (ADR-0003 §3). A local file repeats
+	// it in tasks/<id>-<slug>.md; the adapter's source ID is the resolution key.
 	ID string `yaml:"id"`
-
-	// FilenameID is that same id as parsed from the flat filename's leading field
-	// (set by the store via splitFlatName). It is the canonical key resolveID/CAS
-	// match on; the frontmatter `id:` above is a co-located copy that must equal it,
-	// and lint flags any drift (IDDriftIssue). Derived, not frontmatter.
-	FilenameID string `yaml:"-"`
 
 	Status      Status   `yaml:"status"`
 	Epic        string   `yaml:"epic"`
@@ -55,15 +49,4 @@ type Task struct {
 	// explicitly empty legacy key remains diagnosable and migratable. Values are
 	// the canonical field names and are populated by the store parser.
 	LegacyDependencyFields []string `yaml:"-"`
-}
-
-// CanonicalID returns the store-resolution identity for this record. Filesystem
-// reads prefer the ID derived from the filename so a missing/drifting frontmatter
-// copy remains repairable; portable adapters that have no filename identity use
-// the semantic ID they supplied.
-func (t Task) CanonicalID() string {
-	if t.FilenameID != "" {
-		return t.FilenameID
-	}
-	return t.ID
 }

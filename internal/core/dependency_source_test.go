@@ -68,7 +68,6 @@ func TestTaskGraphSourceDeclarationsOnlyNameEdgesInTheSemanticProjection(t *test
 	representative := graphRecord("projected-edge-duplicate-a", domain.StatusCompleted, target.ID)
 	shadow := graphRecord("projected-edge-duplicate-b", domain.StatusCompleted, target.ID)
 	shadow.ID = representative.ID
-	shadow.FilenameID = representative.ID
 	representative.Path = "tasks/a-representative.md"
 	shadow.Path = "tasks/b-shadow.md"
 
@@ -141,7 +140,6 @@ func TestTaskGraphLegacyShadowDeclarationsDoNotEnterSemanticProjection(t *testin
 			representative := graphRecord("legacy-shadow-owner-a", domain.StatusCompleted)
 			shadow := graphRecord("legacy-shadow-owner-b", domain.StatusCompleted)
 			shadow.ID = representative.ID
-			shadow.FilenameID = representative.ID
 			representative.Path = "tasks/a-legacy-representative.md"
 			shadow.Path = "tasks/b-legacy-shadow.md"
 			test.configure(&shadow, peer)
@@ -358,14 +356,13 @@ func TestTaskGraphSourceSimulationRetainsDuplicateAndUnreadableRecords(t *testin
 	duplicateA := graphRecord("source-duplicate-a", domain.StatusCompleted)
 	duplicateB := graphRecord("source-duplicate-b", domain.StatusCompleted)
 	duplicateB.ID = duplicateA.ID
-	duplicateB.FilenameID = duplicateA.ID
 	unreadableID := testutil.TaskID("source-unreadable")
 	owner := graphRecord("source-mixed-owner", domain.StatusReadyToStart, unreadableID, "invalid-human-token")
 	duplicateA.DependsOn = []string{owner.ID}
 	duplicateB.DependsOn = []string{owner.ID}
 	versioned := func(task domain.Task, revision string) VersionedRecord[domain.Task] {
 		return VersionedRecord[domain.Task]{
-			Record:        LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: task.CanonicalID(), Location: task.Path, LocationIsPath: true}},
+			Record:        LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: task.ID, Location: task.Path, LocationIsPath: true}},
 			SourceVersion: revision, LocalPath: task.Path,
 		}
 	}
@@ -446,10 +443,9 @@ func TestTaskGraphSourceSnapshotCASIncludesEveryDuplicateIDRecord(t *testing.T) 
 	first := graphRecord("source-cas-first", domain.StatusCompleted)
 	second := graphRecord("source-cas-second", domain.StatusCompleted)
 	second.ID = first.ID
-	second.FilenameID = first.ID
 	versioned := func(task domain.Task, revision string) VersionedRecord[domain.Task] {
 		return VersionedRecord[domain.Task]{
-			Record:        LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: task.CanonicalID(), Location: task.Path, LocationIsPath: true}},
+			Record:        LoadedRecord[domain.Task]{Value: task, Source: RecordSource{ID: task.ID, Location: task.Path, LocationIsPath: true}},
 			SourceVersion: revision, LocalPath: task.Path,
 		}
 	}
@@ -473,7 +469,6 @@ func TestTaskGraphSourceQueriesRejectRepresentativeOnlyDerivedGraphs(t *testing.
 	first := graphRecord("source-derived-first", domain.StatusCompleted)
 	shadow := graphRecord("source-derived-shadow", domain.StatusCompleted)
 	shadow.ID = first.ID
-	shadow.FilenameID = first.ID
 	unreadableID := testutil.TaskID("source-derived-unreadable")
 	full := NewTaskGraphRead(TaskGraphRead{
 		Tasks: []domain.Task{first, shadow},
