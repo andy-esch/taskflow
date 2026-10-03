@@ -7,7 +7,7 @@ goal: Core use cases consume identity-bearing semantic ports; local paths are op
 created: "2026-09-23"
 tags: [architecture, ports, adapters, hardening]
 tasks: [6g5vm4efjcdv, 6g6jqqcdehne, 6gcwcf77tvgq, 6gcwcf7gjayh, 6gcwcf7rgxef, 6gcwcf80v8hg, 6gcwcf88z57p, 6gcwcf8gzn50, 6gcwcf8rxe72, 6gdx7mcqm371, 6gdx7mcqq67d, 6gdx7mcrq8s8, 6ge1bacd3bd2, 6ge7qn9ptaxv]
-updated_at: "2026-09-27"
+updated_at: "2026-10-03"
 started_at: "2026-09-23"
 ---
 
@@ -28,9 +28,10 @@ ordering without rescanning records.
 The loaded-record and optional-local-capability design is complete. Ordinary task, epic, audit,
 research, and finding reads now preserve portable source identity and diagnostics, and split
 planning-data capabilities must agree on one source-set witness at construction. Local mutation
-receipts and ordinary-create recovery no longer depend on domain paths. The remaining seams are
-TUI identity and refresh, readable occurrence locations, domain fields that still carry local
-paths or revisions, and CLI controllers that reach directly into the filesystem adapter.
+receipts and ordinary-create recovery no longer depend on domain paths. TUI identity/refresh and
+readable occurrence locations have shipped, and semantic entity values no longer carry local paths,
+filename identities, or guarded revisions. CLI repair, body-link checking, and completion are the
+current implementation slice; executable enforcement of the composition boundary remains next.
 
 This Thread closes those seams in evidence-driven stages:
 
@@ -43,12 +44,13 @@ This Thread closes those seams in evidence-driven stages:
    domain records, and report ordinary-create guard-release failures without suggesting an unsafe
    retry. **Completed.**
 5. Preserve readable occurrence locations and move TUI identity/refresh onto portable loaded-record
-   evidence while retaining fail-closed duplicate-ID behavior. **Independent work:** TUI migration
-   is in progress; readable source-location diagnostics remain eligible.
+   evidence while retaining fail-closed duplicate-ID behavior. **Completed.**
 6. After those prerequisites, move local paths, filename-derived identity, and guarded revisions
    out of semantic entity values; finish the partial Thread precedent and wire explicit local
-   capabilities.
-7. Route CLI planning-data operations through those settled application ports.
+   capabilities. **Completed.**
+7. Route CLI planning-data operations through those settled application ports. **In progress:**
+   named repair/link/completion use cases and portable probes implemented; both reviews reconciled,
+   including resolver-compatible completion fixes. Ready for merge.
 8. Isolate composition wiring and make the intended controller boundary executable through the
    standard lint suite.
 
