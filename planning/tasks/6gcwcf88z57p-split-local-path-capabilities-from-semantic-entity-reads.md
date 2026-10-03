@@ -77,6 +77,11 @@ retain their stronger version evidence outside the domain values.
 
 ## Progress
 
+- The Task filename-identity removal review exposed a repair reload check that rebuilt source
+  identity from the declared ID. It now uses an explicit filesystem source record and verifies the
+  source as well as the repaired fields. Regression tests cover missing and drifting declarations
+  in dry-run and committed repairs, retaining residual identity diagnostics and unrelated content.
+  Both checkpoint reviews are reconciled; Task local-path and Thread mutation migration remain.
 - Checkpoint review found that the compatibility `NewTaskGraph`/`TaskGraphRead.Tasks` conversions
   promoted `Task.Path` to a local repair handle. They are now read-only; local repair tests and
   filesystem adapters supply `VersionedRecord.LocalPath` explicitly. Hostile URI and path-shaped
