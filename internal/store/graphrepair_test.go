@@ -60,6 +60,86 @@ func TestMutateTaskGraphRepairDryRunThenAppliesExactSourceEdits(t *testing.T) {
 	}
 }
 
+func TestMutateTaskGraphRepairRetainsSourceIdentityWithBrokenDeclaredID(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		declaredID string
+		problem    core.GraphProblemCode
+	}{
+		{name: "missing", problem: core.ProblemMissingTaskID},
+		{name: "drifted", declaredID: testutil.TaskID("repair-drifted-declaration"), problem: core.ProblemTaskIDDrift},
+	} {
+		for _, dryRun := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s/dry-run=%t", tc.name, dryRun), func(t *testing.T) {
+				root := t.TempDir()
+				prerequisiteID := testutil.TaskID("repair-source-id-prerequisite")
+				ownerID := testutil.TaskID("repair-source-id-owner")
+				writeGraphMutationTask(t, root, "repair-source-id-prerequisite", domain.StatusCompleted, nil, "")
+				path := writeGraphMutationTask(t, root, "repair-source-id-owner", domain.StatusNextUp,
+					[]string{prerequisiteID, prerequisiteID}, "custom_key: keep-me # source comment\n")
+				content, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				declaration := ""
+				if tc.declaredID != "" {
+					declaration = "id: " + tc.declaredID + "\n"
+				}
+				before := strings.Replace(string(content), "id: "+ownerID+"\n", declaration, 1)
+				testutil.Write(t, path, before)
+				fs := NewFS(root)
+				service := core.MustNewService(fs, core.WithClock(func() time.Time { return graphMutationNow }))
+
+				receipt, err := service.RepairTaskGraph(core.TaskGraphRepairRequest{Auto: true}, dryRun)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !receipt.Changed || receipt.Committed == dryRun || receipt.InitialHealth != core.GraphBroken || receipt.FinalHealth != core.GraphBroken {
+					t.Fatalf("repair receipt = %+v", receipt)
+				}
+				foundIdentityProblem := false
+				for _, problem := range receipt.Problems {
+					if problem.Code == tc.problem && problem.TaskID == ownerID && problem.Path == path {
+						foundIdentityProblem = true
+					}
+					if problem.Code == core.ProblemDuplicateDependency {
+						t.Fatalf("dependency defect survived prospective repair: %+v", receipt.Problems)
+					}
+				}
+				if !foundIdentityProblem {
+					t.Fatalf("residual identity problem lost source attribution: %+v", receipt.Problems)
+				}
+				if len(receipt.Operations) != 1 || receipt.Operations[0].Edit.Source.TaskID != ownerID || receipt.Operations[0].Edit.Source.LocalPath != path {
+					t.Fatalf("repair lost source identity: %+v", receipt.Operations)
+				}
+				reloaded, err := fs.ReadTask(ownerID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				wantDependencies := []string{prerequisiteID}
+				if dryRun {
+					wantDependencies = append(wantDependencies, prerequisiteID)
+				}
+				if reloaded.Source.ID != ownerID || reloaded.Value.Task.ID != tc.declaredID || !slices.Equal(reloaded.Value.Task.DependsOn, wantDependencies) {
+					t.Fatalf("repair changed declaration or failed to reload by source ID: %+v", reloaded)
+				}
+				after, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if dryRun && string(after) != before {
+					t.Fatal("dry-run changed the source")
+				}
+				for _, preserved := range []string{"custom_key: keep-me # source comment", "Body stays intact."} {
+					if !strings.Contains(string(after), preserved) {
+						t.Fatalf("repair lost %q:\n%s", preserved, after)
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestMutateTaskGraphRepairAllowsMalformedThreadsButCASProtectsTheirBytes(t *testing.T) {
 	root := t.TempDir()
 	ownerID := testutil.TaskID("repair-thread-evidence-owner")
