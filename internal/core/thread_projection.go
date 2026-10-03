@@ -85,8 +85,10 @@ type ThreadListView struct {
 
 // ProjectThread joins one persisted membership set to the immutable repository
 // task graph. It never reads storage and never derives dependency rules itself.
+// Bare semantic values supply only the declared ID; source-aware callers use
+// ProjectLoadedThread to retain independent identity and location evidence.
 func ProjectThread(thread domain.Thread, graph *TaskGraph) ThreadView {
-	return projectThread(thread, RecordSource{ID: thread.CanonicalID(), Location: thread.Path, LocationIsPath: thread.Path != ""}, graph)
+	return projectThread(thread, RecordSource{ID: thread.ID}, graph)
 }
 
 // ProjectLoadedThread uses the identity of the selected source, including when
@@ -118,6 +120,13 @@ func projectThread(thread domain.Thread, source RecordSource, graph *TaskGraph) 
 	}
 	view.GraphHealth = graph.Health()
 	view.ProjectionHealth = view.GraphHealth
+	if source.ID == "" && thread.ID != "" {
+		view.ProjectionHealth = GraphBroken
+		view.Problems = append(view.Problems, ThreadProblem{
+			Code: ThreadProblemInvalidDocument, Path: path,
+			Message: "Thread record has no canonical source ID",
+		})
+	}
 	view.GraphProblems = graph.Problems()
 	if err := domain.ValidateThreadDocument(thread); err != nil {
 		view.ProjectionHealth = GraphBroken

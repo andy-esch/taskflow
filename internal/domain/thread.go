@@ -47,13 +47,12 @@ func ValidateThreadStatus(status ThreadStatus) error {
 
 // Thread is a named initiative view over the repository-global task DAG. It
 // persists metadata and membership only; task files remain the dependency source
-// of truth and all graph-derived state is computed at read time.
+// of truth and all graph-derived state is computed at read time. Source identity,
+// location, and guarded revision evidence belong to adapter read envelopes.
 type Thread struct {
 	Slug string `yaml:"-"`
-	Path string `yaml:"-"`
 
-	ID         string `yaml:"id"`
-	FilenameID string `yaml:"-"`
+	ID string `yaml:"id"`
 
 	Status      ThreadStatus `yaml:"status"`
 	Description string       `yaml:"description"`
@@ -65,16 +64,6 @@ type Thread struct {
 	EndedAt     string       `yaml:"ended_at,omitempty"`
 	Tags        []string     `yaml:"tags,omitempty"`
 	Tasks       []string     `yaml:"tasks"`
-}
-
-// CanonicalID is the stable store-resolution identity a primary adapter should
-// retain. It gives the future TUI Thread row the same drift-safe, portable contract
-// as task, audit, and research rows.
-func (t Thread) CanonicalID() string {
-	if t.FilenameID != "" {
-		return t.FilenameID
-	}
-	return t.ID
 }
 
 // ValidateThreadDocument enforces invariants shared by guarded creation and

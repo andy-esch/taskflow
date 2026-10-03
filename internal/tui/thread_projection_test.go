@@ -138,7 +138,7 @@ func TestThreadsUseOneRegistryListAndDetailOwner(t *testing.T) {
 		t.Fatal(err)
 	}
 	detail := selectedThreadDetail(t, m)
-	if !reflect.DeepEqual(detail.projection, wantProjection) || detail.body != wantBody || m.detail.loadedKey != wantProjection.View.Thread.CanonicalID() {
+	if !reflect.DeepEqual(detail.projection, wantProjection) || detail.body != wantBody || m.detail.loadedKey != wantProjection.View.Source.ID {
 		t.Fatalf("registry detail changed core projection/body: key=%q detail=%+v", m.detail.loadedKey, detail)
 	}
 	if detail.path == "" || m.selectedPath() != detail.path {
@@ -148,7 +148,7 @@ func TestThreadsUseOneRegistryListAndDetailOwner(t *testing.T) {
 	var route, jump bool
 	for _, item := range m.paletteIndex() {
 		route = route || item.kind == palCommand && item.word == "threads"
-		jump = jump || item.kind == palJump && item.ek == entityThreads && item.ref.key == wantProjection.View.Thread.CanonicalID()
+		jump = jump || item.kind == palJump && item.ek == entityThreads && item.ref.key == wantProjection.View.Source.ID
 	}
 	if !route || !jump {
 		t.Fatalf("Thread route/item missing from palette: route=%v jump=%v", route, jump)
@@ -201,7 +201,7 @@ func (s *countingThreadStore) ReadThreads() (core.ThreadRead, error) {
 	read := core.ThreadRead{Problems: s.problems}
 	for _, thread := range s.threads {
 		read.Records = append(read.Records, core.VersionedRecord[domain.Thread]{
-			Record: core.LoadedRecord[domain.Thread]{Value: thread, Source: core.RecordSource{ID: thread.CanonicalID()}},
+			Record: core.LoadedRecord[domain.Thread]{Value: thread, Source: core.RecordSource{ID: thread.ID}},
 		})
 	}
 	return read, nil
@@ -213,7 +213,7 @@ func (s *countingThreadStore) ReadThread(ref string) (core.LoadedRecord[core.Thr
 		return core.LoadedRecord[core.ThreadWithBody]{}, err
 	}
 	return core.LoadedRecord[core.ThreadWithBody]{
-		Value: core.ThreadWithBody{Thread: thread, Body: body}, Source: core.RecordSource{ID: thread.CanonicalID()},
+		Value: core.ThreadWithBody{Thread: thread, Body: body}, Source: core.RecordSource{ID: thread.ID},
 	}, nil
 }
 
@@ -309,7 +309,7 @@ func TestLocalThreadPathSurvivesSemanticDetailFailure(t *testing.T) {
 		core.WithThreadPathSource(tuiThreadPathFake{sourceSet: sourceSet, path: "/planning/threads/repair-thread.md"}),
 	)
 	m := openThreads(t, New(svc))
-	if m.detail.content != nil || m.detail.loadedKey != thread.CanonicalID() {
+	if m.detail.content != nil || m.detail.loadedKey != thread.ID {
 		t.Fatalf("semantic error pane lost selection identity: key=%q content=%T", m.detail.loadedKey, m.detail.content)
 	}
 	if got := m.selectedPath(); got != "/planning/threads/repair-thread.md" {
@@ -459,7 +459,7 @@ func TestThreadRowsDegradeWithoutLosingEssentialState(t *testing.T) {
 	it := threadItem{view: view, countsW: 3}
 	other := it
 	other.view.Thread.ID = testutil.TaskID("initiative-two")
-	other.view.Thread.FilenameID = other.view.Thread.ID
+	other.view.Source.ID = other.view.Thread.ID
 	other.view.Thread.Slug = "migrate-configuration-subsystem-phase-two"
 
 	for _, width := range []int{72, 48, 26} {
@@ -491,12 +491,12 @@ func TestThreadRowsDegradeWithoutLosingEssentialState(t *testing.T) {
 
 func TestThreadRowsProtectDuplicateIdentityHints(t *testing.T) {
 	base := core.ThreadView{Thread: domain.Thread{
-		ID: "6g503c6pfqe1", FilenameID: "6g503c6pfqe1", Slug: "same-very-long-thread-name",
+		ID: "6g503c6pfqe1", Slug: "same-very-long-thread-name",
 		Status: domain.ThreadStatusInProgress,
 	}, GraphHealth: core.GraphHealthy, ProjectionHealth: core.GraphHealthy}
 	first := threadItem{view: base, identityHint: "6g503c6pfqe1"}
 	second := first
-	second.view.Thread.ID, second.view.Thread.FilenameID = "6g503c6pfqe2", "6g503c6pfqe2"
+	second.view.Thread.ID = "6g503c6pfqe2"
 	second.identityHint = "6g503c6pfqe2"
 	l := list.New([]list.Item{first, second}, threadDelegate{st: &testStyles}, 26, 5)
 	render := func(index int, item threadItem) string {
@@ -512,7 +512,7 @@ func TestThreadRowsProtectDuplicateIdentityHints(t *testing.T) {
 
 func TestThreadRowsUseCellAwareBudgetsForUnicodeAndLargeCounts(t *testing.T) {
 	view := core.ThreadView{Thread: domain.Thread{
-		ID: "6g503c6pfqez", FilenameID: "6g503c6pfqez",
+		ID:   "6g503c6pfqez",
 		Slug: "移行-configuration-subsystem-phase-終端", Status: domain.ThreadStatusCompleted,
 	}, GraphHealth: core.GraphDegraded, ProjectionHealth: core.GraphBroken, Inconsistent: true}
 	for i := 0; i < 120; i++ {
@@ -546,7 +546,7 @@ func TestThreadActivityUsesAuthoritativeFrontierOnUnhealthyGraph(t *testing.T) {
 	active := domain.Task{ID: testutil.TaskID("active"), Slug: "active", Status: domain.StatusInProgress}
 	graph := core.NewTaskGraph([]domain.Task{legacyRoot, legacyUser, queued, ready, active}, nil)
 	thread := domain.Thread{
-		ID: testutil.TaskID("unhealthy-thread"), FilenameID: testutil.TaskID("unhealthy-thread"),
+		ID:   testutil.TaskID("unhealthy-thread"),
 		Slug: "unhealthy-thread", Status: domain.ThreadStatusInProgress,
 		Description: "global graph evidence prevents dispatch", Goal: "show every pending member",
 		Created: "2026-09-03", Tasks: []string{queued.ID, ready.ID, active.ID},
@@ -572,7 +572,7 @@ func TestThreadDetailKeepsNominalAndSoundProgressDistinct(t *testing.T) {
 		DependsOn: []string{missing},
 	}
 	thread := domain.Thread{
-		ID: testutil.TaskID("unsound"), FilenameID: testutil.TaskID("unsound"), Slug: "unsound",
+		ID: testutil.TaskID("unsound"), Slug: "unsound",
 		Status: domain.ThreadStatusCompleted, Description: "nominal is not sound", Goal: "show the difference",
 		Created: "2026-09-03", Tasks: []string{done.ID},
 	}
@@ -1571,7 +1571,7 @@ func TestThreadSpatialLayoutPlacesExternalGateBetweenMemberWaves(t *testing.T) {
 		DependsOn: []string{gate.ID},
 	}
 	thread := domain.Thread{
-		ID: testutil.TaskID("gate-layout-thread"), FilenameID: testutil.TaskID("gate-layout-thread"),
+		ID:   testutil.TaskID("gate-layout-thread"),
 		Slug: "gate-layout", Status: domain.ThreadStatusInProgress, Created: "2026-09-08",
 		Tasks: []string{before.ID, after.ID},
 	}
@@ -3589,7 +3589,7 @@ func hostileThreadGraphProjection() core.ThreadGraphProjection {
 	members = append(members, join.ID, disconnected.ID, testutil.TaskID("missing-member"))
 	sort.Strings(members)
 	thread := domain.Thread{
-		ID: testutil.TaskID("topology-thread"), FilenameID: testutil.TaskID("topology-thread"),
+		ID:   testutil.TaskID("topology-thread"),
 		Slug: "topology-stress", Status: domain.ThreadStatusInProgress,
 		Description: "stress terminal topology", Goal: "render supplied graph evidence",
 		Created: "2026-09-03", Tasks: members,

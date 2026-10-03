@@ -47,12 +47,12 @@ func TestThreadMembershipMutationIsSurgicalAtomicAndIdempotent(t *testing.T) {
 	writeGraphMutationTask(t, root, "membership-c", domain.StatusCompleted, nil, "")
 	created, svc := createThreadForMutation(t, root, "membership-thread", aID)
 
-	content, err := os.ReadFile(created.Thread.Path)
+	content, err := os.ReadFile(created.Local.CommittedPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 	customized := strings.Replace(string(content), "status: unstarted", "status: unstarted # lifecycle comment\ncustom_field: keep-me", 1)
-	if err := os.WriteFile(created.Thread.Path, []byte(customized), 0o644); err != nil {
+	if err := os.WriteFile(created.Local.CommittedPath, []byte(customized), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -72,7 +72,7 @@ func TestThreadMembershipMutationIsSurgicalAtomicAndIdempotent(t *testing.T) {
 	if len(receipt.MemberOutcomes) != 2 || outcomes[aID] != "skipped" || outcomes[bID] != "added" {
 		t.Fatalf("outcomes = %+v", receipt.MemberOutcomes)
 	}
-	afterAdd, err := os.ReadFile(created.Thread.Path)
+	afterAdd, err := os.ReadFile(created.Local.CommittedPath)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -86,7 +86,7 @@ func TestThreadMembershipMutationIsSurgicalAtomicAndIdempotent(t *testing.T) {
 	if err != nil || noop.Changed || noop.Committed || noop.MemberOutcomes[0].Outcome != "skipped" {
 		t.Fatalf("no-op receipt=%+v err=%v", noop, err)
 	}
-	afterNoop, _ := os.ReadFile(created.Thread.Path)
+	afterNoop, _ := os.ReadFile(created.Local.CommittedPath)
 	if !slices.Equal(afterAdd, afterNoop) {
 		t.Fatal("idempotent remove rewrote the Thread")
 	}
@@ -95,7 +95,7 @@ func TestThreadMembershipMutationIsSurgicalAtomicAndIdempotent(t *testing.T) {
 	if _, err := svc.AddThreadMembers(created.Thread.ID, []string{cID, "missing-member"}, false); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("atomic failure = %v", err)
 	}
-	afterFailure, _ := os.ReadFile(created.Thread.Path)
+	afterFailure, _ := os.ReadFile(created.Local.CommittedPath)
 	if !slices.Equal(beforeFailure, afterFailure) {
 		t.Fatal("failed multi-member add partially changed the Thread")
 	}
@@ -111,9 +111,9 @@ func TestThreadLifecycleMutationStampsAndClearsTerminalState(t *testing.T) {
 	if err != nil || started.Thread.Status != domain.ThreadStatusInProgress || started.Thread.StartedAt != "2026-08-30" {
 		t.Fatalf("started=%+v err=%v", started, err)
 	}
-	startedBytes, _ := os.ReadFile(created.Thread.Path)
+	startedBytes, _ := os.ReadFile(created.Local.CommittedPath)
 	startedNoop, err := svc.StartThread(created.Thread.ID, false)
-	startedBytesAfterNoop, _ := os.ReadFile(created.Thread.Path)
+	startedBytesAfterNoop, _ := os.ReadFile(created.Local.CommittedPath)
 	if err != nil || startedNoop.Changed || startedNoop.Committed || !slices.Equal(startedBytes, startedBytesAfterNoop) {
 		t.Fatalf("same-state start receipt=%+v err=%v bytesChanged=%t", startedNoop, err, !slices.Equal(startedBytes, startedBytesAfterNoop))
 	}
@@ -121,9 +121,9 @@ func TestThreadLifecycleMutationStampsAndClearsTerminalState(t *testing.T) {
 	if err != nil || completed.Thread.Status != domain.ThreadStatusCompleted || completed.Thread.EndedAt != "2026-08-30" {
 		t.Fatalf("completed=%+v err=%v", completed, err)
 	}
-	completedBytes, _ := os.ReadFile(created.Thread.Path)
+	completedBytes, _ := os.ReadFile(created.Local.CommittedPath)
 	completedNoop, err := svc.CompleteThread(created.Thread.ID, false)
-	completedBytesAfterNoop, _ := os.ReadFile(created.Thread.Path)
+	completedBytesAfterNoop, _ := os.ReadFile(created.Local.CommittedPath)
 	if err != nil || completedNoop.Changed || completedNoop.Committed || !slices.Equal(completedBytes, completedBytesAfterNoop) {
 		t.Fatalf("same-state complete receipt=%+v err=%v bytesChanged=%t", completedNoop, err, !slices.Equal(completedBytes, completedBytesAfterNoop))
 	}
@@ -149,13 +149,13 @@ func TestThreadMutationDryRunReturnsProjectionWithoutWriting(t *testing.T) {
 	memberID := testutil.TaskID("dry-mutation-member")
 	writeGraphMutationTask(t, root, "dry-mutation-member", domain.StatusNextUp, nil, "")
 	created, svc := createThreadForMutation(t, root, "dry-mutation-thread")
-	before, _ := os.ReadFile(created.Thread.Path)
+	before, _ := os.ReadFile(created.Local.CommittedPath)
 
 	receipt, err := svc.AddThreadMembers(created.Thread.ID, []string{memberID}, true)
 	if err != nil || !receipt.DryRun || !receipt.Changed || receipt.Committed || len(receipt.After.Members) != 1 {
 		t.Fatalf("dry-run receipt=%+v err=%v", receipt, err)
 	}
-	after, _ := os.ReadFile(created.Thread.Path)
+	after, _ := os.ReadFile(created.Local.CommittedPath)
 	if !slices.Equal(before, after) {
 		t.Fatal("dry-run changed the Thread file")
 	}
@@ -189,7 +189,7 @@ func TestTaskLifecycleReceiptAttributesThreadProjectionWithoutWritingThread(t *t
 	if _, err := svc.CompleteThread(created.Thread.ID, false); err != nil {
 		t.Fatal(err)
 	}
-	threadBefore, _ := os.ReadFile(created.Thread.Path)
+	threadBefore, _ := os.ReadFile(created.Local.CommittedPath)
 
 	receipt, err := svc.Move(upstreamID, domain.StatusNextUp, false, core.TaskLifecycleOverrideNone)
 	if err != nil {
@@ -201,7 +201,7 @@ func TestTaskLifecycleReceiptAttributesThreadProjectionWithoutWritingThread(t *t
 	if !strings.Contains(receipt.Remedy, "newly inconsistent Thread") {
 		t.Fatalf("remedy = %q", receipt.Remedy)
 	}
-	threadAfter, _ := os.ReadFile(created.Thread.Path)
+	threadAfter, _ := os.ReadFile(created.Local.CommittedPath)
 	if !slices.Equal(threadBefore, threadAfter) {
 		t.Fatal("task lifecycle impact attribution wrote the Thread document")
 	}
@@ -212,10 +212,10 @@ func TestTaskLifecycleRefusesInvalidThreadEvidenceBeforeWriting(t *testing.T) {
 	taskID := testutil.TaskID("invalid-thread-evidence-task")
 	taskPath := writeGraphMutationTask(t, root, "invalid-thread-evidence-task", domain.StatusNextUp, nil, "")
 	created, _ := createThreadForMutation(t, root, "invalid-thread-evidence")
-	content, _ := os.ReadFile(created.Thread.Path)
+	content, _ := os.ReadFile(created.Local.CommittedPath)
 	missingID := testutil.TaskID("invalid-thread-missing-member")
 	content = []byte(strings.Replace(string(content), "tasks: []", "tasks: ["+missingID+"]", 1))
-	if err := os.WriteFile(created.Thread.Path, content, 0o644); err != nil {
+	if err := os.WriteFile(created.Local.CommittedPath, content, 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -447,15 +447,15 @@ func TestThreadMutationRejectsRawRepositoryRaces(t *testing.T) {
 		t.Cleanup(func() { testHookBeforeThreadMutationVerify = original })
 		testHookBeforeThreadMutationVerify = func() {
 			testHookBeforeThreadMutationVerify = nil
-			content, _ := os.ReadFile(created.Thread.Path)
-			if err := os.WriteFile(created.Thread.Path, append(content, []byte("\n<!-- raw Thread edit -->\n")...), 0o644); err != nil {
+			content, _ := os.ReadFile(created.Local.CommittedPath)
+			if err := os.WriteFile(created.Local.CommittedPath, append(content, []byte("\n<!-- raw Thread edit -->\n")...), 0o644); err != nil {
 				t.Fatal(err)
 			}
 		}
 		if _, err := svc.AddThreadMembers(created.Thread.ID, []string{memberID}, false); !errors.Is(err, domain.ErrConflict) {
 			t.Fatalf("raw Thread snapshot race = %v", err)
 		}
-		content, _ := os.ReadFile(created.Thread.Path)
+		content, _ := os.ReadFile(created.Local.CommittedPath)
 		if !strings.Contains(string(content), "raw Thread edit") || strings.Contains(string(content), "tasks: ["+memberID+"]") {
 			t.Fatalf("raw edit was lost or stale membership committed:\n%s", content)
 		}
@@ -470,16 +470,16 @@ func TestThreadMutationRejectsRawRepositoryRaces(t *testing.T) {
 		t.Cleanup(func() { testHookBeforeThreadMutationWrite = original })
 		testHookBeforeThreadMutationWrite = func(string) {
 			testHookBeforeThreadMutationWrite = nil
-			content, _ := os.ReadFile(created.Thread.Path)
+			content, _ := os.ReadFile(created.Local.CommittedPath)
 			content = []byte(strings.Replace(string(content), "description: Exercise guarded Thread mutations", "description: Concurrent raw edit", 1))
-			if err := os.WriteFile(created.Thread.Path, content, 0o644); err != nil {
+			if err := os.WriteFile(created.Local.CommittedPath, content, 0o644); err != nil {
 				t.Fatal(err)
 			}
 		}
 		if _, err := svc.AddThreadMembers(created.Thread.ID, []string{memberID}, false); !errors.Is(err, domain.ErrConflict) {
 			t.Fatalf("raw target race = %v", err)
 		}
-		content, _ := os.ReadFile(created.Thread.Path)
+		content, _ := os.ReadFile(created.Local.CommittedPath)
 		if !strings.Contains(string(content), "description: Concurrent raw edit") || strings.Contains(string(content), "tasks: ["+memberID+"]") {
 			t.Fatalf("target edit was lost or stale membership committed:\n%s", content)
 		}
@@ -495,8 +495,8 @@ func TestTaskLifecycleRejectsRawThreadRaceByWholeSnapshotCAS(t *testing.T) {
 	t.Cleanup(func() { testHookBeforeLifecycleVerify = original })
 	testHookBeforeLifecycleVerify = func() {
 		testHookBeforeLifecycleVerify = nil
-		content, _ := os.ReadFile(created.Thread.Path)
-		if err := os.WriteFile(created.Thread.Path, append(content, []byte("\n<!-- raw Thread lifecycle race -->\n")...), 0o644); err != nil {
+		content, _ := os.ReadFile(created.Local.CommittedPath)
+		if err := os.WriteFile(created.Local.CommittedPath, append(content, []byte("\n<!-- raw Thread lifecycle race -->\n")...), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -508,7 +508,7 @@ func TestTaskLifecycleRejectsRawThreadRaceByWholeSnapshotCAS(t *testing.T) {
 		t.Fatalf("raw Thread lifecycle race = %v", err)
 	}
 	taskContent, _ := os.ReadFile(taskPath)
-	threadContent, _ := os.ReadFile(created.Thread.Path)
+	threadContent, _ := os.ReadFile(created.Local.CommittedPath)
 	if !strings.Contains(string(taskContent), "status: next-up") || !strings.Contains(string(threadContent), "raw Thread lifecycle race") {
 		t.Fatalf("stale lifecycle landed or raw Thread edit was lost:\ntask:\n%s\nThread:\n%s", taskContent, threadContent)
 	}

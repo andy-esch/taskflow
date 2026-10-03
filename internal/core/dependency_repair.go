@@ -82,7 +82,7 @@ type TaskGraphRepairMutationResult struct {
 	Plan             TaskGraphRepairPlan
 	Analysis         TaskGraphRepairAnalysis
 	FinalGraph       *TaskGraph
-	Threads          []domain.Thread
+	Threads          []LoadedRecord[domain.Thread]
 	ThreadProblems   []ThreadReadProblem
 	PlannedSources   []TaskGraphSourceRef
 	AppliedSources   []TaskGraphSourceRef

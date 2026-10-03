@@ -251,12 +251,12 @@ func (s *Service) ListThreadViews() (ThreadListView, []ThreadReadProblem, error)
 
 func threadLess(left, right domain.Thread) bool {
 	leftKey := []string{
-		left.ID, left.FilenameID, left.Slug, left.Path, string(left.Status), left.Description,
+		left.ID, left.Slug, string(left.Status), left.Description,
 		left.Goal, left.TargetDate, left.Created, left.Updated, left.StartedAt, left.EndedAt,
 		strings.Join(left.Tags, "\x00"), strings.Join(left.Tasks, "\x00"),
 	}
 	rightKey := []string{
-		right.ID, right.FilenameID, right.Slug, right.Path, string(right.Status), right.Description,
+		right.ID, right.Slug, string(right.Status), right.Description,
 		right.Goal, right.TargetDate, right.Created, right.Updated, right.StartedAt, right.EndedAt,
 		strings.Join(right.Tags, "\x00"), strings.Join(right.Tasks, "\x00"),
 	}
@@ -337,9 +337,6 @@ func hasThreadProblem(problems []ThreadProblem, code ThreadProblemCode) bool {
 }
 
 func threadDiagnosticName(thread domain.Thread) string {
-	if thread.Path != "" {
-		return thread.Path
-	}
 	if thread.Slug != "" && thread.ID != "" {
 		return thread.Slug + " (" + thread.ID + ")"
 	}
@@ -350,6 +347,13 @@ func threadDiagnosticName(thread domain.Thread) string {
 		return thread.ID
 	}
 	return "unidentified Thread"
+}
+
+func threadRecordDiagnosticName(record LoadedRecord[domain.Thread]) string {
+	if record.Source.Location != "" {
+		return record.Source.Location
+	}
+	return threadDiagnosticName(record.Value)
 }
 
 func threadReadProblemName(problem ThreadReadProblem) string {

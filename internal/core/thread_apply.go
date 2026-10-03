@@ -188,7 +188,7 @@ func pendingThreadApplyOperations(operations []ThreadApplyOperation) int {
 // mutating repository state. body is rendered by the Service from the ordinary
 // Thread template before the pure compiler runs.
 func ComposeThreadApplyPlan(snapshot ThreadApplySnapshot, manifest ThreadComposeManifest, body string, newID func() string, now time.Time) (ThreadApplyPlan, error) {
-	if err := ValidateThreadCreationSource(snapshot.Graph, snapshot.Threads, nil); err != nil {
+	if err := validateThreadCreationSnapshot(snapshot.Graph, snapshot.Threads); err != nil {
 		return ThreadApplyPlan{}, err
 	}
 	if snapshot.PlanningRepoID == "" {
@@ -320,7 +320,7 @@ func ComposeThreadApplyPlan(snapshot ThreadApplySnapshot, manifest ThreadCompose
 // PrepareThreadApply revalidates a durable plan against current repository
 // state and returns only the physical writes still needed.
 func PrepareThreadApply(snapshot ThreadApplySnapshot, plan ThreadApplyPlan) (ThreadApplyDecision, error) {
-	if err := ValidateThreadCreationSource(snapshot.Graph, snapshot.Threads, nil); err != nil {
+	if err := validateThreadCreationSnapshot(snapshot.Graph, snapshot.Threads); err != nil {
 		return ThreadApplyDecision{}, err
 	}
 	if plan.Schema != ThreadApplyPlanSchema {

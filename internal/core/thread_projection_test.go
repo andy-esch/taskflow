@@ -12,8 +12,7 @@ import (
 func threadRecord(status domain.ThreadStatus, taskIDs ...string) domain.Thread {
 	sort.Strings(taskIDs)
 	return domain.Thread{
-		ID: testutil.TaskID("thread"), FilenameID: testutil.TaskID("thread"), Slug: "thread",
-		Path: "threads/" + testutil.TaskID("thread") + "-thread.md", Status: status,
+		ID: testutil.TaskID("thread"), Slug: "thread", Status: status,
 		Description: "Thread projection", Goal: "Prove projection semantics", Created: "2026-08-29",
 		Tasks: append([]string(nil), taskIDs...),
 	}
@@ -22,8 +21,6 @@ func threadRecord(status domain.ThreadStatus, taskIDs ...string) domain.Thread {
 func TestLoadedThreadProjectionUsesSourceIdentityWithoutPromotingOpaqueLocation(t *testing.T) {
 	thread := threadRecord(domain.ThreadStatusUnstarted)
 	thread.ID = testutil.TaskID("declared-thread-id")
-	thread.FilenameID = thread.ID // stale compatibility metadata must not mask drift
-	thread.Path = "/stale/domain/path.md"
 	sourceID := testutil.TaskID("actual-thread-source")
 	graph := NewTaskGraph(nil, nil)
 
@@ -125,9 +122,8 @@ func TestProjectThreadIdentityDriftAndTaskCollisionFailClosed(t *testing.T) {
 	task := graphRecord("colliding-identity", domain.StatusNextUp)
 	thread := threadRecord(domain.ThreadStatusUnstarted, task.ID)
 	thread.ID = task.ID
-	thread.FilenameID = testutil.TaskID("different-thread-filename")
-
-	view := ProjectThread(thread, NewTaskGraph([]domain.Task{task}, nil))
+	record := LoadedRecord[domain.Thread]{Value: thread, Source: RecordSource{ID: testutil.TaskID("different-thread-source")}}
+	view := ProjectLoadedThread(record, NewTaskGraph([]domain.Task{task}, nil))
 	if view.ProjectionHealth != GraphBroken || len(view.Frontier) != 0 {
 		t.Fatalf("identity-defective projection = %+v", view)
 	}
@@ -144,7 +140,7 @@ func TestProjectThreadMissingAndInvalidIDsDoNotBecomeTaskCollisions(t *testing.T
 	task := graphRecord("unrelated-task", domain.StatusNextUp)
 	for _, threadID := range []string{"", "not-a-stable-id"} {
 		thread := threadRecord(domain.ThreadStatusUnstarted, task.ID)
-		thread.ID, thread.FilenameID = threadID, ""
+		thread.ID = threadID
 		view := ProjectThread(thread, NewTaskGraph([]domain.Task{task}, nil))
 		if view.ProjectionHealth != GraphBroken || len(view.Frontier) != 0 {
 			t.Fatalf("invalid identity projection = %+v", view)

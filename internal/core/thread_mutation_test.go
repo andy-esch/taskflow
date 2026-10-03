@@ -288,7 +288,7 @@ func TestTaskLifecycleThreadImpactsIncludeDirectDownstreamAndExternalGateEffects
 	other := threadRecord(domain.ThreadStatusCompleted, unrelated.ID)
 	other.ID, other.Slug = testutil.TaskID("other-thread"), "other"
 
-	impacts := TaskLifecycleThreadImpacts([]domain.Thread{other, dependent, shared, direct}, graph, TaskLifecyclePlan{
+	impacts := TaskLifecycleThreadImpacts(semanticThreadRead(other, dependent, shared, direct).LoadedThreads(), graph, TaskLifecyclePlan{
 		TaskID: upstream.ID, To: domain.StatusInProgress,
 	})
 	if len(impacts) != 3 {

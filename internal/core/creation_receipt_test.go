@@ -9,7 +9,6 @@ import (
 )
 
 // Portable creation outcomes carry semantic values without a local outcome.
-// Thread keeps a transitional path until its separate mutation migration.
 type pathlessCreationStore struct{ *fakeStore }
 
 func (s *pathlessCreationStore) CreateTask(task domain.Task, _ string, dry bool) (TaskCreationReceipt, error) {
@@ -31,7 +30,7 @@ func (s *pathlessCreationStore) CreateResearch(research domain.Research, _ strin
 
 func (s *pathlessCreationStore) MutateThreadCreation(_ time.Time, dry bool, _ ThreadCreationPlanner) (ThreadCreationMutationResult, error) {
 	return ThreadCreationMutationResult{
-		Thread: domain.Thread{ID: "6gdx7mn9f0a4", Slug: "created", Path: "/not-the-thread-outcome"},
+		Thread: domain.Thread{ID: "6gdx7mn9f0a4", Slug: "created"},
 		DryRun: dry, Changed: true, Committed: !dry,
 	}, nil
 }
@@ -39,7 +38,7 @@ func (s *pathlessCreationStore) MutateThreadCreation(_ time.Time, dry bool, _ Th
 func (s *pathlessCreationStore) MutateThread(_ time.Time, dry bool, _ ThreadMutationPlanner) (ThreadMutationResult, error) {
 	return ThreadMutationResult{
 		Plan:   ThreadMutationPlan{Operation: ThreadMutationStart},
-		Thread: domain.Thread{ID: "6gdx7mn9f0a4", Slug: "created", Path: "/not-the-thread-update-outcome"},
+		Thread: domain.Thread{ID: "6gdx7mn9f0a4", Slug: "created"},
 		DryRun: dry, Changed: true, Committed: !dry,
 	}, nil
 }
@@ -65,11 +64,11 @@ func TestCreateReceiptsDoNotInferLocalPathsFromDomainRecords(t *testing.T) {
 			t.Fatalf("pathless research receipt=%+v err=%v", research, err)
 		}
 		thread, err := svc.NewThread(NewThreadParams{Title: "Created", Description: "goal", Goal: "done", DryRun: dry})
-		if err != nil || thread.Thread.Path == "" || thread.Local != (LocalCreateOutcome{}) || thread.Committed == dry {
+		if err != nil || thread.Thread.ID == "" || thread.Local != (LocalCreateOutcome{}) || thread.Committed == dry {
 			t.Fatalf("pathless Thread receipt=%+v err=%v", thread, err)
 		}
 		updated, err := svc.StartThread("created", dry)
-		if err != nil || updated.Thread.Path == "" || updated.LocalPath != "" || updated.Committed == dry {
+		if err != nil || updated.Thread.ID == "" || updated.LocalPath != "" || updated.Committed == dry {
 			t.Fatalf("pathless Thread update receipt=%+v err=%v", updated, err)
 		}
 	}

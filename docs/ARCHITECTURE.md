@@ -283,7 +283,11 @@ adapter capabilities rather than leaked persistence.
   executable repair target; YAML repair plans may pair a local `path` with a `location` stale-context
   check, but never use the latter as a selector. Repair authority comes only from an explicitly
   supplied `VersionedRecord.LocalPath`; bare-task and ordinary loaded-record graph inputs remain
-  read-only. Semantic Task values contain no local path, filename identity, or source revision.
+  read-only. Semantic entity values, including Task and Thread, contain no local path, filename
+  identity, or source revision. Thread creation, mutation, and bulk-apply source validation consumes
+  the complete loaded snapshot before supplying semantic planner values. Local Thread materialization
+  uses the guarded record's explicit path and original byte revision; lifecycle and repair impact
+  projections retain loaded source identity/location even when a readable Thread has declaration drift.
   Local navigation requests a separate optional path capability, not the diagnostic location or
   its presentation hint.
   Repository lint follows the same rule through its dedicated `LintSource` port. Its per-kind,
@@ -727,7 +731,7 @@ Files split by concern:
   Detail loading uses one `ShowThreadGraphDetail` read for the graph projection and persisted body,
   then joins the separately optional `ThreadPathSource`; pathless adapters retain summary and
   topology browsing while path copy, clickable titles, and `$EDITOR` degrade explicitly rather
-  than borrowing `domain.Thread.Path` from a portable record. The generic detail pane owns an
+  than treating a readable source location as a local capability. The generic detail pane owns an
   optional alternate-view seam and preserves the selected representation across same-entity
   reloads; Thread content supplies summary/topology renderers without adding Thread state to the
   root model. A sibling optional navigation seam lets structured detail presentations own their

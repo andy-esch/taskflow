@@ -5,6 +5,7 @@ package core
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -138,10 +139,21 @@ type ThreadRead struct {
 	Problems []ThreadReadProblem
 }
 
+// LoadedThreads preserves readable source identity/location for projections
+// without exposing guarded revisions or local mutation handles.
+func (read ThreadRead) LoadedThreads() []LoadedRecord[domain.Thread] {
+	threads := make([]LoadedRecord[domain.Thread], 0, len(read.Records))
+	for _, record := range read.Records {
+		threads = append(threads, LoadedRecord[domain.Thread]{Value: cloneThread(record.Record.Value), Source: record.Record.Source})
+	}
+	return threads
+}
+
 // SemanticThreads is the planner-facing view of one authoritative Thread read.
 // It preserves source-record order and deliberately does not let a second,
 // independently populated slice become mutation evidence. Revisions stay only
-// in the guarded wrappers.
+// in the guarded wrappers; callers must validate source identities before
+// discarding the envelopes for ordinary mutation planning.
 func (read ThreadRead) SemanticThreads() []domain.Thread {
 	threads := make([]domain.Thread, 0, len(read.Records))
 	for _, record := range read.Records {
@@ -155,19 +167,22 @@ func (read ThreadRead) SemanticThreads() []domain.Thread {
 // before constructing a semantic planner snapshot. Repair is intentionally not
 // gated here: it may need to operate while Thread evidence is incomplete.
 func (read ThreadRead) ValidateSources() error {
-	seen := make(map[string]struct{}, len(read.Records))
-	for _, record := range read.Records {
+	seen := make(map[string]string, len(read.Records))
+	ordered := append([]VersionedRecord[domain.Thread](nil), read.Records...)
+	sort.Slice(ordered, func(i, j int) bool { return threadRecordLess(ordered[i].Record, ordered[j].Record) })
+	for _, record := range ordered {
 		if err := requireSourceID(EntityThread, record.Record.Source); err != nil {
 			return err
 		}
 		id := record.Record.Source.ID
-		if _, duplicate := seen[id]; duplicate {
-			return fmt.Errorf("%w: duplicate canonical Thread source ID %q", domain.ErrValidation, id)
+		name := threadRecordDiagnosticName(record.Record)
+		if prior, duplicate := seen[id]; duplicate {
+			return fmt.Errorf("%w: duplicate canonical Thread source ID %q across %s and %s", domain.ErrValidation, id, prior, name)
 		}
 		if declared := record.Record.Value.ID; declared != id {
-			return fmt.Errorf("%w: Thread source ID %q disagrees with declared id %q", domain.ErrValidation, id, declared)
+			return fmt.Errorf("%w: Thread %s source ID %q disagrees with declared id %q", domain.ErrValidation, name, id, declared)
 		}
-		seen[id] = struct{}{}
+		seen[id] = name
 	}
 	return nil
 }
