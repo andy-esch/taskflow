@@ -110,6 +110,7 @@ func callThreadCreationPlanner(store *FS, planner core.ThreadCreationPlanner, sn
 		return core.ThreadCreationPlan{}, err
 	}
 	defer leave()
+	snapshot.Threads = clonePlannerThreads(snapshot.Threads)
 	return planner(snapshot)
 }
 

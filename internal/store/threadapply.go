@@ -198,6 +198,8 @@ func callThreadApplyPlanner(store *FS, planner core.ThreadApplyPlanner, snapshot
 		return core.ThreadApplyPlan{}, err
 	}
 	defer leave()
+	snapshot.Threads = clonePlannerThreads(snapshot.Threads)
+	snapshot.ThreadBodies = cloneStringMap(snapshot.ThreadBodies)
 	return planner(snapshot)
 }
 

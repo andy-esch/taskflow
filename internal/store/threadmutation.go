@@ -117,6 +117,8 @@ func callThreadMutationPlanner(store *FS, planner core.ThreadMutationPlanner, sn
 		return core.ThreadMutationPlan{}, err
 	}
 	defer leave()
+	// Callback-owned slices must not rewrite the snapshot used to authorize its plan.
+	snapshot.Threads = clonePlannerThreads(snapshot.Threads)
 	return planner(snapshot)
 }
 
