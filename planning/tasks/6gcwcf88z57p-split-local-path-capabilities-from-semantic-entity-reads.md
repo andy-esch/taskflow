@@ -11,7 +11,7 @@ autonomy_level: 2
 tags: [architecture, ports, entities, filesystem]
 created: "2026-09-23"
 depends_on: [6gcwcf80v8hg, 6gdx7mcqm371, 6gdx7mcqq67d, 6gdx7mcrq8s8, 6ge1bacd3bd2]
-updated_at: "2026-10-02"
+updated_at: "2026-10-03"
 started_at: "2026-10-01"
 ---
 
@@ -77,11 +77,19 @@ retain their stronger version evidence outside the domain values.
 
 ## Progress
 
+- `domain.Task` now contains no path, filename identity, or source revision. Filesystem scans and
+  creation receipts retain their explicit source/local metadata; bare-task graph compatibility
+  inputs provide no location or repair authority. Test fixtures now carry paths in loaded/guarded
+  records, preserving duplicate-source attribution and snapshot comparisons. TUI tests reject
+  opaque and path-shaped locations, including a path display hint, without a local path capability.
+  The repair-shadow test now requires an actual representative edit rather than accepting a no-op.
+  Full tests, core/store/TUI/wire race checks, and lint pass. Thread mutation planning/materialization
+  and removal of its `Path`/`FilenameID` are the remaining implementation slice.
 - The Task filename-identity removal review exposed a repair reload check that rebuilt source
   identity from the declared ID. It now uses an explicit filesystem source record and verifies the
   source as well as the repaired fields. Regression tests cover missing and drifting declarations
   in dry-run and committed repairs, retaining residual identity diagnostics and unrelated content.
-  Both checkpoint reviews are reconciled; Task local-path and Thread mutation migration remain.
+  Both checkpoint reviews are reconciled; Thread mutation migration remains.
 - Checkpoint review found that the compatibility `NewTaskGraph`/`TaskGraphRead.Tasks` conversions
   promoted `Task.Path` to a local repair handle. They are now read-only; local repair tests and
   filesystem adapters supply `VersionedRecord.LocalPath` explicitly. Hostile URI and path-shaped
@@ -125,10 +133,10 @@ retain their stronger version evidence outside the domain values.
   change. Detail hyperlinks use a separately resolved path; pathless semantic records cannot supply
   editor paths by accident.
 - Task filename identity now lives only in loaded source records, not `domain.Task`; graph tests
-  supply distinct source IDs explicitly when frontmatter IDs drift or are missing. The remaining
-  domain-field removal is `Task.Path` and Thread `Path`/`FilenameID`, concentrated in compatibility
-  constructors, Thread mutation planning/materialization, and their tests. Those callers still need
-  explicit source envelopes or local receipts.
+  supply distinct source IDs explicitly when frontmatter IDs drift or are missing. Task local-path
+  removal is complete. The remaining domain-field removal is Thread `Path`/`FilenameID`, concentrated
+  in mutation planning/materialization and their tests; those callers still need explicit source
+  envelopes or local receipts.
 
 ## Related
 
