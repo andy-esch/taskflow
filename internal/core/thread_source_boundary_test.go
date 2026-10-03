@@ -113,3 +113,58 @@ func TestThreadGraphImpactsRetainSourceDefectsAfterRepair(t *testing.T) {
 		})
 	}
 }
+
+func TestThreadImpactsQualifyDuplicateSourcesBeforeFiltering(t *testing.T) {
+	member := graphRecord("duplicate-changing-member", domain.StatusNextUp)
+	done := graphRecord("duplicate-unchanged-member", domain.StatusCompleted)
+	before := NewTaskGraph([]domain.Task{member, done}, nil)
+	changed := member
+	changed.Status = domain.StatusInProgress
+	after := NewTaskGraph([]domain.Task{changed, done}, nil)
+	sourceID := testutil.TaskID("duplicate-impact-source")
+	active := threadRecord(domain.ThreadStatusUnstarted, member.ID)
+	active.ID, active.Slug = sourceID, "alpha"
+	completed := threadRecord(domain.ThreadStatusCompleted, done.ID)
+	completed.ID, completed.Slug = sourceID, "beta"
+	records := []LoadedRecord[domain.Thread]{
+		{Value: completed, Source: RecordSource{ID: sourceID, Location: "db://threads/beta"}},
+		{Value: active, Source: RecordSource{ID: sourceID, Location: "db://threads/alpha"}},
+	}
+	for name, impacts := range map[string][]ThreadProjectionImpact{
+		"graph": TaskGraphThreadImpacts(records, before, after, []string{member.ID}),
+		"lifecycle": TaskLifecycleThreadImpacts(records, before, TaskLifecyclePlan{
+			TaskID: member.ID, To: domain.StatusInProgress,
+		}),
+	} {
+		t.Run(name, func(t *testing.T) {
+			// The unchanged duplicate is filtered out of the receipt, but must
+			// still qualify the changed occurrence as broken on both sides.
+			if len(impacts) != 1 || impacts[0].ThreadID != sourceID || impacts[0].Slug != "alpha" {
+				t.Fatalf("impacts = %+v", impacts)
+			}
+			for _, view := range []ThreadView{impacts[0].Before, impacts[0].After} {
+				if view.ProjectionHealth != GraphBroken || len(view.Frontier) != 0 || !hasThreadProblem(view.Problems, ThreadProblemDuplicateID) {
+					t.Fatalf("filtering erased the duplicate source defect: %+v", view)
+				}
+				for _, problem := range view.Problems {
+					if problem.Code == ThreadProblemDuplicateID && (problem.ThreadID != sourceID || problem.Path != "") {
+						t.Fatalf("opaque duplicate diagnostic lost source attribution: %+v", problem)
+					}
+				}
+			}
+		})
+	}
+	// Once task evidence is repaired, completion must not clear a remaining
+	// duplicate source defect, even for an otherwise fully drained Thread.
+	member.DependsOn = []string{"invalid-token"}
+	broken := NewTaskGraph([]domain.Task{member, done}, nil)
+	impacts := TaskGraphThreadImpacts(records, broken, after, []string{member.ID})
+	if len(impacts) != 2 || impacts[1].Slug != "beta" || !impacts[1].After.Inconsistent ||
+		!hasThreadProblem(impacts[1].After.Problems, ThreadProblemDuplicateID) ||
+		!hasThreadProblem(impacts[1].After.Problems, ThreadProblemCompletedUnhealthyEvidence) {
+		t.Fatalf("completed duplicate became consistent after graph repair: %+v", impacts)
+	}
+	if records[0].Value.Slug != "beta" || records[1].Value.Slug != "alpha" {
+		t.Fatal("impact computation reordered the adapter records")
+	}
+}

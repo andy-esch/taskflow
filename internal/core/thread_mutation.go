@@ -410,9 +410,10 @@ func TaskLifecycleThreadImpacts(threads []LoadedRecord[domain.Thread], graph *Ta
 	afterGraph := taskGraphWithStatus(graph, plan.TaskID, plan.To)
 	ordered := append([]LoadedRecord[domain.Thread](nil), threads...)
 	sort.Slice(ordered, func(i, j int) bool { return threadRecordLess(ordered[i], ordered[j]) })
+	beforeViews, afterViews := projectLoadedThreads(ordered, graph), projectLoadedThreads(ordered, afterGraph)
 	impacts := make([]ThreadProjectionImpact, 0)
-	for _, thread := range ordered {
-		before, after := ProjectLoadedThread(thread, graph), ProjectLoadedThread(thread, afterGraph)
+	for i, thread := range ordered {
+		before, after := beforeViews[i], afterViews[i]
 		if reflect.DeepEqual(before, after) {
 			continue
 		}
@@ -438,9 +439,10 @@ func TaskGraphThreadImpacts(threads []LoadedRecord[domain.Thread], before, after
 	}
 	ordered := append([]LoadedRecord[domain.Thread](nil), threads...)
 	sort.Slice(ordered, func(i, j int) bool { return threadRecordLess(ordered[i], ordered[j]) })
+	beforeViews, afterViews := projectLoadedThreads(ordered, before), projectLoadedThreads(ordered, after)
 	impacts := make([]ThreadProjectionImpact, 0)
-	for _, thread := range ordered {
-		left, right := ProjectLoadedThread(thread, before), ProjectLoadedThread(thread, after)
+	for i, thread := range ordered {
+		left, right := beforeViews[i], afterViews[i]
 		if reflect.DeepEqual(left, right) {
 			continue
 		}

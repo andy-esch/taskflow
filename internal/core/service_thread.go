@@ -219,13 +219,13 @@ func (s *Service) ListThreadViews() (ThreadListView, []ThreadReadProblem, error)
 	if err != nil {
 		return ThreadListView{}, nil, err
 	}
-	records := append([]VersionedRecord[domain.Thread](nil), read.Records...)
+	records := read.LoadedThreads()
 	problems := append([]ThreadReadProblem(nil), read.Problems...)
 	valid := records[:0]
 	for _, record := range records {
-		if requireSourceID(EntityThread, record.Record.Source) != nil {
+		if requireSourceID(EntityThread, record.Source) != nil {
 			problems = append(problems, ThreadReadProblem{
-				ThreadSlug: record.Record.Value.Slug, Location: record.Record.Source.Location,
+				ThreadSlug: record.Value.Slug, Location: record.Source.Location,
 				Message: "record has no canonical source ID",
 			})
 			continue
@@ -236,16 +236,14 @@ func (s *Service) ListThreadViews() (ThreadListView, []ThreadReadProblem, error)
 	for i := range problems {
 		problems[i].SourceVersion = ""
 	}
-	sort.Slice(records, func(i, j int) bool { return threadRecordLess(records[i].Record, records[j].Record) })
+	sort.Slice(records, func(i, j int) bool { return threadRecordLess(records[i], records[j]) })
 	sort.Slice(problems, func(i, j int) bool { return threadReadProblemLess(problems[i], problems[j]) })
 	list := ThreadListView{
-		Threads: make([]ThreadView, len(records)), GraphHealth: graph.Health(), GraphProblems: graph.Problems(),
+		Threads: projectLoadedThreads(records, graph), GraphHealth: graph.Health(), GraphProblems: graph.Problems(),
 	}
-	for i, record := range records {
-		list.Threads[i] = ProjectLoadedThread(record.Record, graph)
+	for i := range list.Threads {
 		list.Threads[i].GraphProblems = nil
 	}
-	markDuplicateThreadIDs(list.Threads)
 	return list, problems, nil
 }
 
@@ -284,53 +282,6 @@ func threadReadProblemLess(left, right ThreadReadProblem) bool {
 	for i := range leftKey {
 		if leftKey[i] != rightKey[i] {
 			return leftKey[i] < rightKey[i]
-		}
-	}
-	return false
-}
-
-func markDuplicateThreadIDs(views []ThreadView) {
-	indices := make(map[string][]int, len(views))
-	for i := range views {
-		if views[i].Source.ID != "" {
-			indices[views[i].Source.ID] = append(indices[views[i].Source.ID], i)
-		}
-	}
-	for threadID, matches := range indices {
-		if len(matches) < 2 {
-			continue
-		}
-		for _, i := range matches {
-			views[i].ProjectionHealth = GraphBroken
-			views[i].Frontier = nil
-			views[i].Problems = append(views[i].Problems, ThreadProblem{
-				Code: ThreadProblemDuplicateID, ThreadID: threadID, Path: threadViewDiagnosticPath(views[i]),
-				Message: fmt.Sprintf("Thread id %s is used by %d readable Thread documents", threadID, len(matches)),
-			})
-			if views[i].Thread.Status == domain.ThreadStatusCompleted {
-				views[i].Inconsistent = true
-				if !hasThreadProblem(views[i].Problems, ThreadProblemCompletedUnhealthyEvidence) {
-					views[i].Problems = append(views[i].Problems, ThreadProblem{
-						Code: ThreadProblemCompletedUnhealthyEvidence, ThreadID: threadID, Path: threadViewDiagnosticPath(views[i]),
-						Message: "completed Thread has broken projection evidence",
-					})
-				}
-			}
-		}
-	}
-}
-
-func threadViewDiagnosticPath(view ThreadView) string {
-	if view.Source.LocationIsPath {
-		return view.Source.Location
-	}
-	return ""
-}
-
-func hasThreadProblem(problems []ThreadProblem, code ThreadProblemCode) bool {
-	for _, problem := range problems {
-		if problem.Code == code {
-			return true
 		}
 	}
 	return false

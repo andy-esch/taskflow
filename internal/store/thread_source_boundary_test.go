@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -206,6 +207,64 @@ func TestGraphRepairReceiptRetainsReadableThreadIdentityDrift(t *testing.T) {
 			after, err := os.ReadFile(path)
 			if err != nil || string(after) != content {
 				t.Fatalf("task repair rewrote a Thread: err=%v", err)
+			}
+		})
+	}
+}
+
+func TestGraphRepairReceiptRetainsDuplicateThreadSources(t *testing.T) {
+	for _, dry := range []bool{true, false} {
+		t.Run(fmt.Sprintf("dry-run=%t", dry), func(t *testing.T) {
+			root := t.TempDir()
+			prerequisiteID := testutil.TaskID("duplicate-impact-prerequisite")
+			memberID := testutil.TaskID("duplicate-impact-member")
+			writeGraphMutationTask(t, root, "duplicate-impact-prerequisite", domain.StatusCompleted, nil, "")
+			writeGraphMutationTask(t, root, "duplicate-impact-member", domain.StatusNextUp, []string{prerequisiteID, prerequisiteID}, "")
+			sourceID := testutil.TaskID("duplicate-impact-source")
+			content := fmt.Sprintf("---\nid: %s\nstatus: unstarted\ndescription: Keep duplicate sources visible\ngoal: Repair only task dependencies\ncreated: \"2026-10-03\"\ntasks: [%s]\n---\n# Duplicate\n", sourceID, memberID)
+			for _, slug := range []string{"alpha", "beta"} {
+				testutil.Write(t, filepath.Join(root, domain.ThreadsDir, sourceID+"-"+slug+".md"), content)
+			}
+			svc := core.MustNewService(NewFS(root))
+			receipt, err := svc.RepairTaskGraph(core.TaskGraphRepairRequest{Auto: true}, dry)
+			if err != nil || !receipt.Changed || receipt.Committed == dry || receipt.FinalHealth != core.GraphHealthy || len(receipt.ThreadImpacts) != 2 {
+				t.Fatalf("repair=%+v err=%v", receipt, err)
+			}
+			list, problems, err := svc.ListThreadViews()
+			if err != nil || len(problems) != 0 || len(list.Threads) != 2 {
+				t.Fatalf("list=%+v problems=%+v err=%v", list, problems, err)
+			}
+			for i, impact := range receipt.ThreadImpacts {
+				path := filepath.Join(root, domain.ThreadsDir, sourceID+"-"+[]string{"alpha", "beta"}[i]+".md")
+				if impact.ThreadID != sourceID || !impact.Direct {
+					t.Fatalf("impact lost source identity: %+v", impact)
+				}
+				for _, view := range []core.ThreadView{impact.Before, impact.After, list.Threads[i]} {
+					if view.Source.ID != sourceID || view.Source.Location != path || view.ProjectionHealth != core.GraphBroken || len(view.Frontier) != 0 {
+						t.Fatalf("duplicate source became healthy or lost attribution: %+v", view)
+					}
+					found := false
+					for _, problem := range view.Problems {
+						found = found || problem.Code == core.ThreadProblemDuplicateID && problem.ThreadID == sourceID && problem.Path == path
+					}
+					if !found {
+						t.Fatalf("duplicate diagnostic disappeared: %+v", view.Problems)
+					}
+				}
+				// Compare projection qualification, not operation-owned task
+				// timestamps or hoisted global diagnostics in ordinary list rows.
+				listed := list.Threads[i]
+				if !dry && (listed.GraphHealth != impact.After.GraphHealth ||
+					listed.ProjectionHealth != impact.After.ProjectionHealth ||
+					listed.Inconsistent != impact.After.Inconsistent ||
+					!reflect.DeepEqual(listed.Problems, impact.After.Problems) ||
+					!reflect.DeepEqual(listed.Frontier, impact.After.Frontier)) {
+					t.Fatalf("repair and ordinary read qualification disagree: impact=%+v listed=%+v", impact.After, listed)
+				}
+				after, err := os.ReadFile(path)
+				if err != nil || string(after) != content {
+					t.Fatalf("task repair rewrote a duplicate Thread: err=%v", err)
+				}
 			}
 		})
 	}

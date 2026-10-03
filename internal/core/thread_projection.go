@@ -98,6 +98,66 @@ func ProjectLoadedThread(record LoadedRecord[domain.Thread], graph *TaskGraph) T
 	return projectThread(record.Value, record.Source, graph)
 }
 
+// projectLoadedThreads qualifies the complete readable source set before any
+// caller filters it. A single-record projection cannot detect duplicate source
+// identity; list and impact receipts must not publish different health/frontiers.
+// Record order and every source occurrence are preserved.
+func projectLoadedThreads(records []LoadedRecord[domain.Thread], graph *TaskGraph) []ThreadView {
+	views := make([]ThreadView, len(records))
+	for i, record := range records {
+		views[i] = ProjectLoadedThread(record, graph)
+	}
+	markDuplicateThreadIDs(views)
+	return views
+}
+
+func markDuplicateThreadIDs(views []ThreadView) {
+	indices := make(map[string][]int, len(views))
+	for i := range views {
+		if views[i].Source.ID != "" {
+			indices[views[i].Source.ID] = append(indices[views[i].Source.ID], i)
+		}
+	}
+	for threadID, matches := range indices {
+		if len(matches) < 2 {
+			continue
+		}
+		for _, i := range matches {
+			views[i].ProjectionHealth = GraphBroken
+			views[i].Frontier = nil
+			views[i].Problems = append(views[i].Problems, ThreadProblem{
+				Code: ThreadProblemDuplicateID, ThreadID: threadID, Path: threadViewDiagnosticPath(views[i]),
+				Message: fmt.Sprintf("Thread id %s is used by %d readable Thread documents", threadID, len(matches)),
+			})
+			if views[i].Thread.Status == domain.ThreadStatusCompleted {
+				views[i].Inconsistent = true
+				if !hasThreadProblem(views[i].Problems, ThreadProblemCompletedUnhealthyEvidence) {
+					views[i].Problems = append(views[i].Problems, ThreadProblem{
+						Code: ThreadProblemCompletedUnhealthyEvidence, ThreadID: threadID, Path: threadViewDiagnosticPath(views[i]),
+						Message: "completed Thread has broken projection evidence",
+					})
+				}
+			}
+		}
+	}
+}
+
+func threadViewDiagnosticPath(view ThreadView) string {
+	if view.Source.LocationIsPath {
+		return view.Source.Location
+	}
+	return ""
+}
+
+func hasThreadProblem(problems []ThreadProblem, code ThreadProblemCode) bool {
+	for _, problem := range problems {
+		if problem.Code == code {
+			return true
+		}
+	}
+	return false
+}
+
 func projectThread(thread domain.Thread, source RecordSource, graph *TaskGraph) ThreadView {
 	path := ""
 	if source.LocationIsPath {
