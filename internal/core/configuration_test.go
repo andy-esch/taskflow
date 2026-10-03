@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 )
@@ -10,6 +11,33 @@ type fakeConfigurationStore struct {
 	migration ConfigurationMigration
 	diagnosis ConfigurationDiagnosis
 	change    PreferenceChange
+}
+
+type linkDiagnosisProbe struct {
+	ConfigurationStore
+	calls int
+	start string
+	err   error
+}
+
+func (f *linkDiagnosisProbe) DiagnoseConfiguration(start string) (ConfigurationDiagnosis, error) {
+	f.calls++
+	f.start = start
+	return ConfigurationDiagnosis{Problems: []ConfigurationProblem{{Repo: "opaque:impl", Message: "missing linkback"}}}, f.err
+}
+
+func TestRepositoryLinkProblemsDoesNotScanRegistry(t *testing.T) {
+	probe := &linkDiagnosisProbe{}
+	// A registry service with no usable store would panic if Catalog were called.
+	svc := NewConfigurationService(probe, WithSpaceRegistry(NewSpaceRegistryService(nil)))
+	problems, err := svc.RepositoryLinkProblems("opaque:entry-point")
+	if err != nil || len(problems) != 1 || problems[0].Repo != "opaque:impl" || probe.calls != 1 || probe.start != "opaque:entry-point" {
+		t.Fatalf("link problems=%+v err=%v probe=%+v", problems, err, probe)
+	}
+	probe.err = errors.New("repository diagnosis failed")
+	if problems, err := svc.RepositoryLinkProblems("opaque:entry-point"); len(problems) != 0 || !errors.Is(err, probe.err) || probe.calls != 2 {
+		t.Fatalf("failed diagnosis problems=%+v err=%v calls=%d", problems, err, probe.calls)
+	}
 }
 
 func (f *fakeConfigurationStore) LoadConfiguration(string) (ConfigurationState, error) {

@@ -27,6 +27,9 @@ type sourceSetProbe struct {
 	ThreadCreationMutationStore
 	ThreadMutationStore
 	ThreadApplyMutationStore
+	Fixer
+	Linter
+	CompletionSource
 }
 
 func (p *sourceSetProbe) SourceSetID() SourceSetID { return p.id }
@@ -37,6 +40,9 @@ func (p *sourceSetProbe) ReadAuditSnapshot(string) (AuditSnapshot, error) {
 
 type noSourceSetGraph struct{ TaskGraphSource }
 type noSourceSetMutation struct{ TaskGraphMutationStore }
+type noSourceSetCompletion struct{ CompletionSource }
+type noSourceSetFixer struct{ Fixer }
+type noSourceSetLinter struct{ Linter }
 
 type unstableSourceSetGraph struct{ TaskGraphSource }
 
@@ -73,6 +79,9 @@ func TestNewServiceRejectsEveryMismatchedSplitCapability(t *testing.T) {
 		{"Thread creation", WithThreadCreationMutationStore(foreign)},
 		{"Thread mutation", WithThreadMutationStore(foreign)},
 		{"Thread apply", WithThreadApplyMutationStore(foreign)},
+		{"frontmatter repair", WithFrontmatterRepairer(foreign)},
+		{"body link checks", WithBodyLinkSource(foreign)},
+		{"completion", WithCompletionSource(foreign)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			svc, err := NewService(&fakeStore{}, tc.opt)
@@ -92,6 +101,12 @@ func TestNewServiceRejectsMissingOrEmptySourceSetIdentity(t *testing.T) {
 	}{
 		{"missing provider", WithTaskGraphSource(&noSourceSetGraph{}), "does not publish"},
 		{"guarded mutation without provider", WithTaskGraphMutationStore(&noSourceSetMutation{}), "does not publish"},
+		{"completion without provider", WithCompletionSource(&noSourceSetCompletion{}), "does not publish"},
+		{"frontmatter repair without provider", WithFrontmatterRepairer(&noSourceSetFixer{}), "does not publish"},
+		{"link checks without provider", WithBodyLinkSource(&noSourceSetLinter{}), "does not publish"},
+		{"completion without witness", WithCompletionSource(&sourceSetProbe{}), "empty source-set"},
+		{"frontmatter repair without witness", WithFrontmatterRepairer(&sourceSetProbe{}), "empty source-set"},
+		{"link checks without witness", WithBodyLinkSource(&sourceSetProbe{}), "empty source-set"},
 		{"empty provider", WithTaskGraphSource(&sourceSetProbe{}), "empty source-set"},
 		{"unstable provider", WithTaskGraphSource(&unstableSourceSetGraph{}), "unstable source-set"},
 		{"guarded mutation without witness", WithTaskGraphMutationStore(&sourceSetProbe{}), "empty source-set"},

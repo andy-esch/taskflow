@@ -91,8 +91,8 @@ func (s *FS) authorizeMutation() error {
 }
 
 // Compile-time assertions that FS satisfies the core ports. The use-case Store is
-// the one the Service depends on; Fixer/Layout are the narrow fs/text ports the
-// primary adapters (lint --fix, the TUI watcher) wire to the FS directly.
+// the one the Service depends on; optional repair/link/completion ports are also
+// selected by Service. Layout remains an explicit local watcher capability.
 var (
 	_ core.Store               = (*FS)(nil)
 	_ core.LintSource          = (*FS)(nil)

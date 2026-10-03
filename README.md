@@ -474,9 +474,10 @@ autoload -Uz compinit && compinit
 
 Other shells: `just completion bash` / `just completion fish` print the script
 to stdout (see `tskflwctl completion --help`). Completion covers the command
-tree, flags, registered `--space` labels, **and** task/audit/epic/research slugs —
-e.g. `task show <TAB>`, `audit close <TAB>`, `epic show <TAB>` offer the real slugs
-(and still work when a file's frontmatter is malformed).
+tree, flags, registered `--space` labels, **and** task/thread/audit/epic/research references.
+For example, `task show <TAB>` and `thread show <TAB>` offer readable aliases when safe,
+or canonical IDs when aliases collide or shadow an ID. Completion respects `-C`/`--space`
+and still offers malformed frontmatter; duplicate canonical IDs are omitted—use `lint` to diagnose them.
 
 ## Development
 

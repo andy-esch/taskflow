@@ -1,8 +1,10 @@
 package cli
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -99,6 +101,106 @@ func TestComplete_StatusAware_TaskTransitions(t *testing.T) {
 	}
 }
 
+func TestComplete_StatusAware_DamagedDuplicateRemainsAddressable(t *testing.T) {
+	root := setupRepo(t) // beta is in-progress
+	brokenID := testutil.TaskID("damaged-beta")
+	mustWrite(t, filepath.Join(root, domain.TasksDir, brokenID+"-beta.md"), "damaged metadata\n")
+	got := complete(t, "-C", root, "task", "start", "be")
+	// Counting only eligible records would offer the ambiguous slug. Filtering
+	// by slug rather than observed source would hide the damaged sibling entirely.
+	if want := []string{brokenID}; !slices.Equal(got, want) {
+		t.Fatalf("damaged duplicate completion=%v want=%v", got, want)
+	}
+	// Execute the emitted selector: a validation error proves it addressed the
+	// damaged source, unlike the old id-slug suggestion's not-found failure.
+	_, err := runRootStreams(t, "-C", root, "task", "show", got[0], "--json")
+	if ExitCode(err) != 11 {
+		t.Fatalf("damaged selector %q did not reach the record: %v", got[0], err)
+	}
+}
+
+func TestCompleteTaskReferencesCanBeStartedAndKeepSiblings(t *testing.T) {
+	root := freshRepo(t)
+	first, second := "6fjangd7kva1", "6fjangd7kvb2"
+	for _, id := range []string{first, second} {
+		mustWrite(t, filepath.Join(root, domain.TasksDir, id+"-dup.md"), "---\n"+
+			"schema: 1\nid: "+id+"\nstatus: ready-to-start\ndescription: Duplicate alias\n"+
+			"tags: [fixture]\n---\n# Duplicate\n")
+	}
+	got := complete(t, "-C", root, "task", "start", "du")
+	if !slices.Equal(got, []string{first, second}) {
+		t.Fatalf("duplicate selectors=%v", got)
+	}
+	for _, ref := range got {
+		out := runRoot(t, "-C", root, "task", "show", ref, "--json")
+		var envelope struct{ Task struct{ ID string } }
+		if err := json.Unmarshal([]byte(out), &envelope); err != nil || envelope.Task.ID != ref {
+			// The fixture's explicit IDs are independent of completion's policy.
+			t.Fatalf("selector=%q show=%q err=%v", ref, out, err)
+		}
+		runRoot(t, "-C", root, "task", "start", ref, "--dry-run", "--json")
+	}
+	if got := complete(t, "-C", root, "task", "start", first, "du"); !slices.Equal(got, []string{second}) {
+		t.Fatalf("typed one record hid its sibling: %v", got)
+	}
+	runRoot(t, "-C", root, "task", "start", first, second, "--dry-run", "--json")
+}
+
+func TestCompleteFlatEntitiesResolveAliasCollisionsToObservedSource(t *testing.T) {
+	for _, test := range []struct{ kind, dir string }{
+		{"task", domain.TasksDir}, {"thread", domain.ThreadsDir},
+		{"audit", domain.AuditsDir}, {"research", domain.ResearchDir},
+	} {
+		t.Run(test.kind, func(t *testing.T) {
+			root := freshRepo(t)
+			files := []struct{ id, slug string }{
+				{"6fjangd7kva1", "dup"}, {"6fjangd7kvb2", "dup"},
+				{"6fjangd7kvc3", "Case"}, {"6fjangd7kvd4", "case"},
+				{"6fjangd7kve5", "6fjangd7kva1"}, {"6fjangd7kvf6", "unique"},
+			}
+			want := make(map[string]string)
+			for _, file := range files {
+				status := "ready-to-start"
+				if test.kind == "thread" {
+					status = "unstarted"
+				}
+				mustWrite(t, filepath.Join(root, test.dir, file.id+"-"+file.slug+".md"), "---\n"+
+					"schema: 1\nid: "+file.id+"\nstatus: "+status+"\nbucket: open\n"+
+					"description: Fixture\ngoal: Fixture\narea: fixture\ndate: \"2026-01-01\"\n"+
+					"created: \"2026-01-01\"\ntasks: []\ntags: [fixture]\n---\n# Fixture\n")
+				selector := file.id
+				if file.slug == "unique" {
+					selector = file.slug
+				}
+				want[selector] = file.id
+			}
+			got := complete(t, "-C", root, test.kind, "show", "")
+			if len(got) != len(want) {
+				t.Fatalf("suggestions=%v want selectors=%v", got, want)
+			}
+			for _, ref := range got {
+				wantID, exists := want[ref]
+				if !exists {
+					t.Fatalf("unresolvable/unsafe suggestion %q", ref)
+				}
+				out := runRoot(t, "-C", root, test.kind, "show", ref, "--json")
+				var envelope struct {
+					Task, Audit, Research struct{ ID string }
+					View                  struct{ Thread struct{ ID string } }
+				}
+				if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+					t.Fatalf("show %q: %v\n%s", ref, err, out)
+				}
+				gotID := map[string]string{"task": envelope.Task.ID, "audit": envelope.Audit.ID,
+					"research": envelope.Research.ID, "thread": envelope.View.Thread.ID}[test.kind]
+				if gotID != wantID {
+					t.Fatalf("selector=%q addressed=%q want=%q", ref, gotID, wantID)
+				}
+			}
+		})
+	}
+}
+
 func TestComplete_StatusAware_AuditBuckets(t *testing.T) {
 	root := setupRepo(t)
 	openPath, openContent := testutil.AuditFixture(root, "open", "o.md", "---\narea: x\n---\n")
@@ -187,52 +289,5 @@ func TestComplete_Threads(t *testing.T) {
 	}
 	if got := complete(t, "-C", root, "thread", "list", "-c", "graph_"); !has(got, "graph_health") {
 		t.Errorf("Thread column completion: %v", got)
-	}
-}
-
-// TestFlatCompletions pins the flat-layout completion model: a unique slug completes to
-// the readable slug, an id-prefix / full stem completes to the stem, a DUPLICATE slug
-// disambiguates to the id-led stems, and an already-typed arg (by slug or stem) is dropped.
-func TestFlatCompletions(t *testing.T) {
-	matches := []string{
-		"6fjangd7kva1-alpha.md",
-		"6fjangd7kvb2-beta.md",
-		"6fjangd7kvc3-dup.md", // dup slug
-		"6fjangd7kvd4-dup.md", // dup slug
-		"README.md",           // not id-led → ignored
-	}
-	get := func(toComplete string, args ...string) []string {
-		return flatCompletions(matches, toComplete, map[string]bool{}, args)
-	}
-	has := func(got []string, want ...string) bool {
-		if len(got) != len(want) {
-			return false
-		}
-		set := map[string]bool{}
-		for _, g := range got {
-			set[g] = true
-		}
-		for _, w := range want {
-			if !set[w] {
-				return false
-			}
-		}
-		return true
-	}
-
-	if got := get("al"); !has(got, "alpha") {
-		t.Errorf("unique slug-prefix should offer the slug, got %v", got)
-	}
-	if got := get("6fjangd7kvb2"); !has(got, "6fjangd7kvb2-beta") {
-		t.Errorf("id-prefix should offer the full stem, got %v", got)
-	}
-	if got := get("dup"); !has(got, "6fjangd7kvc3-dup", "6fjangd7kvd4-dup") {
-		t.Errorf("a duplicate slug should disambiguate to both stems, got %v", got)
-	}
-	if got := get("al", "alpha"); len(got) != 0 {
-		t.Errorf("an already-typed slug must not be re-offered, got %v", got)
-	}
-	if got := get("6fjangd7kvb2", "6fjangd7kvb2-beta"); len(got) != 0 {
-		t.Errorf("an already-typed stem must not be re-offered, got %v", got)
 	}
 }

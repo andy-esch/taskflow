@@ -277,6 +277,17 @@ func (d ConfigurationDiagnosis) ProblemCount() int {
 	return len(d.Problems) + len(d.Registry.Problems)
 }
 
+// RepositoryLinkProblems checks repository linkbacks without diagnosing the
+// home registry. Ambient warnings must not expand into a catalog scan or fail
+// because a user's unrelated registry is damaged.
+func (s *ConfigurationService) RepositoryLinkProblems(start string) ([]ConfigurationProblem, error) {
+	diagnosis, err := s.store.DiagnoseConfiguration(start)
+	if err != nil {
+		return nil, err
+	}
+	return append([]ConfigurationProblem(nil), diagnosis.Problems...), nil
+}
+
 func (s *ConfigurationService) Diagnose(start string) (ConfigurationDiagnosis, error) {
 	diagnosis, err := s.store.DiagnoseConfiguration(start)
 	if err != nil {
