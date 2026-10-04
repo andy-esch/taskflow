@@ -10,7 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [tui, domain, ux]
 created: "2026-08-24"
-updated_at: "2026-08-24"
+updated_at: "2026-10-04"
+audited: "2026-10-04"
 ---
 ## Objective
 
@@ -76,3 +77,25 @@ Follows the criterion vocabulary (`6g31g9f8x4cv`) and the `task ac` write surfac
 [2026-07-24-ai-agent-cli-ergonomics](../audits/6fsa47r4f7es-2026-07-24-ai-agent-cli-ergonomics.md)
 covers the CLI half of structure-aware writes; this is the browser half, which that finding
 does not discuss.
+
+## Sweep verification (2026-10-04)
+
+Every reference in *What exists to build on* re-verified; all accurate, including
+the negative claim:
+
+- `grep -rn "SetCriterionState" internal/tui/` still returns **zero** hits — the
+  asymmetry the Objective describes is intact
+- `core.Service.SetCriterionState` — `internal/core/service_task.go:408`
+- `core.Service.EditCriteria` — `internal/core/service_task.go:461`
+- `domain.TallyCriteria` — `internal/domain/body.go:498`
+- `theme.CriterionState` — `internal/theme/theme.go:146`
+- `criterionRollup` — `internal/tui/detail.go:823`, called from `detail.go:806`
+- the entity-action machinery — `internal/tui/entity.go` present
+
+No drift found: nothing this task assumes has moved, and no part of it has shipped.
+Open questions 1-3 are left untouched and undecided — question 3 gates the first
+criterion by the task's own design, and deciding it is a human call.
+
+2026-10-04: automated weekly sweep — all seven cited symbols re-verified accurate
+(including zero `SetCriterionState` hits in the TUI); no drift, task remains
+accurately scoped and unstarted.
