@@ -10,7 +10,7 @@ priority: medium
 autonomy_level: 3
 tags: [architecture, ports, threads, safety]
 created: "2026-10-03"
-updated_at: "2026-10-03"
+updated_at: "2026-10-04"
 depends_on: [6gcwcf8rxe72]
 ---
 ## Objective
@@ -35,11 +35,17 @@ fails closed; no current TUI apply workflow is being declared broken.
 - Reuse or consolidate local opening/identity-reader wiring at the secondary/composition boundary.
 - Preserve per-invocation mutation authorization and checked source-set composition.
 - Do not turn optional local discovery into a semantic `core` dependency.
+- Own the direct/pointer identity-replacement matrix here: change the discovered root, replace
+  the durable planning identity, or fail the identity re-read between compose and apply; all
+  must fail closed without persistence. The final Thread regression pass consumes this evidence
+  rather than duplicating the matrix.
 
 ## Acceptance criteria
 
 - [ ] Direct and pointer workspace opening can compose and dry-run a valid Thread apply plan.
-- [ ] Repointed roots or replaced planning identity fail before apply, with no persistence.
+- [ ] Direct and pointer workspace applies reject repointed roots, replaced
+  durable planning identity, and unavailable or failed identity re-reads before
+  persistence; no permissive fallback is used.
 - [ ] Authorization is preserved for read-only, dry-run, and committing callers.
 - [ ] Tests compare the ordinary and workspace opening paths; no permissive identity fallback exists.
 - [ ] Shared opening code, if introduced, retains lazy discovery and one observed initial corpus.
@@ -48,6 +54,7 @@ fails closed; no current TUI apply workflow is being declared broken.
 
 - [Composition isolation](6gcwcf8rxe72-isolate-cli-composition-wiring-and-enforce-controller-boundaries.md)
 - [Adapter-neutral planning Thread](../threads/6gcwd78p9r04-make-planning-data-access-adapter-neutral.md)
+- [Final guarded-contract regression pass](6ggdkzv2tnta-pin-guarded-planning-mutation-boundary-contracts.md)
 
 ## Out of scope
 

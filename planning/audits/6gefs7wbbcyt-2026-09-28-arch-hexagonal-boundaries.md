@@ -4,7 +4,7 @@ id: 6gefs7wbbcyt
 bucket: closed
 area: arch-hexagonal-boundaries
 date: "2026-09-28"
-updated_at: "2026-10-03"
+updated_at: "2026-10-04"
 ---
 # Weekly Architecture Audit: hexagonal-boundaries — 2026-09-28
 
@@ -313,7 +313,7 @@ evidence of a boundary defect. This audit agrees: the generic seams (`scanDir[T]
 
 ## Findings
 
-#### M1. The primary-adapter fitness rule enumerates denied packages, so a new adapter package escapes it · **Status:** fixed
+#### M1. The primary-adapter fitness rule enumerates denied packages, so a new adapter package escapes it · **Status:** fixed (PR #277)
 
 **File:** .golangci.yml:69-104 | **Component:** build/lint policy
 **Effort:** XS · **Urgency:** soon
@@ -562,7 +562,7 @@ construction/globs and stale status-directory comments. Completion uses the
 source-set-checked parse-free application use case and deferred Cobra
 composition.
 
-#### L1. Boundary rule file globs are single-level, so a future subpackage is unguarded · **Status:** fixed
+#### L1. Boundary rule file globs are single-level, so a future subpackage is unguarded · **Status:** fixed (PR #277)
 
 **File:** .golangci.yml:21-22,37-38,54-55,71-76 | **Component:** build/lint policy
 **Effort:** XS · **Urgency:** eventually
@@ -654,14 +654,20 @@ both direct and recursive patterns are needed by the glob matcher.
 
 ## Owner triage (2026-10-03)
 
-All five findings now have explicit dispositions. M4 shipped in PR #275. M1 and L1 are locally fixed and mutation-verified in the composition-isolation task 6gcwcf8rxe72; both implementation reviews are reconciled, awaiting merge. M2 is tracked by 6gg7e59cyxxh with a constructor-compatibility design checkpoint; M3 is tracked by proposed-ADR task 6gg7e59mm68g. The original review narrative remains historical evidence, not a current import inventory. The audit can close as triaged without claiming that tracked work has shipped.
+All five findings have explicit dispositions. M4 merged in PR #275. M1 and L1 were locally
+fixed and mutation-verified in task 6gcwcf8rxe72, then merged in PR #277; both implementation
+reviews are reconciled. This merge attribution was updated on 2026-10-04. M2 is tracked by
+6gg7e59cyxxh with a constructor-compatibility design checkpoint; M3 is tracked by proposed-ADR
+task 6gg7e59mm68g. The original review narrative remains historical evidence, not a current
+import inventory. Closure means triaged, not that tracked work is implemented or merged work
+has been released.
 
 ## Candidate tasks
 
 <!-- candidate-tasks:v1 · ○ open · ● in-progress · ✔ fixed · → tracked · ◌ deferred · ◌ superseded · ✘ wontfix -->
 <!-- Add or replace one row with `tskflwctl audit finding <audit> <code> --candidate "<one line>"`; an empty value removes it. -->
 
-- ✔ M1 · fixed — Implemented by composition-isolation task 6gcwcf8rxe72; both implementation reviews reconciled, awaiting merge.
+- ✔ M1 · fixed — Implemented by task 6gcwcf8rxe72, merged in PR #277; both implementation reviews reconciled.
 - → M2 · tracked — Tracked by task 6gg7e59cyxxh; explicit mutation-policy compatibility design required.
 - → M3 · tracked — Tracked by task 6gg7e59mm68g; propose the dependency-policy ADR for user acceptance.
 - ✔ M4 · fixed — Resolved in PR #275 by CLI planning-data application-port task 6gcwcf8gzn50.

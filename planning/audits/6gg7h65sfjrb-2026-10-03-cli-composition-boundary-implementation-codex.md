@@ -4,7 +4,7 @@ id: 6gg7h65sfjrb
 bucket: closed
 area: cli-composition-boundary-implementation-codex
 date: "2026-10-03"
-updated_at: "2026-10-03"
+updated_at: "2026-10-04"
 ---
 # Audit: CLI composition boundary implementation — codex — 2026-10-03
 
@@ -326,7 +326,7 @@ The final helper verification checks unchanged baseline HEAD/index, independent 
 
 ## Findings
 
-#### M1. In-repo UI accepts missing operational services at the launch boundary · **Status:** fixed locally (2026-10-03)
+#### M1. In-repo UI accepts missing operational services at the launch boundary · **Status:** fixed (PR #277)
 
 **File:** internal/cli/ui.go:94 | **Component:** cli-composition
 
@@ -352,7 +352,7 @@ Removing just the launch hook correctly returns validation exit 11, so the accep
 regression covers each omitted service in repo and atlas starts. Moving the
 guard after repo landing now fails that regression.
 
-#### M2. External Bubble Tea imports bypass controller and neutral-contract lint · **Status:** fixed locally (2026-10-03)
+#### M2. External Bubble Tea imports bypass controller and neutral-contract lint · **Status:** fixed (PR #277)
 
 **File:** .golangci.yml:143 | **Component:** dependency-policy
 
@@ -380,7 +380,7 @@ exceptions; restrict invocation contracts to stdlib and exact core/design. Ten
 compiler-valid import probes now produce ten depguard failures under standard
 lint.
 
-#### L1. Real-wiring discovery and fallback violations survive the regression suite · **Status:** fixed locally (2026-10-03)
+#### L1. Real-wiring discovery and fallback violations survive the regression suite · **Status:** fixed (PR #277)
 
 **File:** internal/cli/composition_test.go:33 | **Component:** regression-coverage
 

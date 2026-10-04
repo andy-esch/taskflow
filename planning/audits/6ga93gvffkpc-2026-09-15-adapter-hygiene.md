@@ -4,6 +4,7 @@ id: 6ga93gvffkpc
 bucket: open
 area: adapter-hygiene
 date: "2026-09-15"
+updated_at: "2026-10-04"
 ---
 # Code Quality Audit: adapter-hygiene — 2026-09-15
 
@@ -69,7 +70,7 @@ Read for context while evaluating the above: `internal/cli/render/render.go`,
 
 ### Medium
 
-#### M1. Dependency mutation receipts carry no remedy; the CLI adapter authors core's recovery prose  · **Status:** open
+#### M1. Dependency mutation receipts carry no remedy; the CLI adapter authors core's recovery prose  · **Status:** tracked by 6ggdkztshmzz
 
 **File:** `internal/cli/render/dependency.go:223` (and `internal/core/dependency_operations.go:42`) | **Component:** cli/render + core
 **Effort:** S · **Urgency:** soon
@@ -129,6 +130,11 @@ it should survive the merge rather than be dropped in favour of the existing cor
 **Follow-up:** the general invariant — every core receipt that reports `impacts` also
 reports a `remedy` — would be better enforced than remembered. A table-driven wire test over
 the receipt DTOs would catch the next one; that is its own task, not part of this fix.
+
+**Resolution:** Task 6ggdkztshmzz owns core-defined dependency recovery intent
+and equivalent human/machine projections. The omission remains unfixed; choose
+the smallest semantic contract rather than mandating a generic Remedy field on
+every receipt.
 
 #### M2. MarkerUnreadable brands readable tasks whose prerequisite is broken  · **Status:** open
 
@@ -194,7 +200,7 @@ arriving from the CLI side.
 
 ### Low
 
-#### L1. The "newly unsafe impact" predicate is spelled three times, twice inside the adapter  · **Status:** open
+#### L1. The "newly unsafe impact" predicate is spelled three times, twice inside the adapter  · **Status:** tracked by 6ggdkztshmzz
 
 **File:** `internal/cli/render/render.go:291` (also `internal/cli/render/dependency.go:215`, `internal/core/service_task.go:414`) | **Component:** cli/render + core
 **Effort:** S · **Urgency:** eventually
@@ -232,6 +238,11 @@ decision as a field, which M1's fix makes natural.
 **Tightening (adjacent):** fold this into M1's change rather than shipping it alone — M1
 needs the predicate reachable from core's dependency path regardless, so the two land as
 one edit.
+
+**Resolution:** Folded into M1's task 6ggdkztshmzz: remove adapter-owned
+newly-unsafe Gate/Inconsistent policy, including the lifecycle renderer's
+wire-string comparison. The current spellings agree; this is a drift risk, not a
+verified incorrect mutation.
 
 #### L2. The spatial anchor guard is narrower than its sibling render guards  · **Status:** open
 
@@ -345,3 +356,19 @@ completed work. No finding was marked `tracked`, and no task was annotated.
   missed. Worth considering whether the fitness rule deserves a lint check rather than a
   recurring audit finding.
 - No task looks obsolete, mis-scoped, or promotable as a result of this run.
+
+## Owner triage (2026-10-04)
+
+M1 and L1 are tracked together by
+[core-owned dependency impact/recovery](../tasks/6ggdkztshmzz-make-dependency-impact-and-recovery-semantics-core-owned.md)
+in the adapter-neutral Thread. They are not fixed. The new task owns the semantic decision and
+equivalent human/machine recovery intent; it does not assume every receipt needs a Remedy field
+or move interface-specific presentation policy into core.
+
+M2 and L2 remain open TUI concerns outside that Thread's closeout. In particular, L2 does not
+establish that anchoring on a readable task with a broken gate is incorrect. No marker redesign
+or new implementation ticket for those findings is silently approved here.
+
+The earlier candidate commands and no-overlap statement describe the original audit capture.
+Do not recreate the M1/L1 candidate: its destination is now the task above. This audit stays open
+because its two TUI findings still lack settled dispositions.

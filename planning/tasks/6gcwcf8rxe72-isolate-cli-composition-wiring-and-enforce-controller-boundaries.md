@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gcwcf8rxe72
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Confine concrete adapter construction so dependency rules can prevent ordinary CLI controllers from bypassing core.
 effort: 1-2 days
@@ -11,10 +11,11 @@ autonomy_level: 3
 tags: [architecture, cli, depguard, ports]
 created: "2026-09-23"
 depends_on: [6gcwcf8gzn50]
-updated_at: "2026-10-03"
+updated_at: "2026-10-04"
 audited: "2026-09-27"
 audit_sources: [2026-09-28-arch-hexagonal-boundaries]
 started_at: "2026-10-03"
+completed_at: "2026-10-04"
 ---
 
 # Isolate CLI composition wiring and enforce controller boundaries
@@ -47,8 +48,9 @@ lint failure.
 - [x] Architecture documentation and the executable dependency policy name the same exceptions.
 - [x] No command behavior, machine schema, or startup/discovery semantics change accidentally.
 
-Implementation criteria verified locally; both external reviews are reconciled. Lifecycle stays
-**in-progress** pending merge; checked criteria and closed audits do not claim the work has shipped.
+Implementation criteria verified and both external reviews reconciled. Merged to main in
+[PR #277](https://github.com/andy-esch/taskflow/pull/277); lifecycle completed on 2026-10-04.
+This records integration, not inclusion in a published release.
 
 ## Out of scope
 
@@ -196,3 +198,10 @@ The startup observation seam is per binding, not global; file-scoped lint preven
 config/userconfig imports in other production composition files. It protects declared startup
 readers, not every syscall inside secondary adapters. Allocating repo-independent adapters remains
 intentional. No new design decision or out-of-scope finding was needed beyond the three followups above.
+
+## Merge bookkeeping (2026-10-04)
+
+PR #277 is present on local main. The implementation audit fixes now cite that PR; their original
+captured snapshots and bounded mutation evidence remain historical. Workspace identity parity and
+explicit persistence authorization are unblocked, not completed. The dependency-policy ADR stays in
+the documentation Thread with its user-acceptance checkpoint.

@@ -12,7 +12,7 @@ tags: [lint, diagnostics, identity]
 created: "2026-09-22"
 audit_sources: [planning/audits/6gch6xep2mh2-2026-09-22-correctness-and-errors.md]
 depends_on: [6g5vm4efjcdv]
-updated_at: "2026-09-22"
+updated_at: "2026-10-04"
 ---
 
 # Lint cross-kind task and Thread ID collisions on unreadable records
@@ -31,6 +31,14 @@ silently dropping the cross-kind collision from the report.
   rule symmetric for readable/unreadable task and Thread pairs.
 - Land after the adapter-neutral lint-load diagnostic shape so the rule consumes one portable
   identity contract rather than adding another filesystem-specific path dependency.
+
+## Current boundary (2026-10-04)
+
+The lint-read prerequisite is completed. `core.Service.Lint` still builds cross-kind identity
+sets from decoded entities, omitting safely recovered IDs carried by task load problems and
+Thread read problems. Consume those identity-bearing diagnostics, not a local source path.
+This task is now a member of the adapter-neutral Thread; it remains unimplemented and its audit
+finding remains tracked. Thread-projection behavior is not silently added to this lint slice.
 
 ## Acceptance criteria
 
@@ -53,3 +61,5 @@ silently dropping the cross-kind collision from the report.
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
 - Audit [2026-09-22 correctness and errors](../audits/6gch6xep2mh2-2026-09-22-correctness-and-errors.md), finding M1
 - Predecessor [adapter-neutral lint load diagnostics](6g5vm4efjcdv-make-repository-lint-load-diagnostics-adapter-neutral.md)
+- [Adapter-neutral planning Thread](../threads/6gcwd78p9r04-make-planning-data-access-adapter-neutral.md)
+- [Final guarded-contract regression pass](6ggdkzv2tnta-pin-guarded-planning-mutation-boundary-contracts.md)
