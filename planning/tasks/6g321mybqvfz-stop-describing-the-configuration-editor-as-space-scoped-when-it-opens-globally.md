@@ -10,7 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [cli, tui, config, discoverability]
 created: "2026-08-23"
-updated_at: "2026-08-23"
+updated_at: "2026-10-04"
+audited: "2026-10-04"
+audit_sources: [2026-10-04-weekly-task-sweep]
 ---
 # Stop describing the configuration editor as space-scoped when it opens globally
 
@@ -57,3 +59,28 @@ person who built it, which is about as strong a discoverability signal as exists
 
 - Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)
 - Surfaces: `internal/configui/editor.go`, `internal/tui/help.go`, `internal/cli/config.go`
+
+## Sweep verification (2026-10-04)
+
+Every row of the Objective's table re-checked against current code; all four still
+accurate, unchanged since the task was written:
+
+- `internal/tui/help.go:37` — still `{":config", "open Configuration / About for this space"}`
+- `internal/tui/help.go:77` — still `{":config", "open Configuration / About for the current space"}` (the atlas help section)
+- the editor still defaults to user scope — `internal/configui/editor.go:86` initialises
+  `scope: core.ConfigScopeUser`, and `editor.go:50` states the intent outright:
+  *"choosing repository scope always requires an explicit key press"*; the switch is
+  `editor.go:196-199`
+- `config edit --help` still lists `--help` as its only command-specific flag
+
+One narrowing for the fourth acceptance criterion, which asks that `config edit --help`
+state "the default scope and how to change it": **the default scope is already stated.**
+The long help reads *"User scope is the default; repository overrides must be selected
+explicitly."* What is missing is only the second half — which key performs that explicit
+selection (`s`/`tab`). So that criterion is partially satisfied already and the remaining
+work there is one clause, not a rewrite. Left unticked: it is not fully met, and deciding
+how to re-word a criterion is a human call.
+
+2026-10-04: automated weekly sweep — all four table rows re-verified unchanged
+(`help.go:37`/`:77`, `configui/editor.go:86`, `config edit --help`); noted AC4's
+default-scope half is already shipped, leaving only the scope-switch key undocumented.

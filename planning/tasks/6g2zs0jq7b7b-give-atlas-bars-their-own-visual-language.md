@@ -10,7 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [tui, atlas, design-system]
 created: "2026-08-23"
-updated_at: "2026-08-23"
+updated_at: "2026-10-04"
+audited: "2026-10-04"
+audit_sources: [2026-10-04-weekly-task-sweep]
 ---
 # Give atlas bars their own visual language
 
@@ -66,3 +68,33 @@ the atlas language or get a third?
 - Epic [25-design-system-coherent-palette-and-selectable-themes](../epics/25-design-system-coherent-palette-and-selectable-themes.md)
 - Introduced by [Compose the atlas spaces view as a comparable table](6g2zqyra2s6h-compose-the-atlas-spaces-view-as-a-comparable-table.md)
 - Design context: [The atlas as a dashboard of dashboards](../research/6g2qtp0022t7-the-atlas-as-a-dashboard-of-dashboards.md)
+
+## Sweep verification (2026-10-04)
+
+Premise verified still accurate, with one refinement. The conflation is real and
+still present: `internal/tui/atlas.go:879` renders the space row with
+`st.miniBar(pct, 10)` while `internal/tui/dashboard.go:168` renders epic completion
+with `st.miniBar(pct, 8)`, and `internal/tui/style.go:146` is a one-liner —
+`func (s *styles) miniBar(pct, width int) string { return progressbar.Render(pct, width, s.pal) }`
+— so both measures resolve to the identical gradient.
+
+Sharper evidence than the task currently carries: `style.go:142`'s doc comment
+describes `miniBar` as *"the epic rollup bar (epic-list rows, epic-detail line)"*.
+The helper is documented as epic-specific and the atlas calls it anyway, so the
+conflation is visible in the source's own vocabulary, not only on screen.
+
+**A partial distinction already exists by accident.** The two call sites pass
+different widths (10 on the atlas, 8 on the dashboard/epic rows). That is the
+"Weight or width" option in *The actual question* — already half-applied, but
+undeclared and therefore not a rule: `detail.go:874` also uses width 12 for an epic
+bar, so width currently tracks available space, not measure kind. Whoever decides
+this should know the width axis is already spent as a layout variable, which is an
+argument against choosing it as the semantic one.
+
+Out-of-scope claim re-confirmed: `segBar` is genuinely a different renderer
+(`progressbar.RenderSegments`, `progressbar.go:85`), used at `detail.go:842`,
+`detail.go:1703`, and `item.go:436`.
+
+2026-10-04: automated weekly sweep — conflation confirmed at `atlas.go:879` vs
+`dashboard.go:168` through one `progressbar.Render`; noted that width is already
+used as a layout variable (8/10/12), weakening it as the semantic distinction.
