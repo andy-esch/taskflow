@@ -759,6 +759,13 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 			taskIdentity[task.ID] = true
 		}
 	}
+	// An unreadable record still owns its safely recovered identity, but cannot
+	// prove valid membership. Keep this evidence out of validTaskIDs above.
+	for _, problem := range taskProblems {
+		if id.Valid(problem.EntityID) {
+			taskIdentity[problem.EntityID] = true
+		}
+	}
 
 	var threads []VersionedRecord[domain.Thread]
 	threadIDSources := make([]domain.StableIdentitySource, 0)
@@ -785,6 +792,9 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 			threadIDSources = append(threadIDSources, domain.StableIdentitySource{
 				ID: problem.ThreadID, Location: problem.Location,
 			})
+			if id.Valid(problem.ThreadID) {
+				threadIdentity[problem.ThreadID] = true
+			}
 		}
 		for _, record := range threads {
 			thread := record.Record.Value
@@ -827,13 +837,14 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 			collisionID = loaded.Source.ID
 		}
 		if collisionID != "" && threadIdentity[collisionID] {
-			issues = append(issues, domain.Issue{Field: "id", Message: fmt.Sprintf(
-				"stable id %s is also used by a Thread — task and Thread identities must be globally unique", collisionID)})
+			issues = append(issues, crossKindIdentityIssue(collisionID, "Thread"))
 		}
 		if len(issues) > 0 {
 			results = append(results, LintResult{Slug: t.Slug, Location: readableDiagnosticLocation(loaded.Source), Issues: issues})
 		}
 	}
+	results = appendProblemIdentityLintResults(results, taskProblems,
+		recoveredCrossKindIDIssues(taskProblems, threadIdentity, "Thread"))
 	// (Duplicate-slug lint retired with the flat layout: id-led filenames are unique by
 	// construction, and duplicate SLUGS are now legal — resolved by id, ambiguous by slug.)
 	// Epics get linted too: the same closed status vocabulary plus priority and a
@@ -890,7 +901,7 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 			results = append(results, LintResult{Slug: r.Slug, Location: readableDiagnosticLocation(record.Source), Issues: issues})
 		}
 	}
-	results = appendDuplicateProblemLintResults(results, rp, dupIDs)
+	results = appendProblemIdentityLintResults(results, rp, dupIDs)
 	// Audits are part of the same hygiene gate (they were reachable only behind
 	// `audit lint`, so a finding defect stayed invisible to the command the repo
 	// actually runs). The sweep reads each audit once, findings already parsed, and
@@ -922,7 +933,7 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 			results = append(results, LintResult{Slug: a.Audit.Slug, Location: readableDiagnosticLocation(loaded.Source), Issues: issues})
 		}
 	}
-	results = appendDuplicateProblemLintResults(results, ap, dupAuditIDs)
+	results = appendProblemIdentityLintResults(results, ap, dupAuditIDs)
 	dupThreadIDs := domain.DuplicateIDIssues(threadIDSources)
 	for _, record := range threads {
 		thread := record.Record.Value
@@ -937,32 +948,39 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 			collisionID = source.ID
 		}
 		if collisionID != "" && taskIdentity[collisionID] {
-			issues = append(issues, domain.Issue{Field: "id", Message: fmt.Sprintf(
-				"stable id %s is also used by a task — task and Thread identities must be globally unique", collisionID)})
+			issues = append(issues, crossKindIdentityIssue(collisionID, "task"))
 		}
 		if len(issues) > 0 {
 			results = append(results, LintResult{Slug: thread.Slug, Location: readableDiagnosticLocation(source), Issues: issues})
 		}
 	}
-	results = appendDuplicateProblemLintResults(results, threadProblems, dupThreadIDs)
+	results = appendProblemIdentityLintResults(results, threadProblems, dupThreadIDs,
+		recoveredCrossKindIDIssues(threadProblems, taskIdentity, "task"))
 	return results, problems, nil
 }
 
-// appendDuplicateProblemLintResults preserves the ordinary unreadable-file
+// appendProblemIdentityLintResults preserves the ordinary unreadable-record
 // diagnostic while also surfacing identity defects recovered by the adapter.
 // Identity belongs to the record even when its body does not decode; core must
 // never infer it by parsing an adapter's path or URI.
-func appendDuplicateProblemLintResults(results []LintResult, problems []LoadProblem, duplicates map[string]domain.Issue) []LintResult {
+// Multiple identity checks share one result per unreadable occurrence. Lookups,
+// rather than map iteration, preserve source order and check order.
+func appendProblemIdentityLintResults(results []LintResult, problems []LoadProblem, issueSets ...map[string]domain.Issue) []LintResult {
 	for _, problem := range problems {
-		issue, ok := duplicates[problem.EntityID]
-		if !ok {
+		var issues []domain.Issue
+		for _, issueSet := range issueSets {
+			if issue, ok := issueSet[problem.EntityID]; ok {
+				issues = append(issues, issue)
+			}
+		}
+		if len(issues) == 0 {
 			continue
 		}
 		location := problem.Location
 		if location == problem.LocalPath {
 			location = ""
 		}
-		results = append(results, LintResult{Slug: loadProblemLabel(problem), Location: location, Issues: []domain.Issue{issue}})
+		results = append(results, LintResult{Slug: loadProblemLabel(problem), Location: location, Issues: issues})
 	}
 	return results
 }
