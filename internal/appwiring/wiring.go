@@ -9,7 +9,6 @@ import (
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/spacestore"
-	"github.com/andy-esch/taskflow/internal/store"
 	"github.com/andy-esch/taskflow/internal/workspacestore"
 )
 
@@ -46,17 +45,10 @@ func openPlanning(reads localSources, start string, authorize func() error) (por
 	if err != nil {
 		return ports.Planning{}, err
 	}
-	discoveryStart := cfg.Dir
-	if discoveryStart == "" {
-		discoveryStart = cfg.Root
+	fs, err := workspacestore.NewPlanningStore(cfg, reads.discover, authorize)
+	if err != nil {
+		return ports.Planning{}, err
 	}
-	fs := store.NewFS(cfg.Root, store.WithPlanningIdentityReader(func() (string, string, error) {
-		fresh, err := reads.discover(discoveryStart)
-		if err != nil {
-			return "", "", err
-		}
-		return fresh.Root, fresh.ID, nil
-	}), store.WithMutationAuthorization(authorize))
 	planning, err := core.NewService(fs)
 	if err != nil {
 		return ports.Planning{}, err

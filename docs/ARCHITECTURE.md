@@ -46,14 +46,14 @@ userconfig  -> tomledit
 spacehealth -> config, domain, userconfig
 configstore -> core, config, userconfig
 spacestore  -> config, core, domain, spacehealth, store, userconfig
-workspacestore -> config, core, store
+workspacestore -> config, core, domain, store
 configui    -> core + presentation utilities
 tui         -> core, domain, configui + presentation/process utilities
 cli/render  -> core, domain, wire + presentation utilities
 cli/ports   -> core, design
 cli         -> cli/ports, core, domain, wire + presentation/process utilities
                config only in init.go and workspace.go (named local exceptions)
-appwiring   -> cli/ports, core, design, config, configstore, spacestore, store,
+appwiring   -> cli/ports, core, design, config, configstore, spacestore,
                userconfig, workspacestore, tui, configui
 ```
 
@@ -97,6 +97,18 @@ Planning discovery remains lazy and happens after target flags are parsed; compl
 it further until Cobra has parsed the command being completed. The wiring package preserves
 the ordinary opener's identity revalidation, checked source set, and local watcher layout.
 
+Ordinary and workspace opening share `workspacestore.NewPlanningStore`: it constructs one store
+from the already-discovered configuration without another startup scan, and carries the invocation's
+authorizer plus a fresh identity reader. Thread apply re-discovers from the original marker directory
+(including a pointer checkout), not cwd or the pointer's resolved target. Changes detected before
+apply writes fail closed; existing guarded preflight and durable-prefix recovery checks remain.
+This local wiring does not widen the core workspace ports.
+
+The shared constructor's fitness test permits config types but no direct config API access;
+reader counters alone cannot observe a bypassing `config.Discover` call. A real-opener regression
+repoints a direct/pointer marker between the first observation and construction: metadata, task
+reads, and watchers stay on that initial corpus, and apply then refuses the changed root.
+
 `cli/ports` owns the invocation bundle and framework-free UI launch requests. There are no
 global defaults or local-adapter fallbacks in controllers. Startup identity/theme/pager values
 use neutral configuration models, not filesystem config types. Help chrome receives explicit
@@ -110,7 +122,7 @@ The retained edges are classified as follows:
 
 | Edge | Classification | Disposition |
 | --- | --- | --- |
-| `appwiring -> configstore`, `spacestore`, `workspacestore`, `store` construction | Binary composition | Selected by the binary, never imported by controllers. Every persistence family receives the invocation's authorizer. |
+| `appwiring -> configstore`, `spacestore`, `workspacestore` construction | Binary composition | Selected by the binary, never imported by controllers. Every persistence family receives the invocation's authorizer; shared planning-store construction lives in the workspace secondary adapter. |
 | `cli -> core.Service` for repair, body-link lint, and entity completion | Application use cases | `RepairPlanning`, `LintWithLinks`, and `CompleteEntities` own orchestration; optional secondary capabilities are source-set checked. Controllers never construct a fallback store. |
 | CLI/TUI watcher access through `Layout` | Explicit local capability | Intentional: watcher directories are process integration, not semantic entity data. |
 | `cli/init.go -> config` | Local topology scaffold | Init can create a repository before a planning service exists; its classified mutation guard remains explicit. Broader maintenance extraction retains its second-consumer trigger. |

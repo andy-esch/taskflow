@@ -61,7 +61,10 @@ This Thread closes those seams in evidence-driven stages:
 9. Finish four independent implementation slices over the settled boundary:
 
    - [Workspace Thread-apply identity parity](../tasks/6gg7e594gcms-preserve-planning-identity-revalidation-in-workspace-opened-thread-apply.md),
-     including direct/pointer roots and identity replacement. **Recommended next.**
+     including direct/pointer roots and identity replacement. **In progress:** implementation and
+     both reviews reconciled locally. The Codex test-gap finding now has hostile initial-repoint
+     coverage plus an executable direct-discovery guard; integration remains. The pre-existing
+     markerless recovery hint is tracked separately, not added as a refactor closure blocker.
    - [Explicit persistence authorization](../tasks/6gg7e59cyxxh-require-an-explicit-mutation-authorization-policy-at-persistence-composition.md),
      retaining its user checkpoint before choosing constructor compatibility and opt-out policy.
    - [Cross-kind collision lint on unreadable records](../tasks/6gcqz5aefjjf-lint-cross-kind-task-and-thread-id-collisions-on-unreadable-records.md),
@@ -69,7 +72,7 @@ This Thread closes those seams in evidence-driven stages:
    - [Core-owned dependency impact and recovery semantics](../tasks/6ggdkztshmzz-make-dependency-impact-and-recovery-semantics-core-owned.md),
      folding adapter-hygiene M1/L1 without changing graph eligibility.
 
-   These are eligible independently; graph edges do not impose an artificial serial order.
+   These slices can progress independently; graph edges impose no artificial serial order.
 10. [Pin guarded planning mutation boundary contracts](../tasks/6ggdkzv2tnta-pin-guarded-planning-mutation-boundary-contracts.md)
     after all four slices. Fill the demonstrated malformed/stale-plan, committed-conflict retry,
     and explicit-space theme regression gaps, then review identity, authorization, recovery, and
