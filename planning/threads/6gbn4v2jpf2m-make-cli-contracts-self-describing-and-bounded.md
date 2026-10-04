@@ -6,8 +6,8 @@ description: Turn the v0.22 machine-contract foundation into complete discovery 
 goal: Agents discover safe commands and exit behavior, retain durable Thread handles, and page large planning corpora without prose scraping.
 created: "2026-09-19"
 tags: [cli, agents, json, contract]
-tasks: [6g63hhk3eddf, 6gbn4g1bb7wr, 6gbn4g1eypzs, 6gbn4g1j40pj]
-updated_at: "2026-09-20"
+tasks: [6g63hhk3eddf, 6gbn4g1bb7wr, 6gbn4g1eypzs, 6gbn4g1j40pj, 6ggfd81jg0qg]
+updated_at: "2026-10-04"
 started_at: "2026-09-20"
 ---
 
@@ -31,3 +31,12 @@ work by value and review capacity.
 Compact body-mutation receipts remain outside this Thread because changing their default envelope
 is a separate compatibility decision. Likewise, this effort publishes CLI capabilities; it does not
 create a second execution API, an MCP server, or the future web adapter.
+
+## Identity-recovery follow-up (2026-10-04)
+
+[Executable ID-less Thread recovery instructions](../tasks/6ggfd81jg0qg-make-id-less-thread-planning-recovery-instructions-executable.md)
+adds a bounded diagnostic follow-up from the workspace-parity review: an agent should not be sent
+to `config migrate` when that command cannot run without a marker. Execute the suggested repairs,
+keep stale-plan and pointer identity refusals intact, and avoid a general remediation framework.
+Its prerequisite is the already-shipped configuration lifecycle foundation; it can proceed
+independently of list-query bounds and does not block adapter-neutral refactor closeout.
