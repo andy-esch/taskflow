@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gcwcf8gzn50
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Stop lint repair, link checking, and entity completion from reaching directly into the filesystem adapter.
 effort: 1-2 days
@@ -15,6 +15,7 @@ updated_at: "2026-10-03"
 audited: "2026-09-27"
 audit_sources: [2026-09-28-arch-hexagonal-boundaries]
 started_at: "2026-10-03"
+completed_at: "2026-10-03"
 ---
 
 # Route CLI planning data operations through application ports
@@ -49,8 +50,8 @@ workflows so satisfying the semantic ports is sufficient without a hidden filesy
 - [x] A non-filesystem fake can drive all three workflows without providing directories or paths.
 - [x] Tests pin call counts and prove no hidden fallback opens the filesystem adapter.
 
-Implementation criteria and both review dispositions verified locally; lifecycle remains
-**in-progress** pending merge.
+Implementation criteria and both review dispositions verified; merged in PR #275 and
+marked **completed** on 2026-10-03.
 
 ## Out of scope
 
@@ -161,9 +162,9 @@ and fail a later document; existing filesystem repair, safety, completion, and w
 Validation passed: `go test ./...`, `go test -race ./...`, `just lint`,
 `just docs-check`, planning lint, and the dogfooded Thread frontier.
 
-Remaining boundary enforcement belongs to
+The subsequent boundary-enforcement slice belongs to
 [isolate CLI composition wiring](6gcwcf8rxe72-isolate-cli-composition-wiring-and-enforce-controller-boundaries.md),
-not this task. Root composition and the explicitly local watcher `Layout` are retained here.
+not this task. This merged slice retained root composition and the explicitly local watcher `Layout`.
 
 Completed external reviews (original briefs retained; owner dispositions recorded):
 

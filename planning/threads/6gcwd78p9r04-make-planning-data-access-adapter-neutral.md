@@ -6,7 +6,7 @@ description: Eliminate path-shaped application contracts and primary-to-secondar
 goal: Core use cases consume identity-bearing semantic ports; local paths are optional capabilities, and primary adapters cannot bypass the application boundary.
 created: "2026-09-23"
 tags: [architecture, ports, adapters, hardening]
-tasks: [6g5vm4efjcdv, 6g6jqqcdehne, 6gcwcf77tvgq, 6gcwcf7gjayh, 6gcwcf7rgxef, 6gcwcf80v8hg, 6gcwcf88z57p, 6gcwcf8gzn50, 6gcwcf8rxe72, 6gdx7mcqm371, 6gdx7mcqq67d, 6gdx7mcrq8s8, 6ge1bacd3bd2, 6ge7qn9ptaxv]
+tasks: [6g5vm4efjcdv, 6g6jqqcdehne, 6gcwcf77tvgq, 6gcwcf7gjayh, 6gcwcf7rgxef, 6gcwcf80v8hg, 6gcwcf88z57p, 6gcwcf8gzn50, 6gcwcf8rxe72, 6gdx7mcqm371, 6gdx7mcqq67d, 6gdx7mcrq8s8, 6ge1bacd3bd2, 6ge7qn9ptaxv, 6gg7e594gcms, 6gg7e59cyxxh]
 updated_at: "2026-10-03"
 started_at: "2026-09-23"
 ---
@@ -30,8 +30,9 @@ research, and finding reads now preserve portable source identity and diagnostic
 planning-data capabilities must agree on one source-set witness at construction. Local mutation
 receipts and ordinary-create recovery no longer depend on domain paths. TUI identity/refresh and
 readable occurrence locations have shipped, and semantic entity values no longer carry local paths,
-filename identities, or guarded revisions. CLI repair, body-link checking, and completion are the
-current implementation slice; executable enforcement of the composition boundary remains next.
+filename identities, or guarded revisions. CLI repair, body-link checking, and completion have
+merged. Concrete composition isolation and executable controller enforcement are the current slice;
+two newly evidenced persistence-composition followups remain explicitly scoped below.
 
 This Thread closes those seams in evidence-driven stages:
 
@@ -48,11 +49,17 @@ This Thread closes those seams in evidence-driven stages:
 6. After those prerequisites, move local paths, filename-derived identity, and guarded revisions
    out of semantic entity values; finish the partial Thread precedent and wire explicit local
    capabilities. **Completed.**
-7. Route CLI planning-data operations through those settled application ports. **In progress:**
-   named repair/link/completion use cases and portable probes implemented; both reviews reconciled,
-   including resolver-compatible completion fixes. Ready for merge.
+7. Route CLI planning-data operations through those settled application ports. **Completed:**
+   named repair/link/completion use cases, portable probes, and resolver-compatible completion fixes
+   merged in PR #275; both reviews reconciled.
 8. Isolate composition wiring and make the intended controller boundary executable through the
-   standard lint suite.
+   standard lint suite. **In progress:** explicit binary wiring and launch contracts implemented;
+   default-deny/recursive lint rules and actual forbidden-import probes verified. Codex and Antigravity
+   findings are fixed and both audits closed; real-reader/corpus mutation tests now pin startup
+   laziness and no fallback. Awaiting merge, not claimed shipped.
+9. Close the observed workspace Thread-apply identity-reader parity gap and design explicit
+   persistence authorization policy. Both follow [composition isolation](../tasks/6gcwcf8rxe72-isolate-cli-composition-wiring-and-enforce-controller-boundaries.md);
+   they are separate behavior/compatibility work, not silently bundled into its extraction.
 
 Markdown-first and git-native behavior remain product constraints. The goal is not to hide Markdown
 or replace storage; it is to stop application semantics from requiring a filesystem path when stable
