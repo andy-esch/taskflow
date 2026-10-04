@@ -1,10 +1,10 @@
 ---
 schema: 1
 id: 6gefs7wbbcyt
-bucket: open
+bucket: closed
 area: arch-hexagonal-boundaries
 date: "2026-09-28"
-updated_at: "2026-09-28"
+updated_at: "2026-10-03"
 ---
 # Weekly Architecture Audit: hexagonal-boundaries — 2026-09-28
 
@@ -313,7 +313,7 @@ evidence of a boundary defect. This audit agrees: the generic seams (`scanDir[T]
 
 ## Findings
 
-#### M1. The primary-adapter fitness rule enumerates denied packages, so a new adapter package escapes it · **Status:** open
+#### M1. The primary-adapter fitness rule enumerates denied packages, so a new adapter package escapes it · **Status:** fixed
 
 **File:** .golangci.yml:69-104 | **Component:** build/lint policy
 **Effort:** XS · **Urgency:** soon
@@ -367,7 +367,14 @@ subpackage of a guarded package is also unguarded — see L1.
 
 **Recommendation:** Give primary-adapters-use-application-seams the same shape as its three siblings: keep list-mode lax, replace the ten enumerated deny entries with a single deny on github.com/andy-esch/taskflow/internal, and move the packages primary adapters legitimately use (configui, id, domain, core, wire, editor, listfilter, graphfmt, theme, design, progressbar) into allow. Re-run the fakestore probe as a negative test.
 
-#### M2. Mutation authorization is fail-open when a composition root omits the option · **Status:** open
+**Resolution:** Primary adapters and CLI controllers now deny internal imports
+by default with exact named allowances; only binary-selected appwiring
+constructs persistence or launches UI frameworks. Formatted, compiler-valid
+probes rejected an unknown adapter, children of allowed core, all four known
+persistence adapters, and appwiring under standard lint. The descriptive
+import-graph checker remains separate work.
+
+#### M2. Mutation authorization is fail-open when a composition root omits the option · **Status:** tracked by 6gg7e59cyxxh
 
 **File:** internal/store/fsstore.go:86-90 | **Component:** store + configstore + spacestore + workspacestore
 **Effort:** S · **Urgency:** soon
@@ -427,7 +434,13 @@ nothing was edited.
 
 **Recommendation:** Make the guard a required construction parameter rather than an optional functional option, in the shape core.NewService already uses: have NewFS return (*FS, error) and reject a nil authorizer, with an explicit store.WithoutMutationAuthorization() opt-out for the read-only cases that genuinely need it (completion). Minimum viable alternative: a test that walks every store.NewFS construction site in internal/ and asserts each supplies an authorizer.
 
-#### M3. The cli/tui/core/store layering is the repo's central architectural rule and has no ADR · **Status:** open
+**Resolution:** Current binary composition carries one invocation authorizer
+through all persistence families; constructor omission still fails open
+elsewhere. Track an explicit-policy design and compatibility checkpoint
+separately rather than changing adapter constructors during the CLI wiring
+extraction.
+
+#### M3. The cli/tui/core/store layering is the repo's central architectural rule and has no ADR · **Status:** tracked by 6gg7e59mm68g
 
 **File:** planning/adrs/ (absent); docs/ARCHITECTURE.md:11-76 | **Component:** planning/adrs
 **Effort:** S · **Urgency:** soon
@@ -482,7 +495,12 @@ direction is enforced executably, with `.golangci.yml` named as the mechanism. H
 
 **Recommendation:** Write one ADR that ratifies what docs/ARCHITECTURE.md already describes and .golangci.yml already enforces: the primary-adapter / core / secondary-adapter layering, consumer-owned ports, the composition-root exception, and DI with no package-level state. It is a consolidation of settled practice, not a new decision, so it can be accepted on the same day it is written. ARCHITECTURE.md then links to it and keeps only the current package map.
 
-#### M4. Shell completion re-derives the flat entity layout and still documents the retired status-as-directory model · **Status:** tracked by 6gcwcf8gzn50
+**Resolution:** Record the settled dependency and composition policy in a
+proposed ADR after the concrete boundary lands; user acceptance remains
+explicit. The current guide and lint policy are reconciled in the composition
+task.
+
+#### M4. Shell completion re-derives the flat entity layout and still documents the retired status-as-directory model · **Status:** fixed (PR #275)
 
 **File:** internal/cli/completion.go:181-182,206-207,222,229,239,245-247,259,266 | **Component:** cli/completion
 **Effort:** S · **Urgency:** eventually
@@ -539,7 +557,12 @@ the ability to complete a file whose frontmatter will not parse).
 
 **Recommendation:** Already owned by task 6gcwcf8gzn50, whose acceptance criterion is exactly this: completion must offer malformed id-led local records without filesystem globs in the Cobra adapter. No new work proposed. The three stale contract comments are a smaller, separable cleanup that should not wait for that task — route to the next code-quality-audit run.
 
-#### L1. Boundary rule file globs are single-level, so a future subpackage is unguarded · **Status:** open
+**Resolution:** Merged application-port migration removes completion filesystem
+construction/globs and stale status-directory comments. Completion uses the
+source-set-checked parse-free application use case and deferred Cobra
+composition.
+
+#### L1. Boundary rule file globs are single-level, so a future subpackage is unguarded · **Status:** fixed
 
 **File:** .golangci.yml:21-22,37-38,54-55,71-76 | **Component:** build/lint policy
 **Effort:** XS · **Urgency:** eventually
@@ -572,6 +595,11 @@ because it is the same edit as M1 — one file, one review — and because M1 sh
 happens to a boundary rule that depends on someone remembering to extend it.
 
 **Recommendation:** Change the guarded file globs from **/internal/<pkg>/*.go to **/internal/<pkg>/**/*.go so subpackages inherit their parent's rule. Fold into M1's edit — same file, same review.
+
+**Resolution:** Production boundary rules cover direct and recursive files,
+retaining narrow named exclusions. Independent nested CLI, TUI, domain, core,
+and wire probes all failed standard lint specifically with depguard diagnostics;
+both direct and recursive patterns are needed by the glob matcher.
 
 ## What audited clean
 
@@ -624,12 +652,16 @@ happens to a boundary rule that depends on someone remembering to extend it.
   rule. The gap is only visible with a package that is not on the list, which is why it
   survived verification. No status change proposed.
 
+## Owner triage (2026-10-03)
+
+All five findings now have explicit dispositions. M4 shipped in PR #275. M1 and L1 are locally fixed and mutation-verified in the composition-isolation task 6gcwcf8rxe72; both implementation reviews are reconciled, awaiting merge. M2 is tracked by 6gg7e59cyxxh with a constructor-compatibility design checkpoint; M3 is tracked by proposed-ADR task 6gg7e59mm68g. The original review narrative remains historical evidence, not a current import inventory. The audit can close as triaged without claiming that tracked work has shipped.
+
 ## Candidate tasks
 
 <!-- candidate-tasks:v1 · ○ open · ● in-progress · ✔ fixed · → tracked · ◌ deferred · ◌ superseded · ✘ wontfix -->
 <!-- Add or replace one row with `tskflwctl audit finding <audit> <code> --candidate "<one line>"`; an empty value removes it. -->
 
-- ○ M1 · open — ./bin/tskflwctl task new "Make the primary-adapter dependency rule deny-by-default" --epic 21-code-quality-architecture-hardening
-- ○ M2 · open — ./bin/tskflwctl task new "Require a mutation authorizer at store construction instead of defaulting to allow" --epic 21-code-quality-architecture-hardening
-- ○ M3 · open — ./bin/tskflwctl task new "Ratify the hexagonal layering and consumer-owned port rule as an ADR" --epic 21-code-quality-architecture-hardening
-- → M4 · tracked — Tracked in planning/tasks/6gcwcf8gzn50-route-cli-planning-data-operations-through-application-ports.md
+- ✔ M1 · fixed — Implemented by composition-isolation task 6gcwcf8rxe72; both implementation reviews reconciled, awaiting merge.
+- → M2 · tracked — Tracked by task 6gg7e59cyxxh; explicit mutation-policy compatibility design required.
+- → M3 · tracked — Tracked by task 6gg7e59mm68g; propose the dependency-policy ADR for user acceptance.
+- ✔ M4 · fixed — Resolved in PR #275 by CLI planning-data application-port task 6gcwcf8gzn50.

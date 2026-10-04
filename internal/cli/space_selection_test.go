@@ -18,7 +18,7 @@ import (
 func runSelection(t *testing.T, args ...string) (stdout, stderr string, err error) {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &errOut)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &errOut)
 	cmd.SetArgs(args)
 	cmd.SetOut(&out)
 	cmd.SetErr(&errOut)

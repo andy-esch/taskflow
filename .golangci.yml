@@ -11,12 +11,15 @@ linters:
   settings:
     depguard:
       rules:
+        # Keep direct and recursive patterns together: depguard's glob matcher
+        # does not make the extra slash in <package>/**/*.go optional.
         # Production domain code is the innermost planning layer. Stable-id parsing and
         # minting is its one internal dependency; application, presentation, discovery,
         # and persistence packages must depend toward domain, never the reverse.
         domain-stays-inward:
           files:
             - "**/internal/domain/*.go"
+            - "**/internal/domain/**/*.go"
             - "!$test"
           list-mode: lax
           allow:
@@ -33,6 +36,7 @@ linters:
         core-owns-ports-not-adapters:
           files:
             - "**/internal/core/*.go"
+            - "**/internal/core/**/*.go"
             - "!$test"
           list-mode: lax
           allow:
@@ -50,6 +54,7 @@ linters:
         wire-stays-adapter-neutral:
           files:
             - "**/internal/wire/*.go"
+            - "**/internal/wire/**/*.go"
             - "!$test"
           list-mode: lax
           allow:
@@ -64,41 +69,137 @@ linters:
         # Presentation packages consume application ports and neutral values; they do
         # not discover planning roots or open persistence adapters. Tests are excluded
         # because integration-style UI tests deliberately construct a real store in a
-        # temporary directory. internal/cli/*.go is also deliberately absent: that
-        # package is today's composition root and is allowed to construct adapters and
-        # launch the TUIs. Its render/prompt subpackages are covered here.
+        # temporary directory. CLI controllers have a separate default-deny rule
+        # below; only cmd/tskflwctl selects internal/appwiring's concrete composition.
         primary-adapters-use-application-seams:
           files:
             - "**/internal/tui/*.go"
+            - "**/internal/tui/**/*.go"
             - "**/internal/configui/*.go"
+            - "**/internal/configui/**/*.go"
             - "**/internal/cli/render/*.go"
+            - "**/internal/cli/render/**/*.go"
             - "**/internal/cli/prompt/*.go"
+            - "**/internal/cli/prompt/**/*.go"
             - "!$test"
           list-mode: lax
           allow:
-            # The full TUI intentionally embeds the focused configuration TUI.
-            - github.com/andy-esch/taskflow/internal/configui
+            # Exact package names: a new adapter (or subpackage) is denied by default.
+            - github.com/andy-esch/taskflow/internal/configui$
+            - github.com/andy-esch/taskflow/internal/core$
+            - github.com/andy-esch/taskflow/internal/design$
+            - github.com/andy-esch/taskflow/internal/domain$
+            - github.com/andy-esch/taskflow/internal/editor$
+            - github.com/andy-esch/taskflow/internal/listfilter$
+            - github.com/andy-esch/taskflow/internal/progressbar$
+            - github.com/andy-esch/taskflow/internal/theme$
+            - github.com/andy-esch/taskflow/internal/themepreview$
+            - github.com/andy-esch/taskflow/internal/wire$
           deny:
-            - pkg: github.com/andy-esch/taskflow/internal/cli
-              desc: primary adapters must not import the Cobra adapter
-            - pkg: github.com/andy-esch/taskflow/internal/tui
-              desc: focused presentation packages must not import the full TUI
-            - pkg: github.com/andy-esch/taskflow/internal/config
-              desc: primary adapters must use core ports instead of repo discovery
-            - pkg: github.com/andy-esch/taskflow/internal/configstore
-              desc: primary adapters must not open the configuration filesystem adapter
-            - pkg: github.com/andy-esch/taskflow/internal/spacehealth
-              desc: primary adapters must use a core space projection
-            - pkg: github.com/andy-esch/taskflow/internal/spacestore
-              desc: primary adapters must not open the cross-space filesystem adapter
-            - pkg: github.com/andy-esch/taskflow/internal/store
-              desc: primary adapters must use core services and ports, not the Markdown store
-            - pkg: github.com/andy-esch/taskflow/internal/tomledit
-              desc: primary adapters must not edit configuration storage directly
-            - pkg: github.com/andy-esch/taskflow/internal/userconfig
-              desc: primary adapters must use a core seam instead of home-scoped storage
-            - pkg: github.com/andy-esch/taskflow/internal/workspacestore
-              desc: primary adapters must use the core workspace service, not its filesystem adapter
+            - pkg: github.com/andy-esch/taskflow/internal
+              desc: primary adapters must use application ports or declared presentation utilities
+
+        focused-primary-does-not-launch-config-ui:
+          files:
+            - "**/internal/configui/*.go"
+            - "**/internal/configui/**/*.go"
+            - "**/internal/cli/render/*.go"
+            - "**/internal/cli/render/**/*.go"
+            - "**/internal/cli/prompt/*.go"
+            - "**/internal/cli/prompt/**/*.go"
+            - "!$test"
+          deny:
+            - pkg: github.com/andy-esch/taskflow/internal/configui
+              desc: only the full TUI embeds the focused configuration TUI
+
+        # Ordinary Cobra controllers may consume only explicitly named application,
+        # neutral contract, and presentation packages. A new secondary adapter is
+        # denied automatically, rather than needing addition to an adapter blacklist.
+        cli-controllers-use-injected-application:
+          files:
+            - "**/internal/cli/*.go"
+            - "**/internal/cli/**/*.go"
+            - "!**/internal/cli/render/*.go"
+            - "!**/internal/cli/render/**/*.go"
+            - "!**/internal/cli/prompt/*.go"
+            - "!**/internal/cli/prompt/**/*.go"
+            - "!**/internal/cli/ports/*.go"
+            - "!**/internal/cli/ports/**/*.go"
+            - "!**/internal/cli/init.go"
+            - "!**/internal/cli/workspace.go"
+            - "!$test"
+          list-mode: lax
+          allow:
+            - github.com/andy-esch/taskflow/internal/cli/ports$
+            - github.com/andy-esch/taskflow/internal/cli/prompt$
+            - github.com/andy-esch/taskflow/internal/cli/render$
+            - github.com/andy-esch/taskflow/internal/core$
+            - github.com/andy-esch/taskflow/internal/design$
+            - github.com/andy-esch/taskflow/internal/domain$
+            - github.com/andy-esch/taskflow/internal/editor$
+            - github.com/andy-esch/taskflow/internal/graphfmt$
+            - github.com/andy-esch/taskflow/internal/id$
+            - github.com/andy-esch/taskflow/internal/wire$
+          deny: &cli-controller-deny
+            - pkg: github.com/andy-esch/taskflow/internal
+              desc: >-
+                CLI controllers must use injected application capabilities. Concrete
+                composition belongs in internal/appwiring, selected by the binary.
+            - pkg: charm.land/bubbletea
+              desc: Bubble Tea launching belongs in internal/appwiring, not a CLI controller
+            - pkg: github.com/charmbracelet/bubbletea
+              desc: Bubble Tea launching belongs in internal/appwiring, not a CLI controller
+
+        # Narrow exceptions are still default-deny. config is only the existing
+        # topology scaffold (init) or local checkout receipt (workspace); neither
+        # permits construction of planning persistence or launching UI frameworks.
+        cli-local-topology-and-checkout:
+          files:
+            - "**/internal/cli/init.go"
+            - "**/internal/cli/workspace.go"
+          list-mode: lax
+          allow:
+            - github.com/andy-esch/taskflow/internal/cli/ports$
+            - github.com/andy-esch/taskflow/internal/cli/prompt$
+            - github.com/andy-esch/taskflow/internal/cli/render$
+            - github.com/andy-esch/taskflow/internal/core$
+            - github.com/andy-esch/taskflow/internal/design$
+            - github.com/andy-esch/taskflow/internal/domain$
+            - github.com/andy-esch/taskflow/internal/editor$
+            - github.com/andy-esch/taskflow/internal/graphfmt$
+            - github.com/andy-esch/taskflow/internal/id$
+            - github.com/andy-esch/taskflow/internal/wire$
+            - github.com/andy-esch/taskflow/internal/config$
+          deny: *cli-controller-deny
+
+        cli-composition-contracts-stay-neutral:
+          files:
+            - "**/internal/cli/ports/*.go"
+            - "**/internal/cli/ports/**/*.go"
+            - "!$test"
+          # No external framework types (Cobra/Bubble Tea/Lipgloss included) may
+          # enter these request contracts; their presentation values are owned.
+          list-mode: strict
+          allow:
+            - $gostd
+            - github.com/andy-esch/taskflow/internal/core$
+            - github.com/andy-esch/taskflow/internal/design$
+          deny: *cli-controller-deny
+
+        # Startup reads are selected in one local provider file, then threaded
+        # through the composition code. Keep direct discovery from bypassing
+        # those observed per-bindings readers in current or future wiring files.
+        appwiring-startup-reads-use-local-sources:
+          files:
+            - "**/internal/appwiring/*.go"
+            - "**/internal/appwiring/**/*.go"
+            - "!**/internal/appwiring/local_sources.go"
+            - "!$test"
+          deny:
+            - pkg: github.com/andy-esch/taskflow/internal/config$
+              desc: select repo-scoped startup reads in appwiring/local_sources.go
+            - pkg: github.com/andy-esch/taskflow/internal/userconfig$
+              desc: select home-scoped startup reads in appwiring/local_sources.go
 
         # The repo-scoped config must never consult the home-scoped one: planning-root
         # discovery has to stay a pure function of the cwd, or `--space`-style handles
@@ -109,12 +210,13 @@ linters:
         config-must-not-read-home-scope:
           files:
             - "**/internal/config/*.go"
+            - "**/internal/config/**/*.go"
           deny:
             - pkg: github.com/andy-esch/taskflow/internal/userconfig
               desc: >-
                 internal/config is repo-scoped; home-scope data must not influence
-                planning-root discovery. Read the user config in the cli adapter and
-                pass what you need down.
+                planning-root discovery. Read user preferences in internal/appwiring
+                and inject the required values into primary adapters.
     errcheck:
       # CLI output writes (to stdout/stderr) have no actionable error path.
       exclude-functions:

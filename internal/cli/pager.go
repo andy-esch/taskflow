@@ -77,11 +77,11 @@ func (a *App) pagerWanted() bool {
 	case a.Paginate:
 		return true
 	}
-	if a.Cfg != nil && a.Cfg.Pager.Enabled != nil {
-		return *a.Cfg.Pager.Enabled
+	if a.Cfg != nil && a.Cfg.PagerEnabled != nil {
+		return *a.Cfg.PagerEnabled
 	}
-	if a.User != nil && a.User.Pager.Enabled != nil {
-		return *a.User.Pager.Enabled
+	if a.User != nil && a.User.PagerEnabled != nil {
+		return *a.User.PagerEnabled
 	}
 	return true
 }
@@ -97,12 +97,12 @@ func (a *App) pagerProgram() string {
 		return v
 	}
 	if a.Cfg != nil {
-		if v := strings.TrimSpace(a.Cfg.Pager.Command); v != "" {
+		if v := strings.TrimSpace(a.Cfg.PagerCommand); v != "" {
 			return v
 		}
 	}
 	if a.User != nil {
-		if v := strings.TrimSpace(a.User.Pager.Command); v != "" {
+		if v := strings.TrimSpace(a.User.PagerCommand); v != "" {
 			return v
 		}
 	}

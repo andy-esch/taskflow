@@ -157,22 +157,22 @@ func TestChromeThemeHonorsFlagAndEnv(t *testing.T) {
 	// miss and only the flag/env tiers are in play.
 	t.Chdir(t.TempDir())
 
-	if got := ChromeTheme([]string{"--theme", "catppuccin"}).Name; got != "catppuccin" {
+	if got := newTestChromeTheme([]string{"--theme", "catppuccin"}).Name; got != "catppuccin" {
 		t.Errorf("flag tier: got %q, want catppuccin", got)
 	}
 	t.Setenv("TSKFLW_THEME", "catppuccin")
-	if got := ChromeTheme(nil).Name; got != "catppuccin" {
+	if got := newTestChromeTheme(nil).Name; got != "catppuccin" {
 		t.Errorf("env tier: got %q, want catppuccin", got)
 	}
-	if got := ChromeTheme([]string{"--theme", "neon"}).Name; got != "neon" {
+	if got := newTestChromeTheme([]string{"--theme", "neon"}).Name; got != "neon" {
 		t.Errorf("flag must beat env: got %q, want neon", got)
 	}
 	t.Setenv("TSKFLW_THEME", "")
-	if got := ChromeTheme(nil).Name; got != design.Default().Name {
+	if got := newTestChromeTheme(nil).Name; got != design.Default().Name {
 		t.Errorf("no selection should fall back to the default, got %q", got)
 	}
 	// An unregistered name must not leave chrome unpainted.
-	if got := ChromeTheme([]string{"--theme", "no-such-theme"}).Name; got != design.Default().Name {
+	if got := newTestChromeTheme([]string{"--theme", "no-such-theme"}).Name; got != design.Default().Name {
 		t.Errorf("unknown theme should degrade to the default, got %q", got)
 	}
 }

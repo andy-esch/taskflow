@@ -7,17 +7,22 @@ its own work.
 
 ## Build / test / lint
 
-- `just build` → `bin/tskflwctl` · `just test` → `go test ./...` · `just lint` →
+- `just build` → `bin/tskflwctl` · `just test` → `go test -race ./...` · `just lint` →
   `golangci-lint run ./...`. Get all three green before calling code done.
 - Standard Go layout: `main` is `./cmd/tskflwctl`, so `go build .` at the root
   does nothing useful — use `just build` / `go build ./...`.
 
 ## Architecture (read before changing code)
 
-`docs/ARCHITECTURE.md` is the one-screen orientation: `cli` and `tui` are
+Start with the package map in `docs/ARCHITECTURE.md`: `cli` and `tui` are
 **primary adapters** over `core`; the markdown filesystem is the
-**secondary adapter** (`store`). Non-negotiables: DI via one `*cli.App`
-populated in `PersistentPreRunE` (no globals), all output through injected
+**secondary adapter** (`store`). The binary selects `internal/appwiring`; controllers
+consume explicit `internal/cli/ports` bindings, never construct persistence or launch UI frameworks.
+`just lint` enforces this, including direct Bubble Tea imports and framework-free invocation
+contracts. Startup discovery/preferences are selected only in `appwiring/local_sources.go`;
+reader-observation tests wrap the real readers and composition, not global test hooks.
+Non-negotiables: one `*cli.App` per command tree, repo-independent services injected up front
+and planning opening deferred until target flags are parsed (no globals), all output through injected
 `io.Writer`, `--json` everywhere with a `schema_version`, the core never touches
 fs/cobra, and **`status`/`bucket` is authoritative in frontmatter** (ADR-0003
 §4 — tasks/audits/research/Threads are stored **flat and id-led**, `tasks/<id>-<slug>.md` ·
@@ -47,8 +52,8 @@ We dogfood: drive this repo's planning with the tool itself.
 - **Read/edit:** `task list|show|set|edit|append|ac`, `epic list|show`,
   `audit new|list|show|findings|finding|lint|close|reopen|defer`,
   `research new|list|show|path|set|edit|append` (no lifecycle verbs — research has no
-  status), `thread new|list|show|path|frontier` (membership/lifecycle mutations have not
-  landed yet). Two faces of mutation: **agent**
+  status), `thread new|list|show|path|frontier|graph` plus guarded membership, lifecycle,
+  and compose/apply verbs (use `thread --help` for the full surface). Two faces of mutation: **agent**
   (field-level `task set`; body via `task append` / `task set --body|--body-file`,
   all scriptable + atomic) vs **human** (`task edit` — $EDITOR on the whole file,
   re-validated on save).

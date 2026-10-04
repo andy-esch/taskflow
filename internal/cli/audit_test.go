@@ -134,7 +134,7 @@ func TestAuditAppendKeepsFreshManagedCandidateSectionValid(t *testing.T) {
 func TestAuditAppend_Empty_Errors(t *testing.T) {
 	root := setupAuditRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "audit", "append", "o", "--body", "   "})
 	if err := cmd.Execute(); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("empty audit append should wrap ErrValidation (exit 11), got %v", err)
@@ -155,7 +155,7 @@ func TestAuditAppend_BodyAndBodyFile_Exclusive(t *testing.T) {
 func TestAuditEdit_RejectsDryRun(t *testing.T) {
 	root := setupAuditRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "--dry-run", "audit", "edit", "o"})
 	if err := cmd.Execute(); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("`audit edit --dry-run` should be rejected with ErrValidation, got %v", err)
@@ -240,7 +240,7 @@ func TestAuditList_ConflictingFlagsError(t *testing.T) {
 		{"audit", "list", "--all", "--closed"},
 	} {
 		var out bytes.Buffer
-		cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+		cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 		cmd.SetArgs(append([]string{"-C", root}, args...))
 		cmd.SetOut(&out)
 		cmd.SetErr(&out)

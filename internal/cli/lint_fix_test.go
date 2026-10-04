@@ -166,7 +166,7 @@ func TestLintFix_UnrepairableFileExitsNonZero(t *testing.T) {
 	testutil.Write(t, broken, "---\nstatus: ready-to-start\n# no closing fence\n")
 
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "lint", "--fix"})
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -182,7 +182,7 @@ func TestLintFix_UnrepairableFileExitsNonZero(t *testing.T) {
 	}
 	// --dry-run stays exit 0 (it promises nothing about the result).
 	out.Reset()
-	dry := NewRootCmd(strings.NewReader(""), &out, &out)
+	dry := newTestRootCmd(strings.NewReader(""), &out, &out)
 	dry.SetArgs([]string{"-C", root, "lint", "--fix", "--dry-run"})
 	dry.SetOut(&out)
 	dry.SetErr(&out)
@@ -216,7 +216,7 @@ func TestLintFix_ReportOnlyEpicExitsNonZero(t *testing.T) {
 	testutil.Write(t, goodPath, goodContent)
 
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "lint", "--fix"})
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -238,7 +238,7 @@ func TestLintFix_ReportOnlyEpicExitsNonZero(t *testing.T) {
 	// --json: the leftover epic finding must land in `remaining`, not only in the
 	// prose error — a --json consumer must never parse prose to learn it stayed broken.
 	out.Reset()
-	jc := NewRootCmd(strings.NewReader(""), &out, &out)
+	jc := newTestRootCmd(strings.NewReader(""), &out, &out)
 	jc.SetArgs([]string{"-C", root, "lint", "--fix", "--json"})
 	jc.SetOut(&out)
 	jc.SetErr(&out)
@@ -275,7 +275,7 @@ func TestLintFix_JSONReportsUnreadable(t *testing.T) {
 	// stdout carries the fix envelope; the error is returned (not written, since
 	// the root silences errors), so the buffer holds only the JSON report.
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "lint", "--fix", "--json"})
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)

@@ -19,7 +19,7 @@ func TestAuditLint_DirtyExits11(t *testing.T) {
 	p, content := testutil.AuditFixture(root, "closed", "2026-01-01-x.md", body)
 	testutil.Write(t, p, content)
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "audit", "lint"})
 	if err := cmd.Execute(); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("a dirty audit should make `audit lint` wrap ErrValidation (exit 11), got %v", err)
@@ -30,7 +30,7 @@ func TestAuditLint_DirtyExits11(t *testing.T) {
 func TestAuditLint_CleanPasses(t *testing.T) {
 	root := setupRepo(t) // tasks only, no audits → nothing to flag
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "audit", "lint"})
 	if err := cmd.Execute(); err != nil {
 		t.Errorf("a clean repo should pass audit lint, got %v", err)

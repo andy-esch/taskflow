@@ -79,7 +79,7 @@ func TestEpicList_StatusFilter(t *testing.T) {
 		t.Errorf("--status active should keep only demo:\n%s", active)
 	}
 	var buf bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &buf, &buf)
+	cmd := newTestRootCmd(strings.NewReader(""), &buf, &buf)
 	cmd.SetArgs([]string{"-C", root, "epic", "list", "--status", "bogus"})
 	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "bogus") {
 		t.Errorf("invalid --status should error naming the value, got %v", err)
@@ -307,7 +307,7 @@ func TestEpicSetBare_Picker(t *testing.T) {
 func TestEpicEdit_NonInteractive(t *testing.T) {
 	root := setupEpicRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "epic", "edit", "demo"})
 	err := cmd.Execute()
 	if err == nil {
@@ -333,7 +333,7 @@ func TestEpicEdit_DryRunRejected(t *testing.T) {
 func TestEpicEditBare_NonInteractive(t *testing.T) {
 	root := setupEpicRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "epic", "edit"}) // no id
 	err := cmd.Execute()
 	if !errors.Is(err, domain.ErrValidation) {

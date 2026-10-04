@@ -50,6 +50,9 @@ func newStatusCmd(app *App) *cobra.Command {
 			if strings.TrimSpace(app.Space) != "" {
 				return fmt.Errorf("%w: --all and --space select different scopes; pass one", domain.ErrValidation)
 			}
+			if app.SpaceOverviewSvc == nil {
+				return fmt.Errorf("%w: space overview is unavailable from this invocation", domain.ErrValidation)
+			}
 			overview, err := app.SpaceOverviewSvc.Overview()
 			if err != nil {
 				return err

@@ -7,8 +7,8 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/spf13/cobra"
 
+	"github.com/andy-esch/taskflow/internal/cli/ports"
 	"github.com/andy-esch/taskflow/internal/cli/render"
-	"github.com/andy-esch/taskflow/internal/configui"
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -51,6 +51,9 @@ func newConfigEditCmd(app *App) *cobra.Command {
 			if !app.Gate.On() || !isTerminal(app.Out) {
 				return fmt.Errorf("%w: `config edit` needs an interactive terminal — use `config show`, `config migrate`, or edit the documented typed TOML fields", domain.ErrValidation)
 			}
+			if app.ConfigSvc == nil {
+				return fmt.Errorf("%w: configuration service is unavailable from this invocation", domain.ErrValidation)
+			}
 			start, err := app.startDir()
 			if err != nil {
 				return err
@@ -64,7 +67,13 @@ func newConfigEditCmd(app *App) *cobra.Command {
 					dark = lipgloss.HasDarkBackground(in, out)
 				}
 			}
-			return configui.Run(app.ConfigSvc, start, app.configurationOverrides(), dark, app.In, app.Out)
+			if app.bindings.RunConfiguration == nil {
+				return fmt.Errorf("%w: configuration editor launch is unavailable from this invocation", domain.ErrValidation)
+			}
+			return app.bindings.RunConfiguration(ports.ConfigurationEditor{
+				Service: app.ConfigSvc, Start: start, Overrides: app.configurationOverrides(),
+				Dark: dark, In: app.In, Out: app.Out,
+			})
 		},
 	}
 }
@@ -85,6 +94,9 @@ func newConfigShowCmd(app *App) *cobra.Command {
 }
 
 func runConfigShow(app *App) error {
+	if app.ConfigSvc == nil {
+		return fmt.Errorf("%w: configuration service is unavailable from this invocation", domain.ErrValidation)
+	}
 	start, err := app.startDir()
 	if err != nil {
 		return err
@@ -111,6 +123,9 @@ func newConfigMigrateCmd(app *App) *cobra.Command {
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "mutating"},
 		RunE: func(_ *cobra.Command, _ []string) error {
+			if app.ConfigSvc == nil {
+				return fmt.Errorf("%w: configuration service is unavailable from this invocation", domain.ErrValidation)
+			}
 			start, err := app.startDir()
 			if err != nil {
 				return err

@@ -14,7 +14,6 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
-	"github.com/andy-esch/taskflow/internal/config"
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/wire"
@@ -118,7 +117,7 @@ func TestCreateCommandsProjectCommittedFailuresFromKindSpecificReceipts(t *testi
 			root := t.TempDir()
 			adapter := &committedCreateStore{root: root, cause: fmt.Errorf("release failed: %w", domain.ErrConflict), sourceSet: core.NewSourceSetID()}
 			stdout := &bytes.Buffer{}
-			app := &App{Svc: core.MustNewService(adapter), Cfg: &config.Config{Root: root}, JSON: true,
+			app := &App{Svc: core.MustNewService(adapter), Cfg: &core.RepositoryConfiguration{PlanningRoot: root}, JSON: true,
 				Out: stdout, ErrOut: &bytes.Buffer{}}
 			cmd := tc.build(app)
 			cmd.SetArgs(tc.args)
@@ -147,7 +146,7 @@ func TestCreateCommandsProjectCommittedFailuresFromKindSpecificReceipts(t *testi
 }
 
 func TestPathlessCreationProjectionDoesNotInventALocation(t *testing.T) {
-	app := &App{Cfg: &config.Config{Root: "/planning"}, Style: render.NewStyle(false)}
+	app := &App{Cfg: &core.RepositoryConfiguration{PlanningRoot: "/planning"}, Style: render.NewStyle(false)}
 	if got := app.rel(""); got != "" {
 		t.Fatalf("empty local outcome became relative path %q", got)
 	}
@@ -168,7 +167,7 @@ func TestPathlessCreationProjectionDoesNotInventALocation(t *testing.T) {
 
 func TestCommittedCreateFailuresRetainKindIdentityAndWorkspace(t *testing.T) {
 	root := "/planning"
-	app := &App{Cfg: &config.Config{Root: root}}
+	app := &App{Cfg: &core.RepositoryConfiguration{PlanningRoot: root}}
 	for _, tc := range []struct {
 		kind, id, slug, status, dir string
 	}{
@@ -219,7 +218,7 @@ func TestCommittedCreateFailuresRetainKindIdentityAndWorkspace(t *testing.T) {
 }
 
 func TestCommittedCreateFilesystemErrorDoesNotInviteCommandRetry(t *testing.T) {
-	app := &App{Cfg: &config.Config{Root: "/planning"}}
+	app := &App{Cfg: &core.RepositoryConfiguration{PlanningRoot: "/planning"}}
 	for _, cause := range []error{syscall.EAGAIN, syscall.EINTR} {
 		t.Run(cause.Error(), func(t *testing.T) {
 			osErr := &os.PathError{Op: "flock", Path: "/planning", Err: cause}

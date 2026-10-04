@@ -6,8 +6,8 @@ description: Restructure project guidance around clear source ownership, scoped 
 goal: Agents and contributors load the minimum authoritative guidance for a change, while code and CI expose documentation drift.
 created: "2026-09-12"
 tags: [documentation, architecture, agents, go, dx]
-tasks: [6g63hjm7cp6w, 6g6x7e2ef37r, 6g9cz5saenme, 6g9cz5sk3b0d, 6g9cz5sv6kck, 6g9cz5t37dc0]
-updated_at: "2026-09-13"
+tasks: [6g63hjm7cp6w, 6g6x7e2ef37r, 6g9cz5saenme, 6g9cz5sk3b0d, 6g9cz5sv6kck, 6g9cz5t37dc0, 6gg7e59mm68g]
+updated_at: "2026-10-03"
 ---
 # Thread: Make documentation layered, executable, and agent-navigable
 
@@ -44,3 +44,8 @@ executable import-graph check follows the split so it targets the durable focuse
 hard-coding the file layout being retired; executable Go examples follow the package-contract
 standard. Reconciliation and drift enforcement close the Thread only after both documentation
 branches have settled.
+
+The [hexagonal dependency-policy ADR](../tasks/6gg7e59mm68g-record-the-hexagonal-dependency-policy-and-composition-exceptions-in-an-adr.md)
+is a separate decision-record slice after the concrete composition boundary settles. It should
+inform the focused architecture guide, not duplicate the executable import inventory or silently
+ratify a new policy without user acceptance.

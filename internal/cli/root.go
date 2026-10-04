@@ -13,22 +13,17 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/spf13/cobra"
 
+	"github.com/andy-esch/taskflow/internal/cli/ports"
 	"github.com/andy-esch/taskflow/internal/cli/prompt"
 	"github.com/andy-esch/taskflow/internal/cli/render"
-	"github.com/andy-esch/taskflow/internal/config"
-	"github.com/andy-esch/taskflow/internal/configstore"
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/domain"
-	"github.com/andy-esch/taskflow/internal/spacestore"
-	"github.com/andy-esch/taskflow/internal/store"
-	"github.com/andy-esch/taskflow/internal/userconfig"
-	"github.com/andy-esch/taskflow/internal/workspacestore"
 )
 
-// App is the dependency container. It is created empty by NewRootCmd and
-// populated lazily in PersistentPreRunE — after flags are parsed, since deps
-// (config, service) depend on flags like --chdir.
+// App is the invocation container. NewRootCmd injects repo-independent services;
+// planning capabilities are opened lazily after flags are parsed, since the
+// selected repository depends on flags like --chdir.
 type App struct {
 	Out    io.Writer
 	ErrOut io.Writer
@@ -49,11 +44,13 @@ type App struct {
 	Th     design.Theme    // the resolved active theme (flag > env > repo config > user config > default)
 	Gate   prompt.Gate     // may we prompt? (resolved once, like Style)
 	Prompt prompt.Prompter // the human-recovery face (huh on a TTY)
-	Cfg    *config.Config
+	Cfg    *core.RepositoryConfiguration
 	// User is the home-scope config (theme/pager preferences that belong to a
 	// person, not a repo). Always non-nil after setStyle; the zero value means
 	// "nothing set here" and every field falls through to the tier below.
-	User *userconfig.Config
+	User         *core.UserConfiguration
+	bindings     ports.Bindings
+	openPlanning func(string) (ports.Planning, error)
 	// userCfgErr is deferred, not printed at load time: the warning needs the Style
 	// (built at the end of setStyle) AND must be suppressed on the completion path,
 	// which only the command's own hook knows about. warnPresentation emits it.
@@ -115,8 +112,12 @@ func (a *App) setStyle() {
 // none exists or it can't be read. The error is returned rather than printed so the
 // caller can warn once the Style is built.
 func (a *App) loadUserConfig() error {
-	uc, err := userconfig.Load()
-	a.User = uc
+	var uc core.UserConfiguration
+	var err error
+	if a.bindings.ReadUser != nil {
+		uc, err = a.bindings.ReadUser()
+	}
+	a.User = &uc
 	return err
 }
 
@@ -162,11 +163,11 @@ func (a *App) styleOnlyPreRun(cmd *cobra.Command, _ []string) error {
 func (a *App) resolveTheme() {
 	cfgName := ""
 	if a.Cfg != nil {
-		cfgName = a.Cfg.Theme.Name
+		cfgName = a.Cfg.ThemeName
 	}
 	userName := ""
 	if a.User != nil {
-		userName = a.User.Theme.Name
+		userName = a.User.ThemeName
 	}
 	a.Th, _ = design.Lookup(themeName(a.Theme, os.Getenv("TSKFLW_THEME"), cfgName, userName))
 }
@@ -205,16 +206,18 @@ func themeName(flag, env, cfgName, userName string) string {
 // the HELP path (nothing has resolved a workspace yet) but not on the ERROR path,
 // where PersistentPreRunE has already populated App.Th with the -C-aware answer
 // and chrome could simply use it. Reconciling the two is tracked separately.
-func ChromeTheme(args []string) design.Theme {
+func ChromeTheme(args []string, bindings ports.Bindings) design.Theme {
 	cfgName := ""
-	if start, err := os.Getwd(); err == nil {
-		if cfg, cfgErr := config.Discover(start); cfgErr == nil && cfg != nil {
-			cfgName = cfg.Theme.Name
+	if start, err := os.Getwd(); err == nil && bindings.ReadRepository != nil {
+		if cfg, cfgErr := bindings.ReadRepository(start); cfgErr == nil {
+			cfgName = cfg.ThemeName
 		}
 	}
 	userName := ""
-	if uc, ucErr := userconfig.Load(); ucErr == nil && uc != nil {
-		userName = uc.Theme.Name
+	if bindings.ReadUser != nil {
+		if uc, ucErr := bindings.ReadUser(); ucErr == nil {
+			userName = uc.ThemeName
+		}
 	}
 	th, _ := design.Lookup(themeName(themeFlagFrom(args), os.Getenv("TSKFLW_THEME"), cfgName, userName))
 	return th
@@ -242,22 +245,24 @@ func themeFlagFrom(args []string) string {
 	return ""
 }
 
-// NewRootCmd builds the command tree with explicit DI — no package globals.
+// NewRootCmd builds the command tree with explicit DI — no package globals or
+// concrete adapter defaults. Empty bindings permit metadata-only tooling;
+// runnable use cases require their named services and launch hooks.
 // All I/O flows through the injected streams, which makes commands testable.
 // in is the single stdin owner: it feeds App.In (the prompt gate, prompter, and
 // editor) AND the cobra root (cmd.InOrStdin, which resolveBody reads for
 // `--body-file -`), so a caller/test injects one reader and every input path
 // agrees — production passes os.Stdin.
-func NewRootCmd(in io.Reader, out, errOut io.Writer) *cobra.Command {
-	root, _ := newRootCmd(in, out, errOut)
+func NewRootCmd(in io.Reader, out, errOut io.Writer, bindings ports.Bindings) *cobra.Command {
+	root, _ := newRootCmd(in, out, errOut, bindings)
 	return root
 }
 
 // newRootCmd exposes the invocation container to package tests so the safety
 // boundary can be exercised through a real Cobra execution and core service.
-func newRootCmd(in io.Reader, out, errOut io.Writer) (*cobra.Command, *App) {
+func newRootCmd(in io.Reader, out, errOut io.Writer, bindings ports.Bindings) (*cobra.Command, *App) {
 	app := &App{
-		Out: out, ErrOut: errOut, In: in, Th: design.Default(),
+		Out: out, ErrOut: errOut, In: in, Th: design.Default(), bindings: bindings,
 	}
 	app.CompletionService = func() (*core.Service, error) {
 		if err := app.resolve(); err != nil {
@@ -265,15 +270,12 @@ func newRootCmd(in io.Reader, out, errOut io.Writer) (*cobra.Command, *App) {
 		}
 		return app.Svc, nil
 	}
-	spaceAdapter := spacestore.New(spacestore.WithMutationAuthorization(app.authorizeMutation))
-	spaceSvc := core.NewSpaceRegistryService(spaceAdapter)
-	app.ConfigSvc = core.NewConfigurationService(
-		configstore.New(configstore.WithMutationAuthorization(app.authorizeMutation)),
-		core.WithConfigurationThemes(design.Names()), core.WithSpaceRegistry(spaceSvc))
-	app.SpaceSvc = spaceSvc
-	app.SpaceOverviewSvc = core.NewSpaceOverviewService(spaceSvc, spaceAdapter)
-	app.WorkspaceSvc = core.NewWorkspaceService(
-		workspacestore.New(workspacestore.WithMutationAuthorization(app.authorizeMutation)))
+	if bindings.Compose != nil {
+		services := bindings.Compose(app.authorizeMutation)
+		app.ConfigSvc, app.SpaceSvc = services.Configuration, services.Spaces
+		app.SpaceOverviewSvc, app.WorkspaceSvc = services.Overview, services.Workspaces
+		app.openPlanning = services.OpenPlanning
+	}
 
 	root := &cobra.Command{
 		Use:               "tskflwctl",
@@ -293,7 +295,7 @@ func newRootCmd(in io.Reader, out, errOut io.Writer) (*cobra.Command, *App) {
 	root.PersistentFlags().BoolVar(&app.DryRun, "dry-run", false, "preview the mutation without writing (validation still runs)")
 	root.PersistentFlags().StringVarP(&app.Chdir, "chdir", "C", "", "anchor to the planning repo at this path (conflicts with --space)")
 	root.PersistentFlags().StringVar(&app.Space, "space", "", "select a registered entry point by label (also TSKFLW_SPACE; conflicts with -C)")
-	_ = root.RegisterFlagCompletionFunc("space", completeSpaceIDs(spaceSvc))
+	_ = root.RegisterFlagCompletionFunc("space", completeSpaceIDs(app.SpaceSvc))
 	root.PersistentFlags().StringVar(&app.Color, "color", "auto", "colorize output: auto|always|never")
 	root.PersistentFlags().BoolVar(&app.NoColor, "no-color", false, "disable colored output (alias for --color=never)")
 	root.PersistentFlags().BoolVar(&app.NoInput, "no-input", false, "never prompt; missing required input is an error (for scripts/agents; also TSKFLW_NO_INPUT)")
@@ -411,6 +413,9 @@ func (a *App) wantsSpace() bool {
 // wrong-repo guard, so a missing, unreadable, or identity-mismatched target must fail
 // loudly and can never fall back to cwd discovery.
 func (a *App) registeredSpaceStart(id string) (string, error) {
+	if a.SpaceSvc == nil {
+		return "", fmt.Errorf("%w: space registry is unavailable from this invocation", domain.ErrValidation)
+	}
 	entry, err := a.SpaceSvc.Resolve(id)
 	if err != nil {
 		return "", err
@@ -432,35 +437,23 @@ func (a *App) resolve() error {
 // it from startDir lets `status --all` implement its empty-registry compatibility fallback
 // without letting ambient TSKFLW_SPACE turn an all-spaces request into a named selection.
 func (a *App) resolveFrom(start string) error {
-	cfg, err := config.Discover(start)
+	if a.openPlanning == nil {
+		return fmt.Errorf("%w: planning opener is unavailable from this invocation", domain.ErrValidation)
+	}
+	opened, err := a.openPlanning(start)
 	if err != nil {
 		return err
 	}
-	a.Cfg = cfg
+	if opened.Service == nil || opened.Repository.PlanningRoot == "" {
+		return fmt.Errorf("%w: planning opener returned incomplete capabilities", domain.ErrValidation)
+	}
+	a.Cfg, a.Svc, a.Layout = &opened.Repository, opened.Service, opened.Layout
 	// The [theme].name can now participate in selection (lowest precedence, so this
 	// only changes anything when neither --theme nor TSKFLW_THEME pinned it). Re-skin
 	// the output Style + prompter so a config-selected theme takes effect.
 	a.resolveTheme()
 	a.Style = a.Style.WithPalette(a.Th.Dark)
 	a.Prompt = prompt.NewTTY(a.In, a.ErrOut, a.Th)
-	// One *FS supplies the application ports, including optional planning repair,
-	// link checking, and parse-free completion. Only watcher layout bypasses Svc.
-	discoveryStart := cfg.Dir
-	if discoveryStart == "" {
-		discoveryStart = cfg.Root
-	}
-	fs := store.NewFS(cfg.Root, store.WithPlanningIdentityReader(func() (string, string, error) {
-		fresh, err := config.Discover(discoveryStart)
-		if err != nil {
-			return "", "", err
-		}
-		return fresh.Root, fresh.ID, nil
-	}), store.WithMutationAuthorization(a.authorizeMutation))
-	a.Svc, err = core.NewService(fs)
-	if err != nil {
-		return err
-	}
-	a.Layout = fs
 	return nil
 }
 
@@ -483,7 +476,7 @@ func (a *App) warnLinks() {
 	}
 	start := a.Cfg.Dir
 	if start == "" {
-		start = a.Cfg.Root
+		start = a.Cfg.PlanningRoot
 	}
 	problems, err := a.ConfigSvc.RepositoryLinkProblems(start)
 	if err != nil {
@@ -502,11 +495,11 @@ func (a *App) warnLinks() {
 func (a *App) warnUnknownTheme() {
 	cfgName := ""
 	if a.Cfg != nil {
-		cfgName = a.Cfg.Theme.Name
+		cfgName = a.Cfg.ThemeName
 	}
 	userName := ""
 	if a.User != nil {
-		userName = a.User.Theme.Name
+		userName = a.User.ThemeName
 	}
 	name := themeName(a.Theme, os.Getenv("TSKFLW_THEME"), cfgName, userName)
 	if name == "" || strings.EqualFold(name, "auto") {
@@ -535,7 +528,7 @@ func (a *App) rel(path string) string {
 		return ""
 	}
 	if a.Cfg != nil {
-		if r, err := filepath.Rel(a.Cfg.Root, path); err == nil {
+		if r, err := filepath.Rel(a.Cfg.PlanningRoot, path); err == nil {
 			return r
 		}
 	}

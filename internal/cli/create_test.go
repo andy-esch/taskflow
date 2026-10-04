@@ -123,7 +123,7 @@ func TestTaskNew_ActiveRequiresDescription(t *testing.T) {
 	mustWrite(t, filepath.Join(root, "epics", "01-e1.md"), "---\nstatus: active\n---\n")
 	for _, flag := range []string{"--next", "--start"} {
 		var out bytes.Buffer
-		cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+		cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 		cmd.SetArgs([]string{"-C", root, "task", "new", "X", "--epic", "01-e1", "--tags", "t", flag})
 		if err := cmd.Execute(); err == nil || ExitCode(err) != 11 {
 			t.Errorf("%s without --description should exit 11, got %v", flag, err)
@@ -183,7 +183,7 @@ func TestTaskNew_BodyFileStdin(t *testing.T) {
 	root := freshRepo(t)
 	mustWrite(t, filepath.Join(root, "epics", "01-e1.md"), "---\nstatus: active\n---\n")
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetIn(strings.NewReader("\n# Piped\n\nfrom stdin\n"))
 	cmd.SetArgs([]string{"-C", root, "task", "new", "Piped Body", "--epic", "01-e1", "--tags", "x", "--body-file", "-"})
 	if err := cmd.Execute(); err != nil {
@@ -206,7 +206,7 @@ func TestTaskNew_MutuallyExclusiveFlags(t *testing.T) {
 		{"--body", "x", "--body-file", "-"},
 	} {
 		var out bytes.Buffer
-		cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+		cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 		cmd.SetArgs(append([]string{"-C", root, "task", "new", "X", "--epic", "01-e1", "--tags", "x"}, extra...))
 		if err := cmd.Execute(); err == nil {
 			t.Errorf("expected a flag-conflict error for %v", extra)
@@ -217,7 +217,7 @@ func TestTaskNew_MutuallyExclusiveFlags(t *testing.T) {
 func TestTaskNew_UnknownEpic_Exit11(t *testing.T) {
 	root := freshRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "new", "X", "--epic", "nope"})
 	err := cmd.Execute()
 	if err == nil {
@@ -344,7 +344,7 @@ func TestEpicNew_Body(t *testing.T) {
 func TestEpicNew_BodyFileStdin(t *testing.T) {
 	root := freshRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetIn(strings.NewReader("\n# Piped\n\nepic from stdin\n"))
 	cmd.SetArgs([]string{"-C", root, "epic", "new", "Streamed", "--description", "d", "--body-file", "-"})
 	if err := cmd.Execute(); err != nil {
@@ -398,7 +398,7 @@ func TestAuditNew_JSONEnvelope(t *testing.T) {
 func TestAuditNew_BadDate_Exit11(t *testing.T) {
 	root := freshRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "audit", "new", "x", "--date", "06-16-2026"})
 	if err := cmd.Execute(); err == nil || ExitCode(err) != 11 {
 		t.Errorf("a malformed date should exit 11 (validation), got %v", err)
@@ -408,7 +408,7 @@ func TestAuditNew_BadDate_Exit11(t *testing.T) {
 func TestEpicNew_RequiresDescription(t *testing.T) {
 	root := freshRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "epic", "new", "X"})
 	if err := cmd.Execute(); err == nil {
 		t.Fatal("expected error when --description is missing")

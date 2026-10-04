@@ -18,7 +18,7 @@ import (
 
 func TestCommandSafetySurfaceCoversEveryRunnableCommand(t *testing.T) {
 	var output bytes.Buffer
-	root := NewRootCmd(strings.NewReader(""), &output, &output)
+	root := newTestRootCmd(strings.NewReader(""), &output, &output)
 	commands, err := commandSafetySurface(root)
 	if err != nil {
 		t.Fatal(err)
@@ -117,7 +117,7 @@ func TestReadOnlyCommandCannotReachAnyMutatingApplicationBoundary(t *testing.T) 
 					t.Fatal(err)
 				}
 				var out bytes.Buffer
-				root, app := newRootCmd(strings.NewReader(""), &out, &out)
+				root, app := newTestRootCmdWithApp(strings.NewReader(""), &out, &out)
 				root.AddCommand(&cobra.Command{
 					Use:         "safety-probe",
 					Hidden:      true,
@@ -164,7 +164,7 @@ func TestDirectWriteCommandsRejectReadOnlyClassification(t *testing.T) {
 		t.Setenv(userconfig.DirEnv, t.TempDir())
 		target := filepath.Join(t.TempDir(), "new-repo")
 		var out bytes.Buffer
-		root := NewRootCmd(strings.NewReader(""), &out, &out)
+		root := newTestRootCmd(strings.NewReader(""), &out, &out)
 		cmd, _, err := root.Find([]string{"init"})
 		if err != nil {
 			t.Fatal(err)
@@ -190,7 +190,7 @@ func TestDirectWriteCommandsRejectReadOnlyClassification(t *testing.T) {
 			mustWrite(t, manifestPath, "thread:\n  title: Safety probe\n  description: Verify command authorization\n  goal: Reject read-only composition\nnodes:\n  - key: member\n    task_id: "+taskID+"\n")
 
 			var out bytes.Buffer
-			root := NewRootCmd(strings.NewReader(""), &out, &out)
+			root := newTestRootCmd(strings.NewReader(""), &out, &out)
 			cmd, _, err := root.Find([]string{"thread", "compose"})
 			if err != nil {
 				t.Fatal(err)
@@ -227,7 +227,7 @@ func TestCustomPreRunsBindSelectedCommandSafety(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var out bytes.Buffer
-			root, app := newRootCmd(strings.NewReader(""), &out, &out)
+			root, app := newTestRootCmdWithApp(strings.NewReader(""), &out, &out)
 			root.SetArgs(tc.args)
 			_ = root.Execute() // command outcome is unrelated; its pre-run must have bound.
 			if app.commandSafety.path != tc.path || !recognizedCommandSafety(app.commandSafety.safety) {

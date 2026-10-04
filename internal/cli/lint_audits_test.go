@@ -23,7 +23,7 @@ func TestLintFoldsAuditFindingIssues(t *testing.T) {
 	testutil.Write(t, p, content)
 
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "lint"})
 	if err := cmd.Execute(); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("top-level lint must flag an audit finding defect (exit 11), got %v", err)
@@ -59,7 +59,7 @@ func TestLintFoldsAuditFrontmatterIssues(t *testing.T) {
 	testutil.Write(t, p, content)
 
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "lint"})
 	if err := cmd.Execute(); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("top-level lint must flag an audit frontmatter defect, got %v", err)

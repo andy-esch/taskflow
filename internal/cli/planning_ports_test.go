@@ -74,7 +74,7 @@ func TestCLICompletionUsesInjectedApplicationForEveryEntity(t *testing.T) {
 			fake := &cliPlanningStub{witness: core.NewSourceSetID()}
 			svc := core.MustNewService(nil, core.WithCompletionSource(fake))
 			var stdout, stderr bytes.Buffer
-			cmd, app := newRootCmd(strings.NewReader(""), &stdout, &stderr)
+			cmd, app := newTestRootCmdWithApp(strings.NewReader(""), &stdout, &stderr)
 			compositions := 0
 			app.CompletionService = func() (*core.Service, error) {
 				compositions++
@@ -105,7 +105,7 @@ func TestCLICompletionFailuresStaySilentWithoutLocalFallback(t *testing.T) {
 				svc = core.MustNewService(nil, core.WithCompletionSource(fake))
 			}
 			var stdout, stderr bytes.Buffer
-			cmd, app := newRootCmd(strings.NewReader(""), &stdout, &stderr)
+			cmd, app := newTestRootCmdWithApp(strings.NewReader(""), &stdout, &stderr)
 			compositions := 0
 			app.CompletionService = func() (*core.Service, error) {
 				compositions++
@@ -141,7 +141,7 @@ func TestCLILintMaintenanceUsesPortableApplicationPorts(t *testing.T) {
 				fake.lintErr = sentinel
 			}
 			var stdout, stderr bytes.Buffer
-			cmd, app := newRootCmd(strings.NewReader(""), &stdout, &stderr)
+			cmd, app := newTestRootCmdWithApp(strings.NewReader(""), &stdout, &stderr)
 			app.Svc = core.MustNewService(fake)
 			// Test composition supplies the complete application service; no local
 			// discovery is needed or permitted by this command invocation.

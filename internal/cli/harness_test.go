@@ -46,7 +46,7 @@ func runRootStreamsIn(t *testing.T, stdin io.Reader, args ...string) (runResult,
 	stdout := io.MultiWriter(&out, &merged)
 	stderr := io.MultiWriter(&errOut, &merged)
 
-	cmd := NewRootCmd(stdin, stdout, stderr)
+	cmd := newTestRootCmd(stdin, stdout, stderr)
 	cmd.SetArgs(args)
 	cmd.SetOut(stdout)
 	cmd.SetErr(stderr)

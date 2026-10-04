@@ -67,7 +67,8 @@ whose remedy changes a boundary rather than one feature's behavior.
 - Building speculative web/atlas interfaces before their primary adapter is committed.
 - Folding repo-scoped configuration and home-scoped registry state into one abstraction
   merely because both persist TOML.
-- Treating every direct filesystem/process import as a violation: the composition root,
-  test fixtures, terminal clipboard/editor helpers, and narrow `Fixer`/`Linter`/`Layout`
-  ports are intentional exceptions documented in `docs/ARCHITECTURE.md`.
+- Treating every direct filesystem/process import as a violation: binary composition,
+  test fixtures, terminal clipboard/editor helpers, local watcher `Layout`, and named
+  init/checkout topology edges are intentional boundaries documented in `docs/ARCHITECTURE.md`.
+  Repair/link checks/completion are application use cases, not controller bypass exceptions.
 - Absorbing product behavior into this epic when a feature or data-model epic owns it.

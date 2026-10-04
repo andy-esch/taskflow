@@ -8,8 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/andy-esch/taskflow/internal/config"
-	"github.com/andy-esch/taskflow/internal/userconfig"
+	"github.com/andy-esch/taskflow/internal/core"
 )
 
 func boolp(b bool) *bool { return &b }
@@ -64,8 +63,8 @@ func TestPagerActive_GateAlwaysWins(t *testing.T) {
 }
 
 func TestPagerWanted(t *testing.T) {
-	cfg := func(enabled *bool) *config.Config {
-		return &config.Config{Pager: config.PagerConfig{Enabled: enabled}}
+	cfg := func(enabled *bool) *core.RepositoryConfiguration {
+		return &core.RepositoryConfiguration{PagerEnabled: enabled}
 	}
 	for _, tc := range []struct {
 		name string
@@ -142,8 +141,8 @@ func TestPipeToPager_StdoutReachesOut(t *testing.T) {
 }
 
 func TestPagerProgram(t *testing.T) {
-	cfgCmd := func(cmd string) *config.Config {
-		return &config.Config{Pager: config.PagerConfig{Command: cmd}}
+	cfgCmd := func(cmd string) *core.RepositoryConfiguration {
+		return &core.RepositoryConfiguration{PagerCommand: cmd}
 	}
 	t.Run("default less -FRX", func(t *testing.T) {
 		t.Setenv("TSKFLW_PAGER", "")
@@ -176,7 +175,7 @@ func TestPagerProgram(t *testing.T) {
 	t.Run("home [pager].command over $PAGER", func(t *testing.T) {
 		t.Setenv("TSKFLW_PAGER", "")
 		t.Setenv("PAGER", "more")
-		app := &App{User: &userconfig.Config{Pager: userconfig.PagerConfig{Command: "bat"}}}
+		app := &App{User: &core.UserConfiguration{PagerCommand: "bat"}}
 		if got := app.pagerProgram(); got != "bat" {
 			t.Errorf("= %q, want %q", got, "bat")
 		}
@@ -184,7 +183,7 @@ func TestPagerProgram(t *testing.T) {
 	t.Run("repo [pager].command over home", func(t *testing.T) {
 		t.Setenv("TSKFLW_PAGER", "")
 		t.Setenv("PAGER", "")
-		app := &App{Cfg: cfgCmd("bat"), User: &userconfig.Config{Pager: userconfig.PagerConfig{Command: "delta"}}}
+		app := &App{Cfg: cfgCmd("bat"), User: &core.UserConfiguration{PagerCommand: "delta"}}
 		if got := app.pagerProgram(); got != "bat" {
 			t.Errorf("= %q, want %q", got, "bat")
 		}
@@ -196,9 +195,9 @@ func TestPagerProgram(t *testing.T) {
 // Enabled is a *bool at both tiers.
 func TestPagerWanted_Tiers(t *testing.T) {
 	yes, no := true, false
-	repo := func(b *bool) *config.Config { return &config.Config{Pager: config.PagerConfig{Enabled: b}} }
-	home := func(b *bool) *userconfig.Config {
-		return &userconfig.Config{Pager: userconfig.PagerConfig{Enabled: b}}
+	repo := func(b *bool) *core.RepositoryConfiguration { return &core.RepositoryConfiguration{PagerEnabled: b} }
+	home := func(b *bool) *core.UserConfiguration {
+		return &core.UserConfiguration{PagerEnabled: b}
 	}
 	cases := []struct {
 		name string
