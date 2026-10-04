@@ -3,7 +3,7 @@
 A local-first planning CLI over markdown+frontmatter. Design rationale lives in
 [`planning/research/`](../planning/research/) (`tskflwctl research list` to browse)
 and [`planning/epics/17-pm-go-cli.md`](../planning/epics/17-pm-go-cli.md); this is
-the one-screen orientation for contributors.
+the architecture reference for contributors, starting with the package map below.
 
 ## The rule: CLI/TUI are primary adapters over a shared core; the filesystem is a secondary adapter
 
@@ -17,9 +17,9 @@ the one-screen orientation for contributors.
 
 ## Current package map and dependency direction
 
-Reviewed against the production import graph on 2026-08-22 (`go list` over
-`./internal/...`). The diagram above is the rule of thumb; these are the actual
-packages that implement it:
+The diagram above is the rule of thumb; these packages implement it. The adapter
+edges below are maintained manually; [the import-graph task](../planning/tasks/6g63hjm7cp6w-test-the-documented-import-graph-instead-of-date-stamping-a-manual-review.md)
+will make documentation drift executable after the guide is restructured.
 
 | Role | Packages | Current inward dependencies |
 | --- | --- | --- |
@@ -27,8 +27,10 @@ packages that implement it:
 | Domain | `internal/domain` | `internal/id` |
 | Application | `internal/core` | `internal/domain`, `internal/id` |
 | Neutral machine contract | `internal/wire` | `internal/core`, `internal/domain` |
-| Planning/config secondary adapters | `internal/store`, `internal/config`, `internal/userconfig`, `internal/spacehealth`, `internal/configstore`, `internal/spacestore` | Consumer-owned `core` ports and/or the narrower domain/config adapters they compose |
-| Primary adapters | `internal/cli`, `internal/tui`, `internal/configui` | `core`/`domain` values, `wire`, and presentation utilities; only the CLI composition root constructs secondary adapters |
+| Planning/config secondary adapters | `internal/store`, `internal/config`, `internal/userconfig`, `internal/spacehealth`, `internal/configstore`, `internal/spacestore`, `internal/workspacestore` | Consumer-owned `core` ports and/or the narrower domain/config adapters they compose |
+| Primary adapters | `internal/cli`, `internal/tui`, `internal/configui` | Application values/ports, neutral contracts, and presentation utilities; no persistence construction |
+| Invocation contracts | `internal/cli/ports` | `core` and `design`; explicit wiring/launch requests, no framework or concrete adapter types |
+| Binary composition | `internal/appwiring`, selected by `cmd/tskflwctl` | Concrete adapters and UI launchers, injected into the CLI's invocation contracts |
 | Presentation utilities | `internal/theme`, `internal/design`, `internal/progressbar`, `internal/themepreview`, `internal/cli/render`, `internal/cli/prompt` | Semantic values and UI libraries, never planning/config persistence |
 | Test/tool support | `internal/testutil`, `internal/tools/*` | Concrete dependencies appropriate to a test fixture or one-off executable; not runtime layers |
 
@@ -44,16 +46,21 @@ userconfig  -> tomledit
 spacehealth -> config, domain, userconfig
 configstore -> core, config, userconfig
 spacestore  -> config, core, domain, spacehealth, store, userconfig
+workspacestore -> config, core, store
 configui    -> core + presentation utilities
 tui         -> core, domain, configui + presentation/process utilities
 cli/render  -> core, domain, wire + presentation utilities
-cli         -> composition of the application, primary adapters, and secondary adapters
+cli/ports   -> core, design
+cli         -> cli/ports, core, domain, wire + presentation/process utilities
+               config only in init.go and workspace.go (named local exceptions)
+appwiring   -> cli/ports, core, design, config, configstore, spacestore, store,
+               userconfig, workspacestore, tui, configui
 ```
 
 ### Enforced fitness rules
 
 `.golangci.yml` makes the stable part of that direction executable for production
-files:
+files, including future subpackages:
 
 - `internal/domain` may import only `internal/id` from this repository.
 - `internal/core` may import only `internal/domain` and `internal/id` from this
@@ -61,10 +68,20 @@ files:
   implements them without becoming a core dependency.
 - `internal/wire` may import only `internal/core` and `internal/domain`, keeping the
   machine contract neutral rather than tied to Cobra, Bubble Tea, or filesystem TOML.
-- `internal/tui`, `internal/configui`, `internal/cli/render`, and
-  `internal/cli/prompt` cannot import the planning/config secondary adapters or sibling
-  primary adapters. The one deliberate primary-adapter composition is the full TUI
-  embedding the focused `configui` model.
+- CLI controllers and `internal/tui`, `internal/configui`, `internal/cli/render`, and
+  `internal/cli/prompt` deny repository-internal imports by default, with exact allowances
+  for their application/neutral-contract and presentation dependencies. A new adapter or
+  a child of an allowed package does not silently become permitted.
+- The full TUI deliberately embeds `configui`; CLI controllers instead inject launch
+  requests. Only `init.go` and `workspace.go` may import `config` directly for the local
+  exceptions below. Neither file is exempt from the remaining controller rule.
+- CLI controllers, including both local exceptions, cannot import Bubble Tea directly.
+- `internal/cli/ports` allows only the standard library, `core`, and `design`; external
+  framework types cannot leak into invocation contracts.
+- Local startup discovery and preference readers are selected in
+  `appwiring/local_sources.go`; other production composition files cannot import
+  `config` or `userconfig` directly. Per-binding reader observation tests exercise
+  real composition, without mutable globals or replacing the persistence adapters.
 - `internal/config` cannot import home-scoped `internal/userconfig`; cwd discovery
   remains independent of a user's registry and preferences.
 
@@ -72,30 +89,40 @@ Tests are excluded from the production adapter rule because UI integration tests
 deliberately construct `store.FS` instances under `t.TempDir()`. That is test
 composition, not runtime dependency direction.
 
-### Composition-root exception and current direct adapter imports
+### Explicit composition and named local exceptions
 
-`internal/cli/*.go` is deliberately not constrained like its `render` and `prompt`
-subpackages. It is today's composition root: `NewRootCmd` constructs
-`configstore.FS`/`spacestore.FS`/`workspacestore.FS`, repo resolution constructs `store.FS`, and the `ui`
-commands launch `tui`/`configui`. Forbidding those imports would move wiring without
-improving the boundary.
+`cmd/tskflwctl` selects `appwiring.LocalBindings()` and passes them to `cli.NewRootCmd`.
+Each command tree gets fresh repo-independent services carrying its own mutation authorizer.
+Planning discovery remains lazy and happens after target flags are parsed; completion defers
+it further until Cobra has parsed the command being completed. The wiring package preserves
+the ordinary opener's identity revalidation, checked source set, and local watcher layout.
 
-The direct primary-to-secondary edges, updated after the portable entity and CLI
-planning-data migrations, are classified as follows:
+`cli/ports` owns the invocation bundle and framework-free UI launch requests. There are no
+global defaults or local-adapter fallbacks in controllers. Startup identity/theme/pager values
+use neutral configuration models, not filesystem config types. Help chrome receives explicit
+presentation readers; generators pass empty bindings to build metadata without discovery.
+Missing operational services fail explicitly. UI startup requires configuration, registry,
+workspace, and overview services on both the repository and atlas landing routes: either
+route exposes atlas navigation and the shared configuration editor. Integration tests
+select real local wiring, while focused tests inject portable capabilities.
+
+The retained edges are classified as follows:
 
 | Edge | Classification | Disposition |
 | --- | --- | --- |
-| `cli -> configstore`, `cli -> spacestore`, `cli -> workspacestore`, `cli -> store` construction | Composition root | Intentional; secondary adapters are injected into consumer-owned core ports. |
+| `appwiring -> configstore`, `spacestore`, `workspacestore`, `store` construction | Binary composition | Selected by the binary, never imported by controllers. Every persistence family receives the invocation's authorizer. |
 | `cli -> core.Service` for repair, body-link lint, and entity completion | Application use cases | `RepairPlanning`, `LintWithLinks`, and `CompleteEntities` own orchestration; optional secondary capabilities are source-set checked. Controllers never construct a fallback store. |
 | CLI/TUI watcher access through `Layout` | Explicit local capability | Intentional: watcher directories are process integration, not semantic entity data. |
-| `cli -> config` for discovery/init/maintenance | Adapter orchestration | Atlas workspace opening now uses `core.WorkspaceService`; `ui` additionally reads `config.ErrNoConfig` to tell an ordinary discovery miss from a broken config. The deferred [`reusable-workspace-discovery-seam`](../planning/tasks/6fgcr2403sjn-reusable-workspace-discovery-seam-lift-init-doctor-fix-off-the-cli.md) retains only init/doctor/fix work that still lacks another consumer. |
-| `cli -> userconfig` for initial presentation-preference loading | Adapter orchestration | Intentional today; registry catalog, selection, mutations, completion, and diagnosis all use `core.SpaceRegistryService`. |
+| `cli/init.go -> config` | Local topology scaffold | Init can create a repository before a planning service exists; its classified mutation guard remains explicit. Broader maintenance extraction retains its second-consumer trigger. |
+| `cli/workspace.go -> config` | Local checkout receipt | Checkout provenance uses `DescribeCheckout`/`ConfigFile`, not planning-data reads or persistence construction. |
+| `appwiring -> config`, `userconfig` | Local discovery/presentation composition | CLI home preferences and missing-planning classification are injected; registry/configuration use cases still use their application services. |
+| `appwiring -> tui`, `configui` | Framework launch composition | Controllers own command gates and launch requests, not Bubble Tea construction/options. |
 | `tui -> configui` | Focused primary-adapter composition | Intentional: the full TUI embeds the same configuration editor launched by `config edit`. |
 | `tui -> editor` / `os/exec` | Narrow process/terminal capability | Intentional; planning data still flows only through `core.Service`. |
 
-The remaining broad CLI composition exception is tracked by
-[controller-boundary enforcement](../planning/tasks/6gcwcf8rxe72-isolate-cli-composition-wiring-and-enforce-controller-boundaries.md);
-the reusable-workspace task retains its separately triggered init/doctor scope.
+The [composition task](../planning/tasks/6gcwcf8rxe72-isolate-cli-composition-wiring-and-enforce-controller-boundaries.md)
+records implementation and mutation-probe evidence. A [proposed dependency-policy ADR](../planning/tasks/6gg7e59mm68g-record-the-hexagonal-dependency-policy-and-composition-exceptions-in-an-adr.md)
+will give these decisions a durable authority without duplicating the current map.
 
 - **`internal/domain`** — entities + invariants (`Task`, `Status`). No fs, no
   Cobra logic, local paths, filename identities, or guarded revisions. Application
@@ -488,8 +515,10 @@ the reusable-workspace task retains its separately triggered init/doctor scope.
   `safety` annotation (`read-only` or `mutating`). Persistent pre-run binds that
   capability before discovery, and the filesystem/config/space/workspace
   secondary adapters receive a framework-neutral authorization callback that rejects a mutation path
-  reached by a read-only command. The callback is optional outside this composition
-  root, so core and reusable adapters do not depend on Cobra. `schema --json` publishes
+  reached by a read-only command. `appwiring` always installs it. Adapter constructors
+  still permit omission outside that composition; [explicit-policy hardening](../planning/tasks/6gg7e59cyxxh-require-an-explicit-mutation-authorization-policy-at-persistence-composition.md)
+  tracks that separate compatibility decision. Neither core nor the adapters depend on Cobra.
+  `schema --json` publishes
   the same complete runnable surface; coverage tests include hidden, deprecated, and
   framework-generated commands. Safety describes whether a command *can* mutate, not
   whether one invocation will: `--dry-run` remains a global preview input whose support
@@ -579,16 +608,21 @@ the reusable-workspace task retains its separately triggered init/doctor scope.
 - **`internal/workspacestore`** — the filesystem secondary adapter for
   `core.WorkspaceStore`. It translates one explicit local start directory through
   repo-scoped `config.Discover`, constructs the concrete Markdown store once, and exposes
-  it as separate entity and watcher-layout capabilities. The CLI composition root carries
+  it as separate entity and watcher-layout capabilities. `appwiring` carries
   the invocation mutation authorizer through this boundary, so stores opened later from
   the atlas cannot bypass command safety. The TUI receives only the resulting
   `core.WorkspaceService`; it does not import discovery or filesystem packages.
-- **`cmd/tskflwctl`** — thin entrypoint; the command tree and DI wiring live in
-  `internal/cli` (`root.go`), which it calls.
+  [Thread-apply identity-reader parity](../planning/tasks/6gg7e594gcms-preserve-planning-identity-revalidation-in-workspace-opened-thread-apply.md)
+  remains a separate fail-closed capability gap; ordinary CLI opening already revalidates identity.
+- **`internal/appwiring`** — local-adapter composition and framework launching, selected by
+  the binary. It implements the invocation contracts in `internal/cli/ports`; importing it
+  from a production controller is a lint failure.
+- **`cmd/tskflwctl`** — thin entrypoint; selects local bindings, passes them to the
+  command tree in `internal/cli`, and supplies the same presentation readers to chrome.
 
 ## Non-negotiable patterns
-- **DI via one `*cli.App`**, populated in root `PersistentPreRunE` (the lazy
-  shell — deps depend on flags). **No package globals**, **no `cmd.Context()`
+- **DI via one `*cli.App`** per command tree: explicit repo-independent composition,
+  then lazy planning opening after target flags. **No package globals**, **no `cmd.Context()`
   for DI**.
 - **All output through injected `io.Writer`** (never `fmt.Println`) → commands
   are testable in-process (see `internal/cli/task_test.go`).
