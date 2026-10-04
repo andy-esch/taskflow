@@ -350,6 +350,11 @@ will give these decisions a durable authority without duplicating the current ma
   neutral problem deliberately: human output leads with identity, while schema 1.73 keeps the
   historical machine `path` field for compatibility and adds kind, identity, and location. A
   pathless adapter leaves `path` empty instead of labelling a URI as a filesystem path.
+  The task/Thread cross-kind collision check also consumes explicit, well-formed IDs recovered
+  on unreadable records. It reports each owning occurrence without discarding its load error;
+  unreadable identity ownership does not establish valid Thread membership. Within-kind duplicate
+  and cross-kind collision issues share one result for a malformed Thread occurrence. Readable
+  source/frontmatter drift checks and create-time namespace guards retain their existing policy.
   Audit reads shared by lint and finding queries are factored further into
   `AuditSnapshotSource`: an empty selector returns one resilient body-aware scan, while a selector
   returns one ordinarily resolved audit. Metadata, parsed findings, and unreadable-record evidence

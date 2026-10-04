@@ -60,8 +60,10 @@ type VersionedRecord[T any] struct {
 }
 
 // LoadProblem is one non-fatal failed-record diagnostic. Stable identity is
-// explicit when the adapter can recover it. Location is optional opaque context;
-// LocalPath is an independently optional repair handle for local adapters.
+// explicit only when the adapter can safely recover canonical source identity;
+// an untrusted frontmatter declaration is not recovered identity. Location is
+// optional opaque context; LocalPath is an independently optional repair handle
+// for local adapters.
 type LoadProblem struct {
 	EntityKind EntityKind
 	EntityID   string

@@ -32,8 +32,9 @@ receipts and ordinary-create recovery no longer depend on domain paths. TUI iden
 readable occurrence locations have shipped, and semantic entity values no longer carry local paths,
 filename identities, or guarded revisions. CLI repair, body-link checking, and completion have
 merged in PR #275. Concrete composition isolation and executable controller enforcement merged
-in PR #277. The remaining work is bounded to two persistence-composition followups, one existing
-identity-lint gap, core-owned impact/recovery semantics, and a final guarded-contract regression pass.
+in PR #277; workspace identity parity merged in PR #279. The remaining work is bounded to explicit
+persistence authorization, the locally implemented identity-lint fix's integration, core-owned
+impact/recovery semantics, and a final guarded-contract regression pass.
 
 This Thread closes those seams in evidence-driven stages:
 
@@ -61,14 +62,16 @@ This Thread closes those seams in evidence-driven stages:
 9. Finish four independent implementation slices over the settled boundary:
 
    - [Workspace Thread-apply identity parity](../tasks/6gg7e594gcms-preserve-planning-identity-revalidation-in-workspace-opened-thread-apply.md),
-     including direct/pointer roots and identity replacement. **In progress:** implementation and
-     both reviews reconciled locally. The Codex test-gap finding now has hostile initial-repoint
-     coverage plus an executable direct-discovery guard; integration remains. The pre-existing
+     including direct/pointer roots and identity replacement. **Completed, merged in PR #279:**
+     both reviews reconciled. The Codex test-gap finding now has hostile initial-repoint
+     coverage plus an executable direct-discovery guard. The pre-existing
      markerless recovery hint is tracked separately, not added as a refactor closure blocker.
    - [Explicit persistence authorization](../tasks/6gg7e59cyxxh-require-an-explicit-mutation-authorization-policy-at-persistence-composition.md),
      retaining its user checkpoint before choosing constructor compatibility and opt-out policy.
    - [Cross-kind collision lint on unreadable records](../tasks/6gcqz5aefjjf-lint-cross-kind-task-and-thread-id-collisions-on-unreadable-records.md),
-     reusing portable diagnostic identity rather than discovering IDs from paths.
+     **In progress, implemented locally:** portable recovered identity now participates in lint,
+     including both unreadable owners. Membership validity and creation policy are unchanged;
+     core/CLI regressions and four restored owner mutation probes pass. Integration remains.
    - [Core-owned dependency impact and recovery semantics](../tasks/6ggdkztshmzz-make-dependency-impact-and-recovery-semantics-core-owned.md),
      folding adapter-hygiene M1/L1 without changing graph eligibility.
 
@@ -103,9 +106,10 @@ identity, an optional source location, or an explicit local capability is the ho
 ## Scope boundary and bookkeeping (2026-10-04)
 
 This Thread has a finish line, not a mandate to absorb every architecture audit. The two new tasks
-above and the existing collision-lint task are members of this graph. Composition is completed;
-the five remaining tasks are not. Older loaded-record TUI reviews are closed because their recorded
-findings were fixed (or absent), not because a new review was performed today.
+above and the existing collision-lint task are members of this graph. Composition and workspace
+parity are completed in PRs #277 and #279; four tasks remain. Older loaded-record TUI reviews are
+closed because their recorded findings were fixed (or absent), not because a new review was
+performed today.
 
 The proposed dependency-policy ADR remains in the
 [documentation Thread](6g9czp7g9pt3-make-documentation-layered-executable-and-agent-navigable.md),

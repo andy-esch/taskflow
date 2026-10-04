@@ -2,9 +2,11 @@ package core
 
 import (
 	"cmp"
+	"fmt"
 	"slices"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/id"
 )
 
 // LintSource is the consumer-owned read port for repository lint. Each method
@@ -16,6 +18,24 @@ type LintSource interface {
 	ReadLintTasks() ([]LoadedRecord[TaskWithBody], []LoadProblem, error)
 	ReadLintEpics() ([]LoadedRecord[domain.Epic], []LoadProblem, error)
 	ReadLintResearch() ([]LoadedRecord[domain.Research], []LoadProblem, error)
+}
+
+func crossKindIdentityIssue(stableID, otherKind string) domain.Issue {
+	return domain.Issue{Field: "id", Message: fmt.Sprintf(
+		"stable id %s is also used by a %s — task and Thread identities must be globally unique", stableID, otherKind)}
+}
+
+// Only explicit, well-formed recovered IDs are collision evidence. The adapter
+// owns recovery/trust; locations, repair paths, slugs, and messages are never
+// parsed here. Preserve existing readable-record policy separately.
+func recoveredCrossKindIDIssues(problems []LoadProblem, otherIdentities map[string]bool, otherKind string) map[string]domain.Issue {
+	issues := make(map[string]domain.Issue)
+	for _, problem := range problems {
+		if id.Valid(problem.EntityID) && otherIdentities[problem.EntityID] {
+			issues[problem.EntityID] = crossKindIdentityIssue(problem.EntityID, otherKind)
+		}
+	}
+	return issues
 }
 
 func loadProblemLabel(problem LoadProblem) string {
