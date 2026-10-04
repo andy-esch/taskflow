@@ -4,7 +4,7 @@ id: 6gch6xep2mh2
 bucket: closed
 area: correctness-and-errors
 date: "2026-09-22"
-updated_at: "2026-09-22"
+updated_at: "2026-10-04"
 ---
 
 # Audit: correctness-and-errors — 2026-09-22
@@ -28,7 +28,7 @@ updated_at: "2026-09-22"
 **Resolution:** <how it was resolved — written by `audit finding --note`, not by hand>
 ```
 
-#### M1. Cross-kind task/Thread id-collision lint is blind to unreadable records · **Status:** tracked by 6gcqz5aefjjf
+#### M1. Cross-kind task/Thread id-collision lint is blind to unreadable records · **Status:** fixed locally (2026-10-04)
 
 **File:** internal/core/service.go:496-518 | **Component:** core/lint
 **Effort:** S · **Urgency:** eventually
@@ -61,9 +61,13 @@ on disk, and it is the surface with the hole.
 
 **Recommendation:** Seed threadIdentity from threadRead.Problems[].ThreadID and taskIdentity from the task FileProblems' EntityID, exactly as threadIDSources already does, so the collision check sees recovered identity.
 
-**Resolution:** Tracked as a focused lint-rule repair after adapter-neutral load
-diagnostics; regression coverage includes both readable/unreadable directions
-and safe recovered identities.
+**Resolution:** Implemented in 6gcqz5aefjjf: repository lint consumes explicit,
+strictly valid recovered task/Thread IDs and reports every readable/unreadable
+owner while preserving load errors. Core and real CLI regressions cover both
+directions, both unreadable, invalid/untrusted IDs, source drift, combined
+duplicate issues, and deterministic human/JSON output. Membership validity and
+create guards remain unchanged; four restored owner mutation probes and full
+tests/race/lint/build/docs checks pass. Integration is pending.
 
 #### L1. blockerReason's default arm mislabels a future status AND truncates the frontier · **Status:** tracked by 6gcqz5aqt2sg
 
@@ -214,6 +218,6 @@ L1/L2 class rather than adding new defects.
 <!-- candidate-tasks:v1 · ○ open · ● in-progress · ✔ fixed · → tracked · ◌ deferred · ◌ superseded · ✘ wontfix -->
 <!-- Add or replace one row with `tskflwctl audit finding <audit> <code> --candidate "<one line>"`; an empty value removes it. -->
 
-- → M1 · tracked — Tracked by 6gcqz5aefjjf — retain cross-kind collisions for unreadable records
+- ✔ M1 · fixed — Retain unreadable task/Thread collision identity — implemented locally in 6gcqz5aefjjf
 - → L1 · tracked — Tracked by 6gcqz5aqt2sg — make closed-vocabulary switches total
 - → L2 · tracked — Tracked by 6gcqz5aqt2sg — fail closed and enforce exhaustive switches

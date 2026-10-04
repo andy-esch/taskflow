@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gg7e594gcms
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Restore guarded Thread apply parity between ordinary and workspace-opened planning services.
 effort: 4-8 hours
@@ -13,6 +13,7 @@ created: "2026-10-03"
 updated_at: "2026-10-04"
 depends_on: [6gcwcf8rxe72]
 started_at: "2026-10-04"
+completed_at: "2026-10-04"
 ---
 ## Objective
 
@@ -109,10 +110,10 @@ focused tests passed. These are owner probes, not independent review results or 
 
 `just build`, `go test ./...`, `go test -race -count=1 ./...`, `just lint`, and
 `just docs-check` pass (temporary Go/lint caches). Planning/audit lint and the Thread frontier are
-checked at handoff. Local implementation criteria are met, but lifecycle remains **in-progress**
-pending merge. Implementation, regression tests, and architecture documentation are committed in
-`8edd869`; both external reviews are reconciled below. No merge, release inclusion, TUI Thread-apply
-UX, or public-constructor authorization policy is claimed here.
+checked at handoff. All implementation criteria are met; PR #279 is merged and the task is
+**completed**. Implementation, regression tests, and architecture documentation are committed in
+`8edd869`; both external reviews are reconciled below. Release inclusion, TUI Thread-apply UX,
+and public-constructor authorization policy are not claimed here.
 
 ## External review handoff
 
@@ -158,4 +159,4 @@ in the CLI-contract Thread. It does not extend this refactor's closure prerequis
 invented lock-file reference was corrected to the actual Darwin root-directory flock.
 
 After reconciliation, full uncached race tests, lint, build, and generated-doc checks pass. Both
-audits are settled locally; this task remains in-progress awaiting integration, not merge/release.
+audits are settled. PR #279 integrated the work; release inclusion remains a separate milestone.
