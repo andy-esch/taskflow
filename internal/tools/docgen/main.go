@@ -17,13 +17,14 @@ import (
 	"github.com/spf13/cobra/doc"
 
 	"github.com/andy-esch/taskflow/internal/cli"
+	"github.com/andy-esch/taskflow/internal/cli/ports"
 )
 
 func main() {
 	out := flag.String("out", "docs/cli", "output directory for the generated reference")
 	flag.Parse()
 
-	root := cli.NewRootCmd(os.Stdin, os.Stdout, os.Stderr)
+	root := cli.NewRootCmd(os.Stdin, os.Stdout, os.Stderr, ports.Bindings{})
 	// Reproducible output: drop cobra's "Auto generated … on <date>" footer so
 	// regeneration is a no-op unless a command/flag actually changed (the whole
 	// point of the CI drift check). DisableAutoGenTag isn't inherited, so set it

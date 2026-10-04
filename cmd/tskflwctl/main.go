@@ -13,13 +13,15 @@ import (
 	"charm.land/lipgloss/v2"
 	"golang.org/x/term"
 
+	"github.com/andy-esch/taskflow/internal/appwiring"
 	"github.com/andy-esch/taskflow/internal/cli"
 	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/theme"
 )
 
 func main() {
-	root := cli.NewRootCmd(os.Stdin, os.Stdout, os.Stderr)
+	bindings := appwiring.LocalBindings()
+	root := cli.NewRootCmd(os.Stdin, os.Stdout, os.Stderr, bindings)
 
 	// fang wraps the *human* face only. When stderr is not a TTY, or the run is
 	// --json, fall through to the original machine path verbatim — so piped/agent
@@ -33,7 +35,7 @@ func main() {
 			fang.WithoutVersion(), // keep our own version string + `version` subcommand
 			fang.WithoutManpage(), // manpages come from ./internal/tools/mangen, not the runtime
 			fang.WithColorSchemeFunc(func(ld lipgloss.LightDarkFunc) fang.ColorScheme {
-				return repoColorScheme(cli.ChromeTheme(os.Args[1:]), ld)
+				return repoColorScheme(cli.ChromeTheme(os.Args[1:], bindings), ld)
 			}),
 			fang.WithErrorHandler(fangErrorHandler),
 		)

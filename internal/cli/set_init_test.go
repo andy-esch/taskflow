@@ -214,7 +214,7 @@ func TestTaskSet_ArbitraryKeyValue(t *testing.T) {
 	// field name must not silently persist.
 	{
 		var out bytes.Buffer
-		cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+		cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 		cmd.SetArgs([]string{"-C", root, "task", "set", "alpha", "--set", "owner=me"})
 		cmd.SetOut(&out)
 		cmd.SetErr(&out)
@@ -249,7 +249,7 @@ func TestTaskSet_ArbitraryKeyValue(t *testing.T) {
 func TestTaskSet_MalformedSet_Errors(t *testing.T) {
 	root := setupRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "set", "alpha", "--set", "noequals"})
 	err := cmd.Execute()
 	if err == nil {
@@ -263,7 +263,7 @@ func TestTaskSet_MalformedSet_Errors(t *testing.T) {
 func TestTaskSet_InvalidPriority_Exit11(t *testing.T) {
 	root := setupRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "set", "alpha", "--priority", "urgent"})
 	err := cmd.Execute()
 	if err == nil {
@@ -277,7 +277,7 @@ func TestTaskSet_InvalidPriority_Exit11(t *testing.T) {
 func TestTaskSet_NoFields_Errors(t *testing.T) {
 	root := setupRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "set", "alpha"})
 	if err := cmd.Execute(); err == nil {
 		t.Fatal("expected an error when no fields are given")

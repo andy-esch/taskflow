@@ -19,6 +19,9 @@ type completeFunc = func(*cobra.Command, []string, string) ([]string, cobra.Shel
 // never turn a configuration problem into shell noise.
 func completeSpaceIDs(registry *core.SpaceRegistryService) completeFunc {
 	return func(_ *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if registry == nil {
+			return nil, cobra.ShellCompDirectiveNoFileComp
+		}
 		catalog, err := registry.Catalog()
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveNoFileComp

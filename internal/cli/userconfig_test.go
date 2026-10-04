@@ -29,14 +29,14 @@ func TestUserConfig_LoadsInSetStyle(t *testing.T) {
 	homeConfig(t, "[theme]\nname = \"neon\"\n[pager]\ncommand = \"delta\"\n")
 
 	var out bytes.Buffer
-	app := &App{Out: &out, ErrOut: &out, In: strings.NewReader("")}
+	_, app := newTestRootCmdWithApp(strings.NewReader(""), &out, &out)
 	app.setStyle()
 
 	if app.User == nil {
 		t.Fatal("setStyle must populate App.User")
 	}
-	if app.User.Theme.Name != "neon" {
-		t.Errorf("theme = %q, want neon", app.User.Theme.Name)
+	if app.User.ThemeName != "neon" {
+		t.Errorf("theme = %q, want neon", app.User.ThemeName)
 	}
 	if got := app.pagerProgram(); got != "delta" && os.Getenv("TSKFLW_PAGER") == "" {
 		t.Errorf("pagerProgram = %q, want delta from the home config", got)
@@ -51,7 +51,7 @@ func TestUserConfig_MalformedWarnsButRuns(t *testing.T) {
 	homeConfig(t, "[theme\nname = ")
 
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"version"})
 	cmd.SetOut(&out)
 	cmd.SetErr(&out)
@@ -69,7 +69,7 @@ func TestUserConfig_AbsentIsSilent(t *testing.T) {
 	t.Setenv(userconfig.DirEnv, t.TempDir()) // exists, but holds no config
 
 	var out bytes.Buffer
-	app := &App{Out: &out, ErrOut: &out, In: strings.NewReader("")}
+	_, app := newTestRootCmdWithApp(strings.NewReader(""), &out, &out)
 	app.setStyle()
 
 	if app.User == nil {
@@ -88,7 +88,7 @@ func TestUserConfig_SilentOnCompletionPath(t *testing.T) {
 	homeConfig(t, "[theme\nname = ") // malformed: would warn on a normal run
 
 	var out, errOut bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &errOut)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &errOut)
 	cmd.SetArgs([]string{"__complete", "task", ""})
 	cmd.SetOut(&out)
 	cmd.SetErr(&errOut)
@@ -120,7 +120,7 @@ func TestWarnPresentation_ReachesStyleOnlyCommands(t *testing.T) {
 	} {
 		t.Setenv(userconfig.DirEnv, dir)
 		var out, errOut bytes.Buffer
-		cmd := NewRootCmd(strings.NewReader(""), &out, &errOut)
+		cmd := newTestRootCmd(strings.NewReader(""), &out, &errOut)
 		cmd.SetArgs(args)
 		cmd.SetOut(&out)
 		cmd.SetErr(&errOut)

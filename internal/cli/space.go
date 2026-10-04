@@ -1,10 +1,13 @@
 package cli
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/cli/render"
 	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/domain"
 )
 
 // newSpaceCmd is the `space` group: the home-scoped registry of planning repos on this
@@ -42,6 +45,9 @@ func newSpaceListCmd(app *App) *cobra.Command {
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
 		RunE: func(_ *cobra.Command, _ []string) error {
+			if app.SpaceSvc == nil {
+				return fmt.Errorf("%w: space registry is unavailable from this invocation", domain.ErrValidation)
+			}
 			catalog, err := app.SpaceSvc.Catalog()
 			if err != nil {
 				return err
@@ -101,6 +107,9 @@ func newSpaceForgetCmd(app *App) *cobra.Command {
 }
 
 func runSpaceAdd(app *App, target, id string) error {
+	if app.SpaceSvc == nil {
+		return fmt.Errorf("%w: space registry is unavailable from this invocation", domain.ErrValidation)
+	}
 	mutation, err := app.SpaceSvc.Add(target, id, app.DryRun)
 	if err != nil {
 		return err
@@ -116,6 +125,9 @@ func runSpaceAdd(app *App, target, id string) error {
 }
 
 func runSpaceForget(app *App, id string) error {
+	if app.SpaceSvc == nil {
+		return fmt.Errorf("%w: space registry is unavailable from this invocation", domain.ErrValidation)
+	}
 	mutation, err := app.SpaceSvc.Forget(id, app.DryRun)
 	if err != nil {
 		return err

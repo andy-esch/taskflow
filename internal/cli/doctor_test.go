@@ -62,7 +62,7 @@ func TestAmbientLinkWarning(t *testing.T) {
 	_, impl := linkedPair(t, false) // one-sided → a warning to emit
 
 	var out, errOut bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &errOut)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &errOut)
 	cmd.SetArgs([]string{"-C", impl, "task", "list", "-q"})
 	_ = cmd.Execute()
 	if !strings.Contains(errOut.String(), "one-sided") {
@@ -74,7 +74,7 @@ func TestAmbientLinkWarning(t *testing.T) {
 
 	t.Setenv("TSKFLW_NO_LINK_WARN", "1")
 	var out2, errOut2 bytes.Buffer
-	cmd2 := NewRootCmd(strings.NewReader(""), &out2, &errOut2)
+	cmd2 := newTestRootCmd(strings.NewReader(""), &out2, &errOut2)
 	cmd2.SetArgs([]string{"-C", impl, "task", "list", "-q"})
 	_ = cmd2.Execute()
 	if strings.Contains(errOut2.String(), "one-sided") {
@@ -87,7 +87,7 @@ func TestAmbientLinkWarning(t *testing.T) {
 func TestDoctor_NoAmbientDoubleWarn(t *testing.T) {
 	_, impl := linkedPair(t, false)
 	var out, errOut bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &errOut)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &errOut)
 	cmd.SetArgs([]string{"-C", impl, "doctor"})
 	_ = cmd.Execute()
 	if strings.Contains(errOut.String(), "one-sided") {

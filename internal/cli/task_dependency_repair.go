@@ -105,7 +105,7 @@ func newTaskDependencyRepairCmd(app *App) *cobra.Command {
 
 func normalizeGraphRepairPath(app *App, edit core.TaskGraphSourceEdit) core.TaskGraphSourceEdit {
 	if edit.Source.LocalPath != "" && !filepath.IsAbs(edit.Source.LocalPath) && app.Cfg != nil {
-		edit.Source.LocalPath = filepath.Join(app.Cfg.Root, edit.Source.LocalPath)
+		edit.Source.LocalPath = filepath.Join(app.Cfg.PlanningRoot, edit.Source.LocalPath)
 	}
 	return edit
 }

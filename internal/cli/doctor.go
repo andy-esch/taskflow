@@ -52,6 +52,9 @@ func newDoctorCommand(app *App) *cobra.Command {
 			return err
 		},
 		RunE: func(_ *cobra.Command, _ []string) error {
+			if app.ConfigSvc == nil {
+				return fmt.Errorf("%w: configuration service is unavailable from this invocation", domain.ErrValidation)
+			}
 			start, err := app.startDir()
 			if err != nil {
 				return err

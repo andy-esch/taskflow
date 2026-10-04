@@ -400,6 +400,9 @@ func registerInitializedSpace(
 	if !enabled || !result.ConfigCreated {
 		return nil, nil
 	}
+	if app.SpaceSvc == nil {
+		return nil, fmt.Errorf("%w: space registry is unavailable from this invocation", domain.ErrValidation)
+	}
 	receipt, err := app.SpaceSvc.RegisterInitialized(
 		result.ConfigDir, result.PlanningID, app.DryRun,
 	)

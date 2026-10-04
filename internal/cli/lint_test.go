@@ -35,7 +35,7 @@ func TestLint_EpicSoleFailure(t *testing.T) {
 	testutil.Write(t, goodPath, goodOut)
 
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "lint"})
 	err := cmd.Execute()
 	if err == nil {
@@ -235,7 +235,7 @@ func TestLint_Dirty_Exit11(t *testing.T) {
 	// setupRepo's tasks have only status+description → missing required fields.
 	root := setupRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "lint"})
 	err := cmd.Execute()
 	if err == nil {

@@ -49,7 +49,7 @@ func isWordByte(b byte) bool {
 }
 
 func TestHelp_CarriesNoRetiredLayoutVocabulary(t *testing.T) {
-	root := NewRootCmd(strings.NewReader(""), nil, nil)
+	root := newTestRootCmd(strings.NewReader(""), nil, nil)
 
 	var walk func(cmd *cobra.Command)
 	walk = func(cmd *cobra.Command) {

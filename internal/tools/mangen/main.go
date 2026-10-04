@@ -21,13 +21,14 @@ import (
 	"github.com/muesli/roff"
 
 	"github.com/andy-esch/taskflow/internal/cli"
+	"github.com/andy-esch/taskflow/internal/cli/ports"
 )
 
 func main() {
 	out := flag.String("out", "manpages", "output directory for the generated manpage")
 	flag.Parse()
 
-	root := cli.NewRootCmd(os.Stdin, os.Stdout, os.Stderr)
+	root := cli.NewRootCmd(os.Stdin, os.Stdout, os.Stderr, ports.Bindings{})
 	page, err := mcobra.NewManPage(1, root)
 	if err != nil {
 		log.Fatalf("mangen: %v", err)

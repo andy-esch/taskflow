@@ -9,9 +9,8 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/config"
 	"github.com/andy-esch/taskflow/internal/core"
-	"github.com/andy-esch/taskflow/internal/spacestore"
+	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/userconfig"
-	"github.com/andy-esch/taskflow/internal/workspacestore"
 )
 
 type uiLayoutFake struct{}
@@ -48,7 +47,7 @@ func TestUILaunchRejectsReadOnlyClassification(t *testing.T) {
 		t.Fatal(err)
 	}
 	var out strings.Builder
-	root := NewRootCmd(strings.NewReader(""), &out, &out)
+	root := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd, _, err := root.Find([]string{"ui"})
 	if err != nil {
 		t.Fatal(err)
@@ -64,8 +63,8 @@ func TestUILaunchRejectsReadOnlyClassification(t *testing.T) {
 func TestAtlasThemeUsesHomeScopeWithoutRepositoryOverride(t *testing.T) {
 	t.Setenv("TSKFLW_THEME", "")
 	app := &App{
-		Cfg:  &config.Config{Theme: config.ThemeConfig{Name: "neon"}},
-		User: &userconfig.Config{Theme: userconfig.ThemeConfig{Name: "catppuccin"}},
+		Cfg:  &core.RepositoryConfiguration{ThemeName: "neon"},
+		User: &core.UserConfiguration{ThemeName: "catppuccin"},
 	}
 	if got := app.atlasTheme().Name; got != "catppuccin" {
 		t.Fatalf("atlas theme = %q, want home-scoped catppuccin", got)
@@ -76,7 +75,7 @@ func TestRuntimeWorkspacePreservesResolvedStartupContext(t *testing.T) {
 	svc := core.MustNewService(nil)
 	layout := uiLayoutFake{}
 	app := &App{
-		Cfg: &config.Config{Dir: "/checkout", Root: "/planning", ID: "planning-id"},
+		Cfg: &core.RepositoryConfiguration{Dir: "/checkout", PlanningRoot: "/planning", ID: "planning-id"},
 		Svc: svc, Layout: layout, selectedSpace: "registered-entry",
 	}
 	workspace := app.runtimeWorkspace()
@@ -103,8 +102,39 @@ func TestUIStartupOpensTheRepoYouAreStandingIn(t *testing.T) {
 	if landOnAtlas {
 		t.Error("in-repo launch must not land on the atlas")
 	}
-	if workspace.PlanningRoot != app.Cfg.Root || workspace.Checkout != app.Cfg.Dir || start != repo {
+	if workspace.PlanningRoot != app.Cfg.PlanningRoot || workspace.Checkout != app.Cfg.Dir || start != repo {
 		t.Fatalf("workspace = %+v, start = %q, want the discovered repo", workspace, start)
+	}
+}
+
+func TestUIStartupRejectsEachMissingBrowserServiceOnBothRoutes(t *testing.T) {
+	repo := t.TempDir()
+	if _, err := config.Init(repo, "", false); err != nil {
+		t.Fatal(err)
+	}
+	for _, route := range []string{"in-repo", "atlas"} {
+		for _, missing := range []struct {
+			name string
+			omit func(*App)
+		}{
+			{"configuration", func(a *App) { a.ConfigSvc = nil }},
+			{"registry", func(a *App) { a.SpaceSvc = nil }},
+			{"workspaces", func(a *App) { a.WorkspaceSvc = nil }},
+			{"overview", func(a *App) { a.SpaceOverviewSvc = nil }},
+		} {
+			t.Run(route+"/"+missing.name, func(t *testing.T) {
+				app := newUITestApp(t, repo)
+				if route == "atlas" {
+					app.Cfg, app.Svc, app.Layout = nil, nil, nil
+				}
+				missing.omit(app)
+				workspace, start, atlas, err := app.uiStartup()
+				if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), "browser services are unavailable") ||
+					workspace.Planning != nil || start != "" || atlas {
+					t.Fatalf("partial browser composition was accepted: workspace=%+v start=%q atlas=%t err=%v", workspace, start, atlas, err)
+				}
+			})
+		}
 	}
 }
 
@@ -118,7 +148,10 @@ func TestUIStartupOutsideARepoLandsOnTheAtlasOverASeededSpace(t *testing.T) {
 		t.Fatal(err)
 	}
 	app := newUITestApp(t, filepath.Join(t.TempDir(), "nowhere-near-a-repo"))
-	if _, err := app.SpaceSvc.Add(repo, "registered", false); err != nil {
+	// Fixture setup is itself a classified mutation, not a bypass of the
+	// authorization callback now shared with the production composition.
+	runRoot(t, "space", "add", repo, "--id", "registered")
+	if _, err := app.SpaceSvc.Resolve("registered"); err != nil {
 		t.Fatal(err)
 	}
 	workspace, start, landOnAtlas, err := app.uiStartup()
@@ -164,16 +197,12 @@ func TestUIDoesNotSubstituteASpaceForABrokenExplicitSelection(t *testing.T) {
 	}
 }
 
-// newUITestApp wires the two registry/workspace capabilities `ui` startup uses and then
+// newUITestApp wires the full browser service bundle and then
 // mirrors the command's own hook: resolve when there is a repo to resolve, tolerate the
 // ordinary discovery miss, and leave Cfg nil when there was none.
 func newUITestApp(t *testing.T, start string) *App {
 	t.Helper()
-	app := &App{
-		In: strings.NewReader(""), Out: io.Discard, ErrOut: io.Discard,
-		SpaceSvc:     core.NewSpaceRegistryService(spacestore.New()),
-		WorkspaceSvc: core.NewWorkspaceService(workspacestore.New()),
-	}
+	_, app := newTestRootCmdWithApp(strings.NewReader(""), io.Discard, io.Discard)
 	app.setStyle()
 	if err := app.resolveFrom(start); err != nil && !errors.Is(err, config.ErrNoConfig) {
 		t.Fatalf("unexpected resolve failure: %v", err)

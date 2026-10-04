@@ -1,17 +1,15 @@
 package cli
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
 	"github.com/spf13/cobra"
 
-	"github.com/andy-esch/taskflow/internal/config"
+	"github.com/andy-esch/taskflow/internal/cli/ports"
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/domain"
-	"github.com/andy-esch/taskflow/internal/tui"
 )
 
 func newUICmd(app *App) *cobra.Command {
@@ -42,7 +40,7 @@ func newUICmd(app *App) *cobra.Command {
 			}
 			app.setStyle()
 			if err := app.resolve(); err != nil {
-				if !errors.Is(err, config.ErrNoConfig) {
+				if app.bindings.IsMissingPlanning == nil || !app.bindings.IsMissingPlanning(err) {
 					return err // a config that EXISTS but is broken is still fatal
 				}
 				app.warnPresentation(cmd)
@@ -68,16 +66,15 @@ func newUICmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			opts := []tui.Option{
-				tui.WithConfiguration(app.ConfigSvc, start, app.configurationOverrides()),
-				tui.WithWorkspaceOpening(app.WorkspaceSvc),
-				tui.WithAtlas(app.SpaceOverviewSvc),
-				tui.WithAtlasTheme(app.atlasTheme()),
+			if app.bindings.RunBrowser == nil {
+				return fmt.Errorf("%w: browser launch is unavailable from this invocation", domain.ErrValidation)
 			}
-			if landOnAtlas {
-				opts = append(opts, tui.WithAtlasLanding())
-			}
-			return tui.Run(workspace, app.Th, opts...)
+			return app.bindings.RunBrowser(ports.Browser{
+				Workspace: workspace, Theme: app.Th, AtlasTheme: app.atlasTheme(),
+				Configuration: app.ConfigSvc, ConfigurationStart: start,
+				Overrides: app.configurationOverrides(), Workspaces: app.WorkspaceSvc,
+				Overview: app.SpaceOverviewSvc, LandOnAtlas: landOnAtlas,
+			})
 		},
 	}
 	return cmd
@@ -94,6 +91,12 @@ func newUICmd(app *App) *cobra.Command {
 // where `esc` from the atlas lands, which is why it follows the same direct-over-pointer
 // preference the atlas itself uses rather than an arbitrary registry row.
 func (a *App) uiStartup() (core.Workspace, string, bool, error) {
+	// In-repo landing still exposes atlas navigation and the shared config editor.
+	// Validate their services before choosing a landing route, not only when the
+	// ambient route happens to need them to find its first workspace.
+	if a.ConfigSvc == nil || a.SpaceSvc == nil || a.WorkspaceSvc == nil || a.SpaceOverviewSvc == nil {
+		return core.Workspace{}, "", false, fmt.Errorf("%w: browser services are unavailable from this invocation", domain.ErrValidation)
+	}
 	if a.Cfg != nil {
 		start, err := a.startDir()
 		if err != nil {
@@ -125,7 +128,7 @@ func (a *App) uiStartup() (core.Workspace, string, bool, error) {
 func (a *App) atlasTheme() design.Theme {
 	userName := ""
 	if a.User != nil {
-		userName = a.User.Theme.Name
+		userName = a.User.ThemeName
 	}
 	theme, _ := design.Lookup(themeName(a.Theme, os.Getenv("TSKFLW_THEME"), "", userName))
 	return theme
@@ -134,10 +137,10 @@ func (a *App) atlasTheme() design.Theme {
 func (a *App) runtimeWorkspace() core.Workspace {
 	checkout := a.Cfg.Dir
 	if checkout == "" {
-		checkout = a.Cfg.Root
+		checkout = a.Cfg.PlanningRoot
 	}
 	return core.Workspace{
-		SpaceID: a.selectedSpace, Checkout: checkout, PlanningRoot: a.Cfg.Root,
+		SpaceID: a.selectedSpace, Checkout: checkout, PlanningRoot: a.Cfg.PlanningRoot,
 		PlanningID: a.Cfg.ID, Planning: a.Svc, Layout: a.Layout,
 	}
 }

@@ -42,7 +42,7 @@ func TestTaskAppend_Body(t *testing.T) {
 func TestTaskAppend_Stdin(t *testing.T) {
 	root := setupRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader("## Notes\n- from stdin\n"), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader("## Notes\n- from stdin\n"), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "append", "alpha", "--body-file", "-"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
@@ -62,7 +62,7 @@ func TestTaskAppend_Stdin(t *testing.T) {
 func TestNewRootCmd_UnifiesStdin(t *testing.T) {
 	in := strings.NewReader("piped input\n")
 	var out bytes.Buffer
-	cmd := NewRootCmd(in, &out, &out)
+	cmd := newTestRootCmd(in, &out, &out)
 	if cmd.InOrStdin() != in {
 		t.Error("cmd.InOrStdin() must be the injected reader (resolveBody's source), not os.Stdin")
 	}
@@ -72,7 +72,7 @@ func TestNewRootCmd_UnifiesStdin(t *testing.T) {
 func TestTaskAppend_Empty_Errors(t *testing.T) {
 	root := setupRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "append", "alpha", "--body", "   "})
 	if err := cmd.Execute(); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("empty append should wrap ErrValidation (exit 11), got %v", err)
@@ -113,7 +113,7 @@ func TestTaskSet_BodyReplace(t *testing.T) {
 func TestTaskSet_BodyWithFields_Rejected(t *testing.T) {
 	root := setupRepo(t)
 	var out bytes.Buffer
-	cmd := NewRootCmd(strings.NewReader(""), &out, &out)
+	cmd := newTestRootCmd(strings.NewReader(""), &out, &out)
 	cmd.SetArgs([]string{"-C", root, "task", "set", "alpha", "--tier", "2", "--body", "x"})
 	if err := cmd.Execute(); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("combining --body with field flags should wrap ErrValidation, got %v", err)
