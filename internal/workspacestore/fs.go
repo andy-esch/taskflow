@@ -6,7 +6,6 @@ package workspacestore
 import (
 	"github.com/andy-esch/taskflow/internal/config"
 	"github.com/andy-esch/taskflow/internal/core"
-	"github.com/andy-esch/taskflow/internal/store"
 )
 
 type FS struct {
@@ -36,7 +35,10 @@ func (f *FS) OpenWorkspace(start string) (core.WorkspaceSource, error) {
 	if err != nil {
 		return core.WorkspaceSource{}, err
 	}
-	fs := store.NewFS(cfg.Root, store.WithMutationAuthorization(f.mutationAuthorization))
+	fs, err := NewPlanningStore(cfg, config.Discover, f.mutationAuthorization)
+	if err != nil {
+		return core.WorkspaceSource{}, err
+	}
 	checkout := cfg.Dir
 	if checkout == "" {
 		checkout = cfg.Root
