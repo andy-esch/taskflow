@@ -1,9 +1,10 @@
 ---
 schema: 1
 id: 6gefxfparh2z
-bucket: open
+bucket: closed
 area: portable-tui-loaded-record-navigation-implementation-antigravity
 date: "2026-09-28"
+updated_at: "2026-10-04"
 ---
 # Audit: Portable TUI loaded-record navigation implementation — antigravity — 2026-09-28
 
@@ -268,3 +269,11 @@ same-view/same-status collisions, but not duplicates hidden by a status or bucke
 acute audit finding whose duplicate had no acute findings. These cases are now guarded and tested.
 Future reviews should compare wire behavior with the existing contract and vary each duplicate
 across both sides of a view filter.
+
+## Lifecycle bookkeeping (2026-10-04)
+
+The reviewed loaded-record navigation task 6gdx7mcrq8s8 is completed and its implementation is on
+main. This audit's recorded findings are fixed or absent, so its lingering open lifecycle was
+closed. This is status reconciliation, not a fresh independent review of today's tree. Original
+snapshot attestations, review limitations, and owner reconciliation remain authoritative evidence
+of what was actually tested.

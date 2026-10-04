@@ -10,7 +10,7 @@ priority: medium
 autonomy_level: 2
 tags: [architecture, integrity, store, design]
 created: "2026-09-07"
-updated_at: "2026-09-22"
+updated_at: "2026-10-04"
 audited: "2026-09-20"
 audit_sources: [2026-09-20-weekly-task-sweep, planning/audits/6gc7jd9aq1q9-2026-09-21-arch-failure-and-recovery.md]
 ---
@@ -106,6 +106,8 @@ a deliberate sequence. This task owns design and scoping, not the implementation
 
 ## Sweep verification (2026-09-20)
 
+Historical capture; later progress entries below record work completed since this sweep.
+
 Automated weekly sweep re-read every reference in this task against
 `internal/store` and `internal/config` at `934e1cf`. No section is obsolete; the
 annotations below narrow two of the four newly observed questions.
@@ -150,6 +152,14 @@ own implementation, so the linked unification task's premise holds.
 
 ## Progress Log
 
+- 2026-10-04: adapter-neutral lint diagnostics and loaded-record/source-set migration are completed
+  inputs, not outstanding foundation implementation. The remaining schema, locking, atomic-write,
+  and durability questions are not pulled into the adapter-neutral Thread by that progress.
+- 2026-10-04: separately approved audit remedies now have bounded tasks for
+  [core-owned impact/recovery](6ggdkztshmzz-make-dependency-impact-and-recovery-semantics-core-owned.md)
+  and [guarded-contract regressions](6ggdkzv2tnta-pin-guarded-planning-mutation-boundary-contracts.md).
+  They close specific observed gaps, not this design task's Q5 shared retry-policy decision or Q4
+  conformance-framework proposal. This task's human approval gate for further child tasks remains.
 - 2026-09-27: ordinary task, epic, audit, and research creates now return committed receipts when
   guard release fails, through [the dedicated follow-up](6ge7qn9ptaxv-report-post-commit-guard-release-failures-from-ordinary-entity-creation.md). Q1 remains open for the legacy edit, fix, and body-write users of `writeLock`; the design pass should not duplicate the resolved create slice.
 - 2026-09-27: the ordinary-create review exposed an error-envelope retry contradiction for

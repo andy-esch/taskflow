@@ -6,8 +6,8 @@ description: Eliminate path-shaped application contracts and primary-to-secondar
 goal: Core use cases consume identity-bearing semantic ports; local paths are optional capabilities, and primary adapters cannot bypass the application boundary.
 created: "2026-09-23"
 tags: [architecture, ports, adapters, hardening]
-tasks: [6g5vm4efjcdv, 6g6jqqcdehne, 6gcwcf77tvgq, 6gcwcf7gjayh, 6gcwcf7rgxef, 6gcwcf80v8hg, 6gcwcf88z57p, 6gcwcf8gzn50, 6gcwcf8rxe72, 6gdx7mcqm371, 6gdx7mcqq67d, 6gdx7mcrq8s8, 6ge1bacd3bd2, 6ge7qn9ptaxv, 6gg7e594gcms, 6gg7e59cyxxh]
-updated_at: "2026-10-03"
+tasks: [6g5vm4efjcdv, 6g6jqqcdehne, 6gcqz5aefjjf, 6gcwcf77tvgq, 6gcwcf7gjayh, 6gcwcf7rgxef, 6gcwcf80v8hg, 6gcwcf88z57p, 6gcwcf8gzn50, 6gcwcf8rxe72, 6gdx7mcqm371, 6gdx7mcqq67d, 6gdx7mcrq8s8, 6ge1bacd3bd2, 6ge7qn9ptaxv, 6gg7e594gcms, 6gg7e59cyxxh, 6ggdkztshmzz, 6ggdkzv2tnta]
+updated_at: "2026-10-04"
 started_at: "2026-09-23"
 ---
 
@@ -31,8 +31,9 @@ planning-data capabilities must agree on one source-set witness at construction.
 receipts and ordinary-create recovery no longer depend on domain paths. TUI identity/refresh and
 readable occurrence locations have shipped, and semantic entity values no longer carry local paths,
 filename identities, or guarded revisions. CLI repair, body-link checking, and completion have
-merged. Concrete composition isolation and executable controller enforcement are the current slice;
-two newly evidenced persistence-composition followups remain explicitly scoped below.
+merged in PR #275. Concrete composition isolation and executable controller enforcement merged
+in PR #277. The remaining work is bounded to two persistence-composition followups, one existing
+identity-lint gap, core-owned impact/recovery semantics, and a final guarded-contract regression pass.
 
 This Thread closes those seams in evidence-driven stages:
 
@@ -53,13 +54,26 @@ This Thread closes those seams in evidence-driven stages:
    named repair/link/completion use cases, portable probes, and resolver-compatible completion fixes
    merged in PR #275; both reviews reconciled.
 8. Isolate composition wiring and make the intended controller boundary executable through the
-   standard lint suite. **In progress:** explicit binary wiring and launch contracts implemented;
+   standard lint suite. **Completed, merged in PR #277:** explicit binary wiring and launch contracts;
    default-deny/recursive lint rules and actual forbidden-import probes verified. Codex and Antigravity
    findings are fixed and both audits closed; real-reader/corpus mutation tests now pin startup
-   laziness and no fallback. Awaiting merge, not claimed shipped.
-9. Close the observed workspace Thread-apply identity-reader parity gap and design explicit
-   persistence authorization policy. Both follow [composition isolation](../tasks/6gcwcf8rxe72-isolate-cli-composition-wiring-and-enforce-controller-boundaries.md);
-   they are separate behavior/compatibility work, not silently bundled into its extraction.
+   laziness and no fallback. Release inclusion is a separate milestone.
+9. Finish four independent implementation slices over the settled boundary:
+
+   - [Workspace Thread-apply identity parity](../tasks/6gg7e594gcms-preserve-planning-identity-revalidation-in-workspace-opened-thread-apply.md),
+     including direct/pointer roots and identity replacement. **Recommended next.**
+   - [Explicit persistence authorization](../tasks/6gg7e59cyxxh-require-an-explicit-mutation-authorization-policy-at-persistence-composition.md),
+     retaining its user checkpoint before choosing constructor compatibility and opt-out policy.
+   - [Cross-kind collision lint on unreadable records](../tasks/6gcqz5aefjjf-lint-cross-kind-task-and-thread-id-collisions-on-unreadable-records.md),
+     reusing portable diagnostic identity rather than discovering IDs from paths.
+   - [Core-owned dependency impact and recovery semantics](../tasks/6ggdkztshmzz-make-dependency-impact-and-recovery-semantics-core-owned.md),
+     folding adapter-hygiene M1/L1 without changing graph eligibility.
+
+   These are eligible independently; graph edges do not impose an artificial serial order.
+10. [Pin guarded planning mutation boundary contracts](../tasks/6ggdkzv2tnta-pin-guarded-planning-mutation-boundary-contracts.md)
+    after all four slices. Fill the demonstrated malformed/stale-plan, committed-conflict retry,
+    and explicit-space theme regression gaps, then review identity, authorization, recovery, and
+    adapter ownership against the completed boundary. Task-local tests are not postponed to this pass.
 
 Markdown-first and git-native behavior remain product constraints. The goal is not to hide Markdown
 or replace storage; it is to stop application semantics from requiring a filesystem path when stable
@@ -75,3 +89,25 @@ identity, an optional source location, or an explicit local capability is the ho
   boundary, and a dependency rule catches regressions.
 - Filesystem behavior, guarded mutation evidence, TUI editing, and public machine compatibility stay
   intact throughout the migration.
+- Workspace and ordinary opening both revalidate planning identity; omission of mutation policy is
+  handled explicitly rather than silently authorizing an unintended caller.
+- Lint retains safely recovered cross-kind collision identity, and dependency impact/recovery policy
+  is core-owned and preserved for human and machine consumers.
+- Closure requires the bounded regression/closeout task to complete with no unresolved boundary
+  data-safety blocker.
+  Review findings handed to followups are marked **tracked**, never represented as implemented fixes.
+
+## Scope boundary and bookkeeping (2026-10-04)
+
+This Thread has a finish line, not a mandate to absorb every architecture audit. The two new tasks
+above and the existing collision-lint task are members of this graph. Composition is completed;
+the five remaining tasks are not. Older loaded-record TUI reviews are closed because their recorded
+findings were fixed (or absent), not because a new review was performed today.
+
+The proposed dependency-policy ADR remains in the
+[documentation Thread](6g9czp7g9pt3-make-documentation-layered-executable-and-agent-navigable.md),
+and still needs user acceptance. Broader atomic-write/locking/schema work and a general conformance
+framework remain in their existing homes. TUI broken-gate versus unreadable-marker semantics stay
+outside this Thread; the related audit findings remain open. The
+[`cli.App` breadth decision](../tasks/6g63hjme8czk-decide-whether-cli.apps-breadth-has-a-real-trigger-yet.md)
+has refreshed assumptions, not a pre-approved refactor.

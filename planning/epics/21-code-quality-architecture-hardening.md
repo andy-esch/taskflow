@@ -1,11 +1,11 @@
 ---
 schema: 1
 status: active
-description: 'Keep the multi-adapter core honest with enforceable dependency direction, consumer-owned ports, and trigger-scoped consolidation instead of speculative rewrites.'
+description: Keep the multi-adapter core honest with enforceable dependency direction, consumer-owned ports, and trigger-scoped consolidation instead of speculative rewrites.
 priority: medium
 tags: [architecture, quality]
 created: "2026-06-22"
-updated_at: "2026-09-13"
+updated_at: "2026-10-04"
 ---
 
 # Code quality & architecture hardening
@@ -43,6 +43,11 @@ whose remedy changes a boundary rather than one feature's behavior.
 
 ## Live work
 
+- [Make planning data access adapter neutral](../threads/6gcwd78p9r04-make-planning-data-access-adapter-neutral.md)
+  has merged semantic-read, optional-local-capability, CLI-port, and composition-boundary work.
+  Its bounded closeout is workspace identity parity, explicit persistence authorization,
+  unreadable cross-kind collision lint, core-owned impact/recovery semantics, then focused
+  guarded-contract regression review. Broader foundation redesign is not silently required.
 - The reusable host/container release gate now turns the repository's automated qualification into
   one executable contract while leaving publication and manual dogfood explicit.
 - [Make documentation layered, executable, and agent-navigable](../threads/6g9czp7g9pt3-make-documentation-layered-executable-and-agent-navigable.md)

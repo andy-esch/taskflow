@@ -3,36 +3,36 @@ schema: 1
 id: 6g63hjme8czk
 status: ready-to-start
 epic: 21-code-quality-architecture-hardening
-description: 'App is ~30 fields across flags, presentation, and seven services: name the trigger for a split or record that it is accepted'
+description: Decide whether current cli.App breadth has an evidenced split trigger after composition extraction, or record a bounded not-yet decision.
 effort: 2-3 hours (decision, not refactor)
 tier: 4
 priority: low
 autonomy_level: 3
 tags: [cli, architecture, dx]
 created: "2026-09-02"
+updated_at: "2026-10-04"
 ---
 # Decide whether cli.App's breadth has a real trigger yet
 
 ## Objective
 
-`cli.App` is ~30 fields spanning three distinct concerns: invocation flags
-(`JSON`, `DryRun`, `Color`, `NoInput`, `Chdir`, `Space`…), resolved presentation
-state (`Style`, `Th`, `Gate`, `Prompt`, `User`, `userCfgErr`), and seven injected
-services (`Svc`, `SpaceSvc`, `SpaceOverviewSvc`, `WorkspaceSvc`, `ConfigSvc`, plus
-the narrow `Fixer`/`Layout`/`Linter` ports). Every command receives all of it.
+Assess the current `cli.App` after application-port migration and composition extraction
+(PRs #275/#277), not the old field-count analogy to the TUI root model.
 
-It is the CLI's counterpart to the TUI's ~50-field root `Model` — the same
-breadth, arrived at the same way, and the TUI's answer (extract per-concern
-sub-models: `spaceSession`, `entityTab`, the modal stack) is the established one.
-The mainstream CLI equivalent is a split between an IO/invocation context and a
-service container, as in kubectl's `IOStreams` + factory.
+`App` still combines invocation/IO state, resolved presentation, and named application
+services. It now receives `ports.Bindings` and a lazy planning opener; concrete construction
+and framework launch wiring live in `internal/appwiring`. `Fixer` and `Linter` fields are
+retired; `Layout` is an explicit local watcher capability. Ordinary planning opening is
+lazy after flags are parsed, and completion deliberately defers opening until its target
+flags are known. There is no longer a whole-CLI-package composition exemption.
 
-But this epic's stated principle is trigger-scoped consolidation **instead of
-speculative rewrites**, and no concrete pain has been recorded here: DI is
-genuinely global-free, `PersistentPreRunE` resolves everything once, and tests
-construct `App` without complaint. So the deliverable is a decision, not a
-refactor. Either name the trigger and scope the work, or record that the breadth
-is accepted and stop re-litigating it in reviews.
+Those changes address real boundary defects, but do not settle whether `App`'s remaining
+breadth imposes a concrete cost. Measure current command dependencies, focused-test setup,
+and incomplete-binding failures. Compare an IO/invocation split, per-command contracts,
+and doing nothing without assuming a field count or TUI precedent makes a split necessary.
+
+The deliverable remains a decision, not a refactor. Either name an evidenced trigger and
+scope the work, or record that the breadth is accepted with a trigger for reconsideration.
 
 ## Acceptance criteria
 
@@ -45,9 +45,17 @@ is accepted and stop re-litigating it in reviews.
 ## Out of scope
 
 - Refactoring `App` under this task — this is the decision, and any change is a separately filed follow-up
-- The composition-root exception in `docs/ARCHITECTURE.md`; that edge is already classified and is not what this examines
+- Reopening the merged composition boundary or weakening its executable controller rules
 - The TUI's root `Model`, which has its own extraction history
 
 ## Related
 
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
+- [Composition isolation](6gcwcf8rxe72-isolate-cli-composition-wiring-and-enforce-controller-boundaries.md), merged in PR #277
+
+## Scope refresh (2026-10-04)
+
+Old field counts, retired ports, and whole-package-exemption assumptions were removed after
+the merged boundary work. The decision criteria remain unchecked: extraction is not evidence
+that this separate breadth question has been answered. This is not a required adapter-neutral
+Thread member and does not expand that Thread's closeout scope.

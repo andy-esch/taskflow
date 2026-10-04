@@ -4,7 +4,7 @@ id: 6gfrcytd9n9a
 bucket: open
 area: test-rigour
 date: "2026-10-02"
-updated_at: "2026-10-02"
+updated_at: "2026-10-04"
 ---
 
 # Audit: test-rigour — 2026-10-02
@@ -28,7 +28,7 @@ updated_at: "2026-10-02"
 **Resolution:** <how it was resolved — written by `audit finding --note`, not by hand>
 ```
 
-#### M1. `thread compose`/`apply` refuse malformed and stale plans, and 24 of 37 refusals have no test · **Status:** open
+#### M1. `thread compose`/`apply` refuse malformed and stale plans, and 24 of 37 refusals have no test · **Status:** tracked by 6ggdkzv2tnta
 
 **File:** internal/core/thread_apply.go:214 | **Component:** core/thread-apply
 **Effort:** S · **Urgency:** soon
@@ -109,7 +109,12 @@ audit if it recurs.
 
 **Recommendation:** Extend the two existing rejection tables: add the ten structural manifest rows to TestComposeThreadApplyPlanRejectsMisleadingOrInvalidManifest, and a tampered status plus a deleted prerequisite and dependent to TestPrepareThreadApplyRejectsUnsafeOrEditedCreationIdentity — asserting errors.Is(err, domain.ErrValidation) alongside the substring.
 
-#### M2. Thread creation's committed-conflict no-retry guard is untested while its mutation twin is covered · **Status:** open
+**Resolution:** Task 6ggdkzv2tnta will re-measure reachable compose/apply
+refusals and add sentinel, actionable-diagnostic, and no-persistence assertions.
+Historical coverage counts are not treated as current proof; shared-validator
+redesign remains outside scope.
+
+#### M2. Thread creation's committed-conflict no-retry guard is untested while its mutation twin is covered · **Status:** tracked by 6ggdkzv2tnta
 
 **File:** internal/core/service_thread.go:93 | **Component:** core/thread-mutations
 **Effort:** XS · **Urgency:** soon
@@ -183,7 +188,11 @@ loop of the four, and the only one whose guard is properly pinned at the core le
 
 **Recommendation:** Add the creation-side twin of store.TestThreadMutationAttributesReleaseFailureAfterCommit: drive svc.NewThread through core.MustNewService with WithRetry and a conflict-wrapping testHookRepositoryUnlockError, asserting ThreadCreationMutationFailure, receipt.Committed, and retries == 0.
 
-#### M3. `theme` can silently fall back to ambient presentation on a bad `--space`, untested · **Status:** open
+**Resolution:** Task 6ggdkzv2tnta owns generic and conflict-wrapping post-commit
+Thread creation regressions through portable core and actual adapter/service
+wiring, proving no retry/remint and retention of committed identity and receipt.
+
+#### M3. `theme` can silently fall back to ambient presentation on a bad `--space`, untested · **Status:** tracked by 6ggdkzv2tnta
 
 **File:** internal/cli/theme.go:41 | **Component:** cli/space-selection
 **Effort:** XS · **Urgency:** soon
@@ -257,6 +266,11 @@ so no command can forget it and the test is written once — is a design call fo
 architecture audit.
 
 **Recommendation:** Add the two-line theme case beside the existing template case in TestGlobalSpace_UnknownListsKnownLabels, asserting exit 10 on --space missing.
+
+**Resolution:** Task 6ggdkzv2tnta includes the bounded explicit-space theme
+refusal regression and an exact guard-removal check. This does not approve a
+resolver redesign; an explicitly named space must not degrade into ambient
+success.
 
 #### L1. The exit-taxonomy smoke test's filesystem probe is vacuous as root and aborts the rest of the test · **Status:** open
 
@@ -579,14 +593,31 @@ any change, because this environment runs as uid 0. Every other package is green
   and that still holds, so it was dropped from the file set despite ranking second on
   churn.
 
+## Owner triage (2026-10-04)
+
+M1-M3 are tracked together by
+[guarded planning mutation boundary regressions](../tasks/6ggdkzv2tnta-pin-guarded-planning-mutation-boundary-contracts.md).
+The task is sequenced after workspace identity parity, explicit authorization policy, cross-kind
+collision lint, and core-owned impact/recovery semantics for a final bounded closeout pass.
+Behavior-level tests still belong in each implementation slice; this dependency does not defer
+their verification until the end.
+
+Workspace root/identity replacement tests stay in their existing task rather than being copied.
+Shared-validator and resolver redesign, a generic conformance framework, and broader retry-policy
+decisions are not approved by this regression task. Re-measure the current reachable refusals and
+make each guard-removal probe fail for the intended condition, not unrelated invalid fixtures.
+
+L1-L3 remain open outside this approved scope. Tracked findings are not fixed, and this audit
+cannot close as fully triaged while those findings remain unresolved.
+
 ## Candidate tasks
 
 <!-- candidate-tasks:v1 · ○ open · ● in-progress · ✔ fixed · → tracked · ◌ deferred · ◌ superseded · ✘ wontfix -->
 <!-- Add or replace one row with `tskflwctl audit finding <audit> <code> --candidate "<one line>"`; an empty value removes it. -->
 
-- ○ M1 · open — `tskflwctl task new "Pin thread compose/apply structural and stale-plan refusals with negative tests" --epic 30-threads-and-task-dependency-graphs --tags threads,graph,tests --tier 2 --priority high --description "Cover the 24 untested refusal predicates in thread_apply.go by extending the compose and prepare rejection tables."`
-- ○ M2 · open — `tskflwctl task new "Pin the thread-creation committed-conflict no-retry guard" --epic 30-threads-and-task-dependency-graphs --tags threads,mutations,tests --tier 2 --priority medium --description "Add the creation-side conflict-wrapping release-failure test so core cannot retry a committed thread creation."`
-- ○ M3 · open — `tskflwctl task new "Cover the explicit --space fall-back refusal on every best-effort command" --epic 29-multi-space-planning-a-home-registry-and-the-atlas --tags cli,multi-repo,tests --tier 3 --priority medium --description "theme carries the same wantsSpace refusal as template but has no negative test; add it and consider centralizing the invariant in App.resolve()."`
+- → M1 · tracked — Tracked by 6ggdkzv2tnta: reachable malformed/stale-plan refusals, sentinel/diagnostic assertions, and precise guard-removal evidence.
+- → M2 · tracked — Tracked by 6ggdkzv2tnta: committed-conflict Thread creation must retain its receipt without retry/remint through real service composition.
+- → M3 · tracked — Tracked by 6ggdkzv2tnta: explicit invalid theme --space refuses instead of returning ambient success; no resolver redesign.
 - ○ L1 · open — `tskflwctl task new "Make the exit-taxonomy filesystem probe honest under root" --epic 21-code-quality-architecture-hardening --tags tests,ci --tier 3 --priority low --description "chmod 0o500 does not bite uid 0, so the smoke test fails in root containers and aborts before its remaining assertions."`
 - ○ L2 · open — `tskflwctl task new "Stop pinning built-in template catalog size in the kind-filter test" --epic 22-selectable-template-library --tags tests,cli --tier 4 --priority low --description "A third audit template would redden TestTemplateList_KindFilter; assert the per-row invariant and a floor instead of an exact count."`
 - ○ L3 · open — `tskflwctl task new "Resolve the duplicated thread-validation messages between core and domain" --epic 21-code-quality-architecture-hardening --tags threads,tests,simplification --tier 4 --priority low --description "NewThread re-checks four rules domain.ValidateThreadDocument already enforces, and the two copies have diverged in case."`

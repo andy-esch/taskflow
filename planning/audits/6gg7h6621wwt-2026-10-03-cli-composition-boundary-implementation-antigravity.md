@@ -4,7 +4,7 @@ id: 6gg7h6621wwt
 bucket: closed
 area: cli-composition-boundary-implementation-antigravity
 date: "2026-10-03"
-updated_at: "2026-10-03"
+updated_at: "2026-10-04"
 ---
 # Audit: CLI composition boundary implementation — antigravity — 2026-10-03
 
@@ -361,7 +361,7 @@ None of these are new regressions introduced by the composition refactoring.
 
 ### Findings
 
-#### M1. Production wiring lacks an eager discovery regression guard, permitting early I/O in appwiring.Compose · **Status:** fixed locally (2026-10-03)
+#### M1. Production wiring lacks an eager discovery regression guard, permitting early I/O in appwiring.Compose · **Status:** fixed (PR #277)
 
 - **Verified path/line:** `internal/cli/composition_test.go:33` and `internal/appwiring/wiring.go:46`
 - **Reproduction:**

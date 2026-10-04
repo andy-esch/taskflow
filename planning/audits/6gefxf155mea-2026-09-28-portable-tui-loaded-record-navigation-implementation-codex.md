@@ -1,10 +1,10 @@
 ---
 schema: 1
 id: 6gefxf155mea
-bucket: open
+bucket: closed
 area: portable-tui-loaded-record-navigation-implementation-codex
 date: "2026-09-28"
-updated_at: "2026-09-28"
+updated_at: "2026-10-04"
 ---
 # Audit: Portable TUI loaded-record navigation implementation — codex — 2026-09-28
 
@@ -179,3 +179,11 @@ regression covers list, show, frontier, and graph projections.
 - Captured source fingerprint: `acc1a0ec54cdae072e101df2f1c11c5f83414c6f`
 - Sole deliverable: `planning/audits/6gefxf155mea-2026-09-28-portable-tui-loaded-record-navigation-implementation-codex.md`
 - Transfer result: `succeeded` through `scripts/isolated-review-workspace.sh transfer` after verification; sandbox retained for owner confirmation.
+
+## Lifecycle bookkeeping (2026-10-04)
+
+The reviewed loaded-record navigation task 6gdx7mcrq8s8 is completed and its implementation is on
+main. This audit's recorded findings are fixed or absent, so its lingering open lifecycle was
+closed. This is status reconciliation, not a fresh independent review of today's tree. Original
+snapshot attestations, review limitations, and owner reconciliation remain authoritative evidence
+of what was actually tested.
