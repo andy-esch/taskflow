@@ -197,11 +197,12 @@ type LegacyFieldClearJSON struct {
 // TaskGraphStateImpactJSON is one before/after derived-state consequence of a
 // graph or lifecycle mutation.
 type TaskGraphStateImpactJSON struct {
-	TaskID string             `json:"task_id"`
-	Before TaskGraphStateJSON `json:"before"`
-	After  TaskGraphStateJSON `json:"after"`
-	Path   []string           `json:"path,omitempty"`
-	Direct bool               `json:"direct"`
+	TaskID      string             `json:"task_id"`
+	Before      TaskGraphStateJSON `json:"before"`
+	After       TaskGraphStateJSON `json:"after"`
+	Path        []string           `json:"path,omitempty"`
+	Direct      bool               `json:"direct"`
+	NewlyUnsafe bool               `json:"newly_unsafe" jsonschema:"description=core-owned impact warning: a different non-clear gate or newly inconsistent state; consult the enclosing receipt for preview and durability evidence"`
 }
 
 func toTaskGraphStateImpactsJSON(impacts []core.TaskGraphStateImpact) []TaskGraphStateImpactJSON {
@@ -210,6 +211,7 @@ func toTaskGraphStateImpactsJSON(impacts []core.TaskGraphStateImpact) []TaskGrap
 		out = append(out, TaskGraphStateImpactJSON{
 			TaskID: impact.TaskID, Before: toTaskGraphStateJSON(impact.Before), After: toTaskGraphStateJSON(impact.After),
 			Path: append([]string(nil), impact.Path...), Direct: impact.Direct,
+			NewlyUnsafe: impact.NewlyUnsafe(),
 		})
 	}
 	return out
@@ -248,12 +250,13 @@ type TaskLifecycleJSON struct {
 // ThreadProjectionImpactJSON is one Thread view changed by a task lifecycle
 // transition; direct distinguishes membership from downstream/boundary effects.
 type ThreadProjectionImpactJSON struct {
-	ThreadID       string         `json:"thread_id"`
-	Slug           string         `json:"slug"`
-	Direct         bool           `json:"direct"`
-	ChangedTaskIDs []string       `json:"changed_task_ids"`
-	Before         ThreadViewJSON `json:"before"`
-	After          ThreadViewJSON `json:"after"`
+	ThreadID          string         `json:"thread_id"`
+	Slug              string         `json:"slug"`
+	Direct            bool           `json:"direct"`
+	ChangedTaskIDs    []string       `json:"changed_task_ids"`
+	Before            ThreadViewJSON `json:"before"`
+	After             ThreadViewJSON `json:"after"`
+	NewlyInconsistent bool           `json:"newly_inconsistent" jsonschema:"description=core-owned warning that this Thread would become or has become inconsistent; consult the enclosing receipt for preview and durability evidence"`
 }
 
 func toThreadProjectionImpactsJSON(impacts []core.ThreadProjectionImpact) []ThreadProjectionImpactJSON {
@@ -263,6 +266,7 @@ func toThreadProjectionImpactsJSON(impacts []core.ThreadProjectionImpact) []Thre
 			ThreadID: impact.ThreadID, Slug: impact.Slug, Direct: impact.Direct,
 			ChangedTaskIDs: append([]string{}, impact.ChangedTaskIDs...),
 			Before:         ToThreadViewJSON(impact.Before), After: ToThreadViewJSON(impact.After),
+			NewlyInconsistent: impact.NewlyInconsistent(),
 		})
 	}
 	return out
@@ -330,6 +334,7 @@ type DependencyMutationJSON struct {
 	PlannedTaskIDs      []string                    `json:"planned_task_ids"`
 	AppliedTaskIDs      []string                    `json:"applied_task_ids"`
 	RemainingTaskIDs    []string                    `json:"remaining_task_ids"`
+	Remedy              string                      `json:"remedy,omitempty" jsonschema:"description=core-owned inspection or recovery guidance; distinguishes proposed unsafe changes from rejected writes and durable-prefix recovery"`
 	Workspace           WorkspaceJSON               `json:"workspace"`
 }
 
@@ -343,6 +348,7 @@ func ToDependencyMutationJSON(receipt core.DependencyMutationReceipt, workspace 
 		PlannedTaskIDs:      append([]string{}, receipt.PlannedTaskIDs...),
 		AppliedTaskIDs:      append([]string{}, receipt.AppliedTaskIDs...),
 		RemainingTaskIDs:    append([]string{}, receipt.RemainingTaskIDs...), Workspace: workspace,
+		Remedy: receipt.Remedy,
 	}
 	for _, edge := range receipt.Edges {
 		payload.Edges = append(payload.Edges, DependencyEdgeOutcomeJSON{

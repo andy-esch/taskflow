@@ -49,6 +49,10 @@ type DependencyMutationReceipt struct {
 	PlannedTaskIDs      []string
 	AppliedTaskIDs      []string
 	RemainingTaskIDs    []string
+	// Remedy is core-owned inspection/recovery guidance, not permission to retry.
+	// Impacts describe the full proposed plan; AppliedTaskIDs alone report its
+	// durable prefix, including when the operation returns an error.
+	Remedy string
 }
 
 // DependencyMutationFailure preserves a typed receipt on error. Error includes
@@ -63,15 +67,24 @@ func (e *DependencyMutationFailure) Error() string {
 	if e == nil || e.Cause == nil {
 		return "dependency mutation failed"
 	}
-	if len(e.Receipt.AppliedTaskIDs) == 0 {
-		return e.Cause.Error()
+	message := e.Cause.Error()
+	if len(e.Receipt.AppliedTaskIDs) > 0 {
+		if len(e.Receipt.RemainingTaskIDs) == 0 {
+			message = fmt.Sprintf("%v; all planned dependency task files were durably applied to %s", e.Cause, strings.Join(e.Receipt.AppliedTaskIDs, ", "))
+		} else {
+			message = fmt.Sprintf("%v; durable dependency prefix applied to %s; remaining tasks %s", e.Cause,
+				strings.Join(e.Receipt.AppliedTaskIDs, ", "), strings.Join(e.Receipt.RemainingTaskIDs, ", "))
+		}
 	}
-	if len(e.Receipt.RemainingTaskIDs) == 0 {
-		return fmt.Sprintf("%v; all planned dependency task files were durably applied to %s; verify current graph state before deciding whether to retry",
-			e.Cause, strings.Join(e.Receipt.AppliedTaskIDs, ", "))
+	remedy := e.Receipt.Remedy
+	if remedy == "" {
+		// Preserve useful recovery even for a failure constructed by another caller.
+		remedy = dependencyMutationRemedy(e.Receipt, e.Cause)
 	}
-	return fmt.Sprintf("%v; durable dependency prefix applied to %s; retry the same command to converge remaining tasks %s",
-		e.Cause, strings.Join(e.Receipt.AppliedTaskIDs, ", "), strings.Join(e.Receipt.RemainingTaskIDs, ", "))
+	if remedy != "" {
+		message += "; " + remedy
+	}
+	return message
 }
 
 func (e *DependencyMutationFailure) Unwrap() error {
@@ -178,7 +191,21 @@ func dependencyReceipt(operation DependencyOperation, result TaskGraphMutationRe
 			}
 		}
 	}
+	receipt.Remedy = dependencyMutationRemedy(receipt, mutationErr)
 	return receipt
+}
+
+func dependencyMutationRemedy(receipt DependencyMutationReceipt, mutationErr error) string {
+	if mutationErr != nil {
+		if len(receipt.AppliedTaskIDs) > 0 {
+			if len(receipt.RemainingTaskIDs) > 0 {
+				return "inspect the current graph and the applied/remaining task IDs before resuming the same dependency request"
+			}
+			return "inspect the current graph before deciding whether to retry; the planned dependency writes already landed"
+		}
+		return "no dependency task files were applied; inspect the failure and current graph before retrying"
+	}
+	return taskImpactRemedy(receipt.Impacts, receipt.DryRun)
 }
 
 func planDependencyEdges(graph *TaskGraph, operation DependencyOperation, taskRef string, prerequisiteRefs []string) (TaskGraphMutationPlan, dependencyPlanDetails, error) {

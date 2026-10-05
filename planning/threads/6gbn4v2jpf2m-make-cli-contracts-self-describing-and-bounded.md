@@ -6,7 +6,7 @@ description: Turn the v0.22 machine-contract foundation into complete discovery 
 goal: Agents discover safe commands and exit behavior, retain durable Thread handles, and page large planning corpora without prose scraping.
 created: "2026-09-19"
 tags: [cli, agents, json, contract]
-tasks: [6g63hhk3eddf, 6gbn4g1bb7wr, 6gbn4g1eypzs, 6gbn4g1j40pj, 6ggfd81jg0qg]
+tasks: [6g63hhk3eddf, 6gbn4g1bb7wr, 6gbn4g1eypzs, 6gbn4g1j40pj, 6ggfd81jg0qg, 6ggjmtmdd54w]
 updated_at: "2026-10-04"
 started_at: "2026-09-20"
 ---
@@ -40,3 +40,13 @@ to `config migrate` when that command cannot run without a marker. Execute the s
 keep stale-plan and pointer identity refusals intact, and avoid a general remediation framework.
 Its prerequisite is the already-shipped configuration lifecycle foundation; it can proceed
 independently of list-query bounds and does not block adapter-neutral refactor closeout.
+
+## Bootstrap targeting follow-up (2026-10-04)
+
+[Prevent silently ignored init selectors](../tasks/6ggjmtmdd54w-prevent-silently-ignored-target-selectors-during-init.md)
+tracks a dogfood finding: `init` accepts global `-C` but scaffolds/repairs the
+`--path` target, which defaults to the caller's working directory. Decide whether
+to honor or reject bootstrap selectors, pin no-write refusal for unsupported or
+conflicting targets, and keep fresh initialization independent of existing-repo
+discovery. This follows the completed configuration lifecycle foundation and is
+independent of the other open members; it is not an adapter-neutral closeout blocker.

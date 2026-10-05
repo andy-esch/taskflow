@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -163,15 +164,41 @@ func TestDependencyMigrationClearsAndReportsPresentEmptyLegacyFields(t *testing.
 	}
 }
 
+// Count Service attempts without replacing any filesystem behavior. A conflict
+// after an actual write must not disappear into an automatic resume/no-op.
+type dependencyMutationCountingFS struct {
+	*FS
+	mutationCalls int
+}
+
+func (s *dependencyMutationCountingFS) MutateTaskGraph(now time.Time, dryRun bool, planner core.TaskGraphPlanner) (core.TaskGraphMutationResult, error) {
+	s.mutationCalls++
+	return s.FS.MutateTaskGraph(now, dryRun, planner)
+}
+
 func TestDependencyMigrationEveryDurablePrefixStaysSoundAndResumes(t *testing.T) {
 	for failAfter := 1; failAfter <= 3; failAfter++ {
 		t.Run(fmt.Sprintf("after-%d", failAfter), func(t *testing.T) {
 			root := t.TempDir()
-			writeGraphMutationTask(t, root, "prefix-a", domain.StatusReadyToStart, nil, "blocked_by: [prefix-b]\n")
-			writeGraphMutationTask(t, root, "prefix-b", domain.StatusCompleted, nil, "blocked_by: [prefix-c]\n")
-			writeGraphMutationTask(t, root, "prefix-c", domain.StatusCompleted, nil, "blocked_by: [prefix-d]\n")
-			writeGraphMutationTask(t, root, "prefix-d", domain.StatusCompleted, nil, "")
-			svc := core.MustNewService(NewFS(root), core.WithClock(func() time.Time { return graphMutationNow }))
+			paths, before := map[string]string{}, map[string][]byte{}
+			for i, slug := range []string{"prefix-a", "prefix-b", "prefix-c", "prefix-d"} {
+				status, legacy := domain.StatusCompleted, ""
+				if i == 0 {
+					status = domain.StatusReadyToStart
+				}
+				if i < 3 {
+					legacy = "blocked_by: [" + []string{"prefix-b", "prefix-c", "prefix-d"}[i] + "]\n"
+				}
+				taskID := testutil.TaskID(slug)
+				paths[taskID] = writeGraphMutationTask(t, root, slug, status, nil, legacy)
+				var readErr error
+				before[taskID], readErr = os.ReadFile(paths[taskID])
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+			}
+			fs := &dependencyMutationCountingFS{FS: NewFS(root)}
+			svc := core.MustNewService(fs, core.WithClock(func() time.Time { return graphMutationNow }), core.WithRetry(4, func(int) {}))
 
 			original := testHookAfterGraphWrite
 			defer func() { testHookAfterGraphWrite = original }()
@@ -180,24 +207,69 @@ func TestDependencyMigrationEveryDurablePrefixStaysSoundAndResumes(t *testing.T)
 				writes++
 				if writes == failAfter {
 					testHookAfterGraphWrite = nil
-					return errors.New("injected interruption")
+					return fmt.Errorf("injected interruption: %w", domain.ErrConflict)
 				}
 				return nil
 			}
 			partial, err := svc.MigrateTaskDependencies(false)
-			if err == nil || len(partial.AppliedTaskIDs) != failAfter || len(partial.RemainingTaskIDs) != 3-failAfter {
+			var failure *core.DependencyMutationFailure
+			if !errors.Is(err, domain.ErrConflict) || !errors.As(err, &failure) || fs.mutationCalls != 1 ||
+				len(partial.AppliedTaskIDs) != failAfter || len(partial.RemainingTaskIDs) != 3-failAfter {
 				t.Fatalf("prefix %d receipt=%+v err=%v", failAfter, partial, err)
+			}
+			for taskID, path := range paths {
+				after, readErr := os.ReadFile(path)
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+				changed := !bytes.Equal(before[taskID], after)
+				if changed != slices.Contains(partial.AppliedTaskIDs, taskID) ||
+					!strings.Contains(string(after), "Body stays intact.") {
+					t.Fatalf("durable bytes disagree with receipt for %s: %+v", taskID, partial)
+				}
 			}
 			if failAfter == 3 && !strings.Contains(err.Error(), "all planned dependency task files were durably applied") {
 				t.Fatalf("final-write failure did not explain fully durable result: %v", err)
+			}
+			if partial.Remedy == "" || !strings.Contains(err.Error(), partial.Remedy) || strings.Contains(err.Error(), "retry the same command to converge") {
+				t.Fatalf("prefix %d lost core inspection guidance: receipt=%+v err=%v", failAfter, partial, err)
+			}
+			if failAfter == 3 && !strings.Contains(partial.Remedy, "writes already landed") {
+				t.Fatalf("final-write recovery implied outstanding writes: %+v", partial)
+			}
+			if failAfter < 3 && !strings.Contains(partial.Remedy, "applied/remaining task IDs") {
+				t.Fatalf("partial-write recovery omitted inspection of durable progress: %+v", partial)
 			}
 			graph, loadErr := core.LoadTaskGraph(NewFS(root))
 			if loadErr != nil || graph.Health() == core.GraphBroken {
 				t.Fatalf("prefix %d left broken graph: health=%s err=%v problems=%+v", failAfter, graph.Health(), loadErr, graph.Problems())
 			}
+			// An operator can change remaining intent after inspecting the prefix.
+			// Explicit resume must plan from those live bytes, not replay the old plan.
+			var editedID string
+			if len(partial.RemainingTaskIDs) > 0 {
+				editedID = partial.RemainingTaskIDs[0]
+				content, readErr := os.ReadFile(paths[editedID])
+				if readErr != nil {
+					t.Fatal(readErr)
+				}
+				for _, prerequisite := range []string{"prefix-b", "prefix-c", "prefix-d"} {
+					content = bytes.ReplaceAll(content, []byte("blocked_by: ["+prerequisite+"]"), []byte("blocked_by: []"))
+				}
+				content = append(content, []byte("\nOperator changed remaining intent.\n")...)
+				if writeErr := os.WriteFile(paths[editedID], content, 0o644); writeErr != nil {
+					t.Fatal(writeErr)
+				}
+			}
 			completed, err := svc.MigrateTaskDependencies(false)
-			if err != nil || len(completed.AppliedTaskIDs) != 3-failAfter {
+			if err != nil || fs.mutationCalls != 2 || len(completed.AppliedTaskIDs) != 3-failAfter {
 				t.Fatalf("prefix %d rerun=%+v err=%v", failAfter, completed, err)
+			}
+			if editedID != "" {
+				task, body, readErr := fs.GetTask(editedID)
+				if readErr != nil || len(task.DependsOn) != 0 || !strings.Contains(body, "Operator changed remaining intent.") {
+					t.Fatalf("resume ignored current operator intent: task=%+v body=%s err=%v", task, body, readErr)
+				}
 			}
 			graph, loadErr = core.LoadTaskGraph(NewFS(root))
 			if loadErr != nil || graph.Health() != core.GraphHealthy {

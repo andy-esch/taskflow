@@ -324,8 +324,7 @@ func MovesHuman(out, errw io.Writer, st Style, results []MoveResult, dryRun bool
 				}
 				for _, impact := range r.Lifecycle.Impacts {
 					prefix := st.Dim("•")
-					if (impact.Before.Gate != impact.After.Gate && impact.After.Gate != string(core.GateClear)) ||
-						(!impact.Before.Inconsistent && impact.After.Inconsistent) {
+					if impact.NewlyUnsafe {
 						prefix = st.Warn("⚠")
 					}
 					fmt.Fprintf(out, "  %s %s state %s/%s -> %s/%s\n", prefix, impact.TaskID,
@@ -336,7 +335,7 @@ func MovesHuman(out, errw io.Writer, st Style, results []MoveResult, dryRun bool
 				}
 				for _, impact := range r.Lifecycle.ThreadImpacts {
 					prefix := st.Dim("•")
-					if !impact.Before.Inconsistent && impact.After.Inconsistent {
+					if impact.NewlyInconsistent {
 						prefix = st.Warn("⚠")
 					}
 					fmt.Fprintf(out, "  %s %s (%s) inconsistent %t -> %t\n", prefix, impact.Slug, impact.ThreadID,

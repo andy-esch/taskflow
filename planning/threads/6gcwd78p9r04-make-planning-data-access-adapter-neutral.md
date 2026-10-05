@@ -33,8 +33,8 @@ readable occurrence locations have shipped, and semantic entity values no longer
 filename identities, or guarded revisions. CLI repair, body-link checking, and completion have
 merged in PR #275. Concrete composition isolation and executable controller enforcement merged
 in PR #277; workspace identity parity merged in PR #279. The remaining work is bounded to explicit
-persistence authorization, the locally implemented identity-lint fix's integration, core-owned
-impact/recovery semantics, and a final guarded-contract regression pass.
+persistence authorization, core-owned impact/recovery semantics, and a final guarded-contract
+regression pass. Cross-kind collision lint merged in PR #280.
 
 This Thread closes those seams in evidence-driven stages:
 
@@ -69,11 +69,11 @@ This Thread closes those seams in evidence-driven stages:
    - [Explicit persistence authorization](../tasks/6gg7e59cyxxh-require-an-explicit-mutation-authorization-policy-at-persistence-composition.md),
      retaining its user checkpoint before choosing constructor compatibility and opt-out policy.
    - [Cross-kind collision lint on unreadable records](../tasks/6gcqz5aefjjf-lint-cross-kind-task-and-thread-id-collisions-on-unreadable-records.md),
-     **In progress, implemented locally:** portable recovered identity now participates in lint,
+     **Completed, merged in PR #280:** portable recovered identity now participates in lint,
      including both unreadable owners. Membership validity and creation policy are unchanged;
-     core/CLI regressions and four restored owner mutation probes pass. Integration remains.
+     core/CLI regressions and four restored owner mutation probes pass.
    - [Core-owned dependency impact and recovery semantics](../tasks/6ggdkztshmzz-make-dependency-impact-and-recovery-semantics-core-owned.md),
-     folding adapter-hygiene M1/L1 without changing graph eligibility.
+     **In progress:** folding adapter-hygiene M1/L1 without changing graph eligibility.
 
    These slices can progress independently; graph edges impose no artificial serial order.
 10. [Pin guarded planning mutation boundary contracts](../tasks/6ggdkzv2tnta-pin-guarded-planning-mutation-boundary-contracts.md)
@@ -107,7 +107,8 @@ identity, an optional source location, or an explicit local capability is the ho
 
 This Thread has a finish line, not a mandate to absorb every architecture audit. The two new tasks
 above and the existing collision-lint task are members of this graph. Composition and workspace
-parity are completed in PRs #277 and #279; four tasks remain. Older loaded-record TUI reviews are
+parity and collision lint are completed in PRs #277, #279, and #280; three tasks remain.
+Older loaded-record TUI reviews are
 closed because their recorded findings were fixed (or absent), not because a new review was
 performed today.
 

@@ -28,7 +28,7 @@ updated_at: "2026-10-04"
 **Resolution:** <how it was resolved — written by `audit finding --note`, not by hand>
 ```
 
-#### M1. Cross-kind task/Thread id-collision lint is blind to unreadable records · **Status:** fixed locally (2026-10-04)
+#### M1. Cross-kind task/Thread id-collision lint is blind to unreadable records · **Status:** fixed 2026-10-04 (PR #280)
 
 **File:** internal/core/service.go:496-518 | **Component:** core/lint
 **Effort:** S · **Urgency:** eventually
@@ -61,13 +61,11 @@ on disk, and it is the surface with the hole.
 
 **Recommendation:** Seed threadIdentity from threadRead.Problems[].ThreadID and taskIdentity from the task FileProblems' EntityID, exactly as threadIDSources already does, so the collision check sees recovered identity.
 
-**Resolution:** Implemented in 6gcqz5aefjjf: repository lint consumes explicit,
-strictly valid recovered task/Thread IDs and reports every readable/unreadable
-owner while preserving load errors. Core and real CLI regressions cover both
-directions, both unreadable, invalid/untrusted IDs, source drift, combined
-duplicate issues, and deterministic human/JSON output. Membership validity and
-create guards remain unchanged; four restored owner mutation probes and full
-tests/race/lint/build/docs checks pass. Integration is pending.
+**Resolution:** Implemented by 6gcqz5aefjjf and merged in PR #280. Lint reports
+readable and unreadable task/Thread collision owners using explicit, strictly
+valid recovered identity, preserves load errors, and leaves membership validity
+and create guards unchanged. Core/CLI regressions, four restored owner mutation
+probes, and full tests/race/lint/build/docs checks pass.
 
 #### L1. blockerReason's default arm mislabels a future status AND truncates the frontier · **Status:** tracked by 6gcqz5aqt2sg
 

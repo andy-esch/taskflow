@@ -336,7 +336,11 @@ import (
 // 1.80: ADDITIVE — non-repairable graph-repair defects with an identifiable
 // declaration expose it separately from executable `target` edits, preserving
 // source occurrence, field, raw value, and occurrence index in receipts.
-const SchemaVersion = "1.80"
+// 1.81: ADDITIVE — task-state and Thread-projection mutation impacts carry
+// core-owned newly_unsafe/newly_inconsistent warning decisions. Dependency
+// mutation receipts expose optional remedy guidance for proposed unsafe changes
+// and durable-prefix recovery; preview/refusal/applied evidence remains explicit.
+const SchemaVersion = "1.81"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.

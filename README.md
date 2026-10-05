@@ -220,6 +220,14 @@ manifest feed the sole guarded removal-only recovery path. A rare cleanup error 
 lifecycle or Thread write is reported explicitly as committed with an inspection receipt;
 inspect current state instead of blindly retrying it.
 
+Mutation impact warnings and `remedy` guidance are core-owned and shared by human
+and JSON output. JSON impacts expose `newly_unsafe` (tasks) and
+`newly_inconsistent` (Threads); these classify the proposed before/after state,
+not durability. Check `dry_run`, lifecycle `committed`, or dependency
+`applied_task_ids`/`remaining_task_ids` before treating a change as persisted.
+An already unsafe task does not trigger a new warning unless its non-clear gate
+changes or it becomes inconsistent; this is an inspection signal, not a severity ranking.
+
 `board`, `status`, and their JSON envelopes report a non-healthy task graph before a write
 encounters that guard; the TUI overview and cross-space atlas carry the same summary signal.
 These read dashboards remain informational. `lint` is the validation gate: safe resolvable legacy

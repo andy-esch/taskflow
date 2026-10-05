@@ -581,19 +581,43 @@ func taskLifecycleRemedy(result TaskLifecycleMutationResult) string {
 	if result.OverrideApplied && result.Plan.Override == TaskLifecycleOverrideDependencyGate {
 		parts = append(parts, "resolve the outstanding blockers; the override did not alter dependency edges")
 	}
-	if taskImpactsNeedRepair(result.Impacts) {
-		parts = append(parts, "inspect each affected task with `tskflwctl task blockers <task>` and restore sound prerequisites or update its dependencies")
+	if remedy := taskImpactRemedy(result.Impacts, result.DryRun); remedy != "" {
+		parts = append(parts, remedy)
 	}
 	if threadImpactsNeedRepair(result.ThreadImpacts) {
-		parts = append(parts, "inspect each newly inconsistent Thread and restore sound member or external-gate evidence")
+		if result.DryRun {
+			parts = append(parts, "preview only: inspect each Thread that would become inconsistent and restore sound member or external-gate evidence before applying")
+		} else {
+			parts = append(parts, "inspect each newly inconsistent Thread and restore sound member or external-gate evidence")
+		}
 	}
 	return strings.Join(parts, "; ")
 }
 
+func taskImpactRemedy(impacts []TaskGraphStateImpact, dryRun bool) string {
+	if !taskImpactsNeedRepair(impacts) {
+		return ""
+	}
+	var commands []string
+	for _, impact := range impacts {
+		if impact.NewlyUnsafe() {
+			taskRef := impact.TaskID
+			if taskRef == "" {
+				taskRef = "<task>"
+			}
+			commands = append(commands, fmt.Sprintf("`tskflwctl task blockers %s`", taskRef))
+		}
+	}
+	inspection := strings.Join(commands, ", ")
+	if dryRun {
+		return "preview only: proposed changes would introduce newly unsafe task state; inspect affected tasks with " + inspection + " and adjust the request or prerequisites before applying"
+	}
+	return "inspect each affected task with " + inspection + " and restore sound prerequisites or update its dependencies"
+}
+
 func taskImpactsNeedRepair(impacts []TaskGraphStateImpact) bool {
 	for _, impact := range impacts {
-		if (!impact.Before.Inconsistent && impact.After.Inconsistent) ||
-			(impact.Before.Gate != impact.After.Gate && impact.After.Gate != GateClear) {
+		if impact.NewlyUnsafe() {
 			return true
 		}
 	}
@@ -602,7 +626,7 @@ func taskImpactsNeedRepair(impacts []TaskGraphStateImpact) bool {
 
 func threadImpactsNeedRepair(impacts []ThreadProjectionImpact) bool {
 	for _, impact := range impacts {
-		if !impact.Before.Inconsistent && impact.After.Inconsistent {
+		if impact.NewlyInconsistent() {
 			return true
 		}
 	}
