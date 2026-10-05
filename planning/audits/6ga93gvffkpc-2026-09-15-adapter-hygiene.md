@@ -4,7 +4,7 @@ id: 6ga93gvffkpc
 bucket: open
 area: adapter-hygiene
 date: "2026-09-15"
-updated_at: "2026-10-04"
+updated_at: "2026-10-05"
 ---
 # Code Quality Audit: adapter-hygiene — 2026-09-15
 
@@ -70,7 +70,7 @@ Read for context while evaluating the above: `internal/cli/render/render.go`,
 
 ### Medium
 
-#### M1. Dependency mutation receipts carry no remedy; the CLI adapter authors core's recovery prose  · **Status:** fixed 2026-10-04
+#### M1. Dependency mutation receipts carry no remedy; the CLI adapter authors core's recovery prose  · **Status:** fixed 2026-10-04 (PR #282)
 
 **File:** `internal/cli/render/dependency.go:223` (and `internal/core/dependency_operations.go:42`) | **Component:** cli/render + core
 **Effort:** S · **Urgency:** soon
@@ -131,12 +131,14 @@ it should survive the merge rather than be dropped in favour of the existing cor
 reports a `remedy` — would be better enforced than remembered. A table-driven wire test over
 the receipt DTOs would catch the next one; that is its own task, not part of this fix.
 
-**Resolution:** Implemented locally in task 6ggdkztshmzz, pending external
-review and integration. Dependency receipts now publish core-owned remedy
-guidance; shared dependency/lifecycle task advice carries runnable stable-ID
-blocker commands. Preview, no-write refusal, durable prefix, and all-applied
-failures stay distinct, with human/error/JSON parity and semantic schema tests.
-No repair authorization or persistence transaction changes.
+**Resolution:** Implemented in 6ggdkztshmzz for PR #282; both implementation
+reviews are reconciled, with integration pending. Dependency receipts publish
+core-owned recovery guidance shared with lifecycle receipts, including runnable
+stable-ID blocker commands. Preview, no-write refusal, durable-prefix, and
+all-applied failures remain distinct, with human/error/JSON parity and populated
+semantic schema regressions. Antigravity's mapper-test gap is fixed and Codex's
+pre-existing TUI consumer gap is tracked by 6ggkdbg0816h. Repair authorization
+and transaction behavior are unchanged.
 
 #### M2. MarkerUnreadable brands readable tasks whose prerequisite is broken  · **Status:** open
 
@@ -202,7 +204,7 @@ arriving from the CLI side.
 
 ### Low
 
-#### L1. The "newly unsafe impact" predicate is spelled three times, twice inside the adapter  · **Status:** fixed 2026-10-04
+#### L1. The "newly unsafe impact" predicate is spelled three times, twice inside the adapter  · **Status:** fixed 2026-10-04 (PR #282)
 
 **File:** `internal/cli/render/render.go:291` (also `internal/cli/render/dependency.go:215`, `internal/core/service_task.go:414`) | **Component:** cli/render + core
 **Effort:** S · **Urgency:** eventually
@@ -241,13 +243,14 @@ decision as a field, which M1's fix makes natural.
 needs the predicate reachable from core's dependency path regardless, so the two land as
 one edit.
 
-**Resolution:** Implemented locally in task 6ggdkztshmzz, pending external
-review and integration. TaskGraphStateImpact.NewlyUnsafe and
-ThreadProjectionImpact.NewlyInconsistent own the existing predicates. Wire
-copies the decisions; lifecycle rendering trusts copied flags and dependency
-rendering invokes core, without string-based policy. Schema revision 1.81 is
-additive. Compiler-valid owner, mapper, renderer, guidance, and committed-retry
-mutation probes are killed by the named regression tests and restored.
+**Resolution:** Implemented in 6ggdkztshmzz for PR #282; both implementation
+reviews are reconciled, with integration pending.
+TaskGraphStateImpact.NewlyUnsafe and ThreadProjectionImpact.NewlyInconsistent
+own the existing warning predicates; wire copies core decisions and renderers
+consume them without string-based policy. Schema 1.81 is additive. The
+strengthened wire matrix covers 36 task state transitions and all four Thread
+consistency transitions; three additional compiler-valid shallow mapper probes
+fail and restored tests pass. No production semantics changed after review.
 
 #### L2. The spatial anchor guard is narrower than its sibling render guards  · **Status:** open
 

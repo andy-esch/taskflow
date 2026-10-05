@@ -13,33 +13,60 @@ import (
 )
 
 func TestImpactWireCopiesCoreDecisionsAndDependencyRemedy(t *testing.T) {
-	for _, unsafe := range []bool{false, true} {
-		gate := core.GateClear
-		if unsafe {
-			gate = core.GateBlocked
+	const ownerGuidance = "inspect the owner's durable receipt before choosing the next operation"
+	// Cover every gate/inconsistency pair, not just transitions from clear.
+	// Otherwise a mapper using only After.Gate can agree accidentally with core.
+	states := []core.TaskGraphState{
+		{Gate: core.GateClear},
+		{Gate: core.GateClear, Inconsistent: true},
+		{Gate: core.GateBlocked},
+		{Gate: core.GateBlocked, Inconsistent: true},
+		{Gate: core.GateBroken},
+		{Gate: core.GateBroken, Inconsistent: true},
+	}
+	for _, before := range states {
+		for _, after := range states {
+			t.Run(fmt.Sprintf("task/%s-%t_to_%s-%t", before.Gate, before.Inconsistent, after.Gate, after.Inconsistent), func(t *testing.T) {
+				impact := core.TaskGraphStateImpact{TaskID: "6g0000000001", Before: before, After: after}
+				// Role-only changes must not become warnings either.
+				impact.Before.Role, impact.After.Role = core.RoleQueued, core.RoleCandidate
+				dependency := ToDependencyMutationJSON(core.DependencyMutationReceipt{
+					Impacts: []core.TaskGraphStateImpact{impact}, Remedy: ownerGuidance,
+				}, WorkspaceJSON{})
+				lifecycle := ToTaskLifecycleJSON(core.TaskLifecycleReceipt{
+					Impacts: []core.TaskGraphStateImpact{impact}, Remedy: ownerGuidance,
+				})
+				if dependency.Remedy != ownerGuidance || lifecycle.Remedy != ownerGuidance ||
+					len(dependency.Impacts) != 1 || len(lifecycle.Impacts) != 1 ||
+					dependency.Impacts[0].NewlyUnsafe != impact.NewlyUnsafe() ||
+					lifecycle.Impacts[0].NewlyUnsafe != impact.NewlyUnsafe() {
+					t.Fatalf("wire re-derived/lost the core decision: dependency=%+v lifecycle=%+v", dependency, lifecycle)
+				}
+				data, err := json.Marshal(dependency)
+				if err != nil || !strings.Contains(string(data), `"newly_unsafe":`) || !strings.Contains(string(data), `"remedy":`) {
+					t.Fatalf("public decision/guidance disappeared: %s, %v", data, err)
+				}
+			})
 		}
-		impact := core.TaskGraphStateImpact{TaskID: "6g0000000001",
-			Before: core.TaskGraphState{Gate: core.GateClear}, After: core.TaskGraphState{Gate: gate},
-		}
-		threadImpact := core.ThreadProjectionImpact{ThreadID: "6g0000000002",
-			After: core.ThreadView{Inconsistent: unsafe},
-		}
-		const ownerGuidance = "inspect the owner's durable receipt before choosing the next operation"
-		dependency := ToDependencyMutationJSON(core.DependencyMutationReceipt{
-			Impacts: []core.TaskGraphStateImpact{impact}, Remedy: ownerGuidance,
-		}, WorkspaceJSON{})
-		lifecycle := ToTaskLifecycleJSON(core.TaskLifecycleReceipt{
-			Impacts: []core.TaskGraphStateImpact{impact}, ThreadImpacts: []core.ThreadProjectionImpact{threadImpact},
-		})
-		if dependency.Remedy != ownerGuidance || len(dependency.Impacts) != 1 ||
-			dependency.Impacts[0].NewlyUnsafe != impact.NewlyUnsafe() ||
-			lifecycle.Impacts[0].NewlyUnsafe != impact.NewlyUnsafe() ||
-			lifecycle.ThreadImpacts[0].NewlyInconsistent != threadImpact.NewlyInconsistent() {
-			t.Fatalf("wire re-derived/lost the core decision: dependency=%+v lifecycle=%+v", dependency, lifecycle)
-		}
-		data, err := json.Marshal(dependency)
-		if err != nil || !strings.Contains(string(data), `"newly_unsafe":`) || !strings.Contains(string(data), `"remedy":`) {
-			t.Fatalf("public decision/guidance disappeared: %s, %v", data, err)
+	}
+	for _, before := range []bool{false, true} {
+		for _, after := range []bool{false, true} {
+			t.Run(fmt.Sprintf("thread/%t_to_%t", before, after), func(t *testing.T) {
+				impact := core.ThreadProjectionImpact{ThreadID: "6g0000000002",
+					Before: core.ThreadView{Inconsistent: before}, After: core.ThreadView{Inconsistent: after},
+				}
+				lifecycle := ToTaskLifecycleJSON(core.TaskLifecycleReceipt{
+					ThreadImpacts: []core.ThreadProjectionImpact{impact}, Remedy: ownerGuidance,
+				})
+				if lifecycle.Remedy != ownerGuidance || len(lifecycle.ThreadImpacts) != 1 ||
+					lifecycle.ThreadImpacts[0].NewlyInconsistent != impact.NewlyInconsistent() {
+					t.Fatalf("wire re-derived/lost the core Thread decision: %+v", lifecycle)
+				}
+				data, err := json.Marshal(lifecycle)
+				if err != nil || !strings.Contains(string(data), `"newly_inconsistent":`) || !strings.Contains(string(data), `"remedy":`) {
+					t.Fatalf("public Thread decision/guidance disappeared: %s, %v", data, err)
+				}
+			})
 		}
 	}
 	data, err := json.Marshal(ToDependencyMutationJSON(core.DependencyMutationReceipt{}, WorkspaceJSON{}))

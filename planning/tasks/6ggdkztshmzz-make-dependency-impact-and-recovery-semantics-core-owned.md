@@ -10,7 +10,7 @@ priority: medium
 autonomy_level: 3
 tags: [architecture, core, recovery, json]
 created: "2026-10-04"
-updated_at: "2026-10-04"
+updated_at: "2026-10-05"
 audit_sources: [2026-09-15-adapter-hygiene]
 depends_on: [6gcwcf8rxe72]
 started_at: "2026-10-04"
@@ -70,13 +70,14 @@ wire projection did not publish recovery guidance.
 
 ## Implementation and review handoff (2026-10-04)
 
-Implemented locally; remains **in progress** pending external review and integration.
+Implemented locally; remains **in progress** pending integration in [PR #282](https://github.com/andy-esch/taskflow/pull/282).
 Source audit M1/L1 are fixed locally, not represented as merged; unrelated findings remain open.
 Review handoff is frozen for the independent
 [Codex](../audits/6ggjnz40teda-2026-10-04-core-owned-dependency-impact-recovery-implementation-codex.md)
 and [Antigravity](../audits/6ggjnz4989cm-2026-10-04-core-owned-dependency-impact-recovery-implementation-antigravity.md)
-audits. Both contain the same contract and hostile evidence requirements. Codex is now
-reviewed and closed with its sole finding tracked; Antigravity remains pending.
+audits. Both contain the same contract and hostile evidence requirements. Codex is
+reviewed and closed with its sole finding tracked; Antigravity's test-coverage
+finding is fixed and its audit is closed. Neither closure claims integration.
 
 - `TaskGraphStateImpact.NewlyUnsafe()` and `ThreadProjectionImpact.NewlyInconsistent()`
   own the existing warning predicates. A different non-clear gate still warns, including
@@ -149,8 +150,33 @@ Review evidence also strengthened permanent tests, without production changes:
   regressions supplement, not replace, the review's sandbox-local evidence.
 
 Codex audit closure means M1 has an explicit task destination, not that its followup
-or integration is done. Antigravity still reviews the original captured implementation;
-the post-Codex delta is tests and planning only, and its assigned audit remains untouched.
+or integration is done. Antigravity reviewed the original captured implementation;
+the post-review delta is tests and planning only, with no production-policy changes.
+
+### Antigravity review disposition (2026-10-05)
+
+Accepted and independently reproduced M1: replacing the wire task warning with
+`After.Gate != GateClear` passed the original focused test and full wire/CLI suites.
+The production mapper was already correct; this was a regression-test blind spot,
+not a shipped warning defect or a new design decision.
+
+`TestImpactWireCopiesCoreDecisionsAndDependencyRemedy` now exercises all **36**
+before/after gate/inconsistency pairs through dependency and lifecycle conversion,
+plus all **four** Thread consistency transitions. Role-only changes remain quiet,
+unchanged unsafe states do not become new warnings, and owner guidance survives
+even when the warning flag is false. Core's separate literal predicate table
+remains the policy oracle; the wire test checks copying, not a second policy.
+
+Three compiler-valid mapper probes ran only in an independent temporary copy:
+the reported shallow gate check, a changed-gate-only rule dropping new
+inconsistency, and a Thread rule using only `After.Inconsistent`. The expanded
+test rejects each for the intended semantic mismatch; each restored test passes,
+and the restored mapper matches the source byte-for-byte. Full race tests,
+lint, build, generated-doc parity, and planning/audit lint pass.
+
+Antigravity M1 is fixed locally in PR #282 and the audit is closed. No additional
+task or artificial graph edge is needed for this bounded test hardening. Codex's
+pre-existing TUI followup remains tracked, not fixed by this review.
 
 ## Out of scope
 
