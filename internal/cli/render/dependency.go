@@ -226,16 +226,14 @@ func DependencyMutationHuman(w io.Writer, st Style, receipt core.DependencyMutat
 	}
 	for _, impact := range receipt.Impacts {
 		prefix := st.Dim("•")
-		newlyUnsafe := (impact.Before.Gate != impact.After.Gate && impact.After.Gate != core.GateClear) ||
-			(!impact.Before.Inconsistent && impact.After.Inconsistent)
-		if newlyUnsafe {
+		if impact.NewlyUnsafe() {
 			prefix = st.Warn("⚠")
 		}
 		fmt.Fprintf(w, "%s %s state %s/%s -> %s/%s\n", prefix, impact.TaskID,
 			impact.Before.Role, impact.Before.Gate, impact.After.Role, impact.After.Gate)
-		if newlyUnsafe {
-			fmt.Fprintf(w, "  %s inspect with `tskflwctl task blockers %s`; restore a sound prerequisite or remove the edge\n", st.Dim("remedy:"), impact.TaskID)
-		}
+	}
+	if receipt.Remedy != "" {
+		fmt.Fprintf(w, "  %s %s\n", st.Dim("remedy:"), receipt.Remedy)
 	}
 	if len(receipt.ClearedLegacyFields) > 0 {
 		verb := "cleared"

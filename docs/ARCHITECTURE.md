@@ -457,6 +457,16 @@ will give these decisions a durable authority without duplicating the current ma
   Dependency writes stamp `updated_at` from the caller-injected clock only when graph-owned
   fields actually change. A dry run holds the same exclusive guard for an authoritative
   preview but, because it writes nothing, makes no CAS durability claim about later apply.
+  Impact policy also lives in core: `TaskGraphStateImpact.NewlyUnsafe` and
+  `ThreadProjectionImpact.NewlyInconsistent` own warning decisions; adapters must not
+  rederive them from gate strings or inconsistency pairs. Dependency and lifecycle
+  receipts share task-impact recovery guidance, with separate Thread/override advice
+  where applicable. Wire revision 1.81 copies those decisions as `newly_unsafe` and
+  `newly_inconsistent` and dependency receipts expose optional `remedy`. Impacts describe
+  the complete proposed before/after plan, even on refusal or partial failure; consumers
+  must inspect `dry_run`, lifecycle `committed`, and dependency applied/remaining IDs
+  separately for durability. Core failure guidance calls for inspection before resuming,
+  distinguishes no-write/partial/all-applied outcomes, and never recommends blind retry.
   `TaskGraphRepairStore` is deliberately not a mode flag on that ordinary mutation port. It alone
   accepts a broken source graph, and only for reauthorized `drop`, `dedupe`, and empty-legacy-key
   operations. Core diagnoses exact declarations, simulates every atomic source-file step, proves

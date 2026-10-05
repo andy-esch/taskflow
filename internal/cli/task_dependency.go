@@ -42,6 +42,12 @@ func newTaskDependCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "depend",
 		Short: "Change repository-global task dependencies through the graph guard",
+		Long: `Change repository-global task dependencies through the graph guard.
+
+Mutation receipts carry core-owned impact warnings and recovery guidance. With
+--dry-run, impacts describe proposed changes, not persisted state. After a failed
+multi-file write, inspect the current graph and applied/remaining task IDs before
+resuming; a planned impact does not prove its task file was written.`,
 	}
 	cmd.AddCommand(
 		newTaskDependencyEdgeCmd(app, core.DependencyAdd),

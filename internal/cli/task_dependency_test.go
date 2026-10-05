@@ -369,6 +369,7 @@ func TestWriteErrorCarriesStructuredDependencyMutationRecovery(t *testing.T) {
 		Operation: core.DependencyMigrate, Changed: true,
 		PlannedTaskIDs: []string{"6g0000000001", "6g0000000002"},
 		AppliedTaskIDs: []string{"6g0000000001"}, RemainingTaskIDs: []string{"6g0000000002"},
+		Remedy: "inspect the current graph and the applied/remaining task IDs before resuming the same dependency request",
 	}
 	err := &dependencyCommandFailure{
 		cause:   &core.DependencyMutationFailure{Cause: domain.ErrConflict, Receipt: receipt},
@@ -383,6 +384,8 @@ func TestWriteErrorCarriesStructuredDependencyMutationRecovery(t *testing.T) {
 	if envelope.Error.Code != "conflict" || envelope.Error.DependencyMutation == nil ||
 		!slices.Equal(envelope.Error.DependencyMutation.AppliedTaskIDs, []string{"6g0000000001"}) ||
 		!slices.Equal(envelope.Error.DependencyMutation.RemainingTaskIDs, []string{"6g0000000002"}) ||
+		envelope.Error.DependencyMutation.Remedy != receipt.Remedy ||
+		!strings.Contains(envelope.Error.Message, receipt.Remedy) ||
 		envelope.Error.DependencyMutation.Workspace.PlanningRoot != "/repo/planning" {
 		t.Fatalf("structured recovery envelope = %+v", envelope)
 	}

@@ -387,6 +387,12 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 					Action: core.DependencyAdd, Outcome: "added",
 				}},
 				PlannedTaskIDs: []string{"6g0000000002"},
+				Impacts: []core.TaskGraphStateImpact{{
+					TaskID: "6g0000000002", Direct: true,
+					Before: core.TaskGraphState{TaskID: "6g0000000002", Role: core.RoleCandidate, Gate: core.GateClear, Eligible: true},
+					After:  core.TaskGraphState{TaskID: "6g0000000002", Role: core.RoleCandidate, Gate: core.GateBlocked},
+				}},
+				Remedy: "preview only: inspect affected tasks before applying",
 			}, WorkspaceJSON{PlanningRoot: "/repo/planning", Source: WorkspaceSourceConfig}))
 		}},
 		{"TaskGraphRepairEnvelope", func(w io.Writer) error {
@@ -493,7 +499,21 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 			return emit(w, ToCreatedEnvelope("task", "6fsa428vc2mm", "alpha", "ready-to-start", "tasks/6fsa428vc2mm-alpha.md", false, WorkspaceJSON{}))
 		}},
 		{"MovesEnvelope", func(w io.Writer) error {
-			return emit(w, ToMovesEnvelope([]MoveResult{{Slug: "alpha", To: "in-progress"}}, false, WorkspaceJSON{}))
+			afterThread := threadView
+			afterThread.Inconsistent = true
+			lifecycle := ToTaskLifecycleJSON(core.TaskLifecycleReceipt{
+				Task: task, Changed: true, Committed: true,
+				Impacts: []core.TaskGraphStateImpact{{
+					TaskID: "6g0000000002", Direct: true,
+					Before: core.TaskGraphState{TaskID: "6g0000000002", Role: core.RoleInFlight, Gate: core.GateClear},
+					After:  core.TaskGraphState{TaskID: "6g0000000002", Role: core.RoleInFlight, Gate: core.GateBlocked, Inconsistent: true},
+				}},
+				ThreadImpacts: []core.ThreadProjectionImpact{{
+					ThreadID: thread.ID, Slug: thread.Slug, Before: threadView, After: afterThread,
+				}},
+				Remedy: "inspect the affected task and Thread",
+			})
+			return emit(w, ToMovesEnvelope([]MoveResult{{Slug: "alpha", To: "in-progress", Lifecycle: &lifecycle}}, false, WorkspaceJSON{}))
 		}},
 		{"SummaryEnvelope", func(w io.Writer) error {
 			return emit(w, ToSummaryEnvelope(core.Summary{
@@ -686,9 +706,15 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 				Kind: "task", ID: "6g0000000002", Slug: "created", Status: "ready-to-start",
 				Path: "tasks/6g0000000002-created.md",
 			}, WorkspaceJSON{PlanningRoot: "/repo/planning", Source: WorkspaceSourceConfig})
+			dependency := ToDependencyMutationJSON(core.DependencyMutationReceipt{
+				Operation: core.DependencyMigrate, Changed: true,
+				PlannedTaskIDs: []string{"6g0000000001", "6g0000000002"},
+				AppliedTaskIDs: []string{"6g0000000001"}, RemainingTaskIDs: []string{"6g0000000002"},
+				Remedy: "inspect current graph and durable progress before resuming",
+			}, WorkspaceJSON{})
 			return emit(w, ErrorEnvelope{SchemaVersion: SchemaVersion, Error: ErrorItem{
 				Code: "conflict", Message: "Thread creation committed before cleanup failed",
-				Created: &created,
+				Created: &created, DependencyMutation: &dependency,
 				TaskRename: &TaskRenameRecoveryJSON{
 					TaskRenameJSON: TaskRenameJSON{
 						TaskID: "6g0000000001", FromSlug: "old", ToSlug: "new",
