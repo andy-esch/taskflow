@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6ggdkztshmzz
-status: ready-to-start
+status: in-progress
 epic: 21-code-quality-architecture-hardening
 description: Publish core-owned dependency impact and recovery intent consistently to human and machine callers.
 effort: 4-8 hours
@@ -13,6 +13,7 @@ created: "2026-10-04"
 updated_at: "2026-10-04"
 audit_sources: [2026-09-15-adapter-hygiene]
 depends_on: [6gcwcf8rxe72]
+started_at: "2026-10-04"
 ---
 # Make dependency impact and recovery semantics core-owned
 
@@ -30,9 +31,9 @@ recovery guidance present on lifecycle receipts, while renderers repeat the newl
 Gate/Inconsistent predicate. The spellings currently agree; this is an ownership and machine
 contract gap, not evidence that today's dependency mutations compute the wrong graph.
 
-The 2026-10-04 survey still finds the rule in `core/service_task.go`,
+The pre-implementation 2026-10-04 survey found the rule in `core/service_task.go`,
 `cli/render/dependency.go`, and `cli/render/render.go`; `DependencyMutationReceipt` and its
-wire projection do not publish recovery guidance. Recheck these sites before implementing.
+wire projection did not publish recovery guidance.
 
 ## Scope
 
@@ -50,22 +51,106 @@ wire projection do not publish recovery guidance. Recheck these sites before imp
 
 ## Acceptance criteria
 
-- [ ] Core owns the newly unsafe impact decision and recovery intent; dependency
+- [x] Core owns the newly unsafe impact decision and recovery intent; dependency
   and lifecycle renderers no longer re-derive Gate/Inconsistent policy,
   including comparisons against wire strings.
-- [ ] Focused tests pin no-op, safe, already unsafe, newly
+- [x] Focused tests pin no-op, safe, already unsafe, newly
   blocked/broken/inconsistent, and cleared impacts without changing eligibility
   or authorization behavior.
-- [ ] Human dependency receipts and machine projections preserve equivalent
+- [x] Human dependency receipts and machine projections preserve equivalent
   actionable recovery intent; interface-specific presentation does not determine
   whether recovery is needed.
-- [ ] Dry-run, refusal, and committed/partial outcomes retain accurate
+- [x] Dry-run, refusal, and committed/partial outcomes retain accurate
   durability evidence and never suggest an unsafe blind retry.
-- [ ] Any public JSON additions follow ADR-0008's monotonic contract revision
+- [x] Any public JSON additions follow ADR-0008's monotonic contract revision
   policy with schema, golden fixtures, changelog, and documentation updated
   together.
-- [ ] Portable service tests demonstrate the contract without filesystem paths;
+- [x] Portable service tests demonstrate the contract without filesystem paths;
   normal tests, lint, generated-doc checks, and planning lint pass.
+
+## Implementation and review handoff (2026-10-04)
+
+Implemented locally; remains **in progress** pending external review and integration.
+Source audit M1/L1 are fixed locally, not represented as merged; unrelated findings remain open.
+Review handoff is frozen for the independent
+[Codex](../audits/6ggjnz40teda-2026-10-04-core-owned-dependency-impact-recovery-implementation-codex.md)
+and [Antigravity](../audits/6ggjnz4989cm-2026-10-04-core-owned-dependency-impact-recovery-implementation-antigravity.md)
+audits. Both contain the same contract and hostile evidence requirements. Codex is now
+reviewed and closed with its sole finding tracked; Antigravity remains pending.
+
+- `TaskGraphStateImpact.NewlyUnsafe()` and `ThreadProjectionImpact.NewlyInconsistent()`
+  own the existing warning predicates. A different non-clear gate still warns, including
+  broken → blocked: this is an inspection signal, not a new severity ordering.
+- Dependency and lifecycle receipts share task-impact recovery guidance with runnable stable-ID
+  blocker commands. Dependency failures distinguish no writes, a durable prefix, and all planned
+  writes landing before an error; they require inspection before resuming. Retry mechanics,
+  eligibility, overrides, and graph guards are unchanged.
+- Impacts describe the complete proposed plan, not proof of persistence. Preview guidance is
+  explicitly prospective; applied/remaining IDs and lifecycle `committed` retain durability.
+  Pre-write CLI failures still omit a structured dependency mutation payload; their error text
+  carries core guidance without representing planned edges as applied.
+- Wire revision **1.81, additive** copies `newly_unsafe`/`newly_inconsistent` into the shared
+  impact DTOs (including repair impacts) and optional dependency `remedy`. The classified wire
+  changelog, schema/goldens, README, architecture, and generated dependency reference agree.
+  No persisted frontmatter or closed vocabulary changes.
+
+### Validation
+
+`go test ./...`, `go test -race ./...`, `golangci-lint run ./...` (zero issues), and
+`just build` pass. Generated CLI docs and schema comments match fresh temporary output;
+`tskflwctl lint` and the adapter-neutral Thread frontier are healthy.
+
+Portable tests cover safe/no-op/already-unsafe/cleared impacts, changed blocked/broken gates,
+inconsistency, preview/refusal, partial/all-applied conflicts, and unchanged Thread/override
+advice. Schema validation uses populated dependency, lifecycle/Thread, and error recovery branches.
+File-backed migration tests exercise every durable prefix, including failure after the final write.
+
+Five compiler-valid mutation probes ran in an independent non-Git temporary copy. Each failed its
+named tests; all edits were restored byte-for-byte and the focused suite passed again:
+
+| Broken invariant | Regression that rejected it |
+| --- | --- |
+| Core task warning always false | `TestTaskGraphStateImpactNewlyUnsafe` |
+| Wire drops the task warning flag | `TestImpactWireCopiesCoreDecisionsAndDependencyRemedy`, `TestDependencyMutationPublishesCoreRecoveryIntent` |
+| Lifecycle renderer reintroduces its gate-string rule | `TestMovesHumanUsesProjectedImpactFlagsNotWireStatePolicy` |
+| Dependency receipt drops core guidance | `TestServiceDependencyAndLifecycleShareRecoveryIntent` |
+| Conflict retry continues after durable writes | `TestServiceDependencyRefusalAndCommittedFailureRecovery`, `TestServiceDependencyPartialRecoveryRequiresInspectionAndNeverAutoRetries` |
+
+Fresh-binary throwaway-space dogfood verified JSON preview with no applied IDs, a human newly-blocked
+warning with an executable blocker command, a no-op without recovery advice, removal clearing the
+warning, and clean lint. An unrelated init selector ambiguity is tracked in
+[its own followup](6ggjmtmdd54w-prevent-silently-ignored-target-selectors-during-init.md), sequenced in
+the CLI contract Thread rather than added as a refactor closure blocker.
+
+### Codex review disposition (2026-10-04)
+
+Codex found no new core/JSON/retry defect after independent real-store, consumer,
+schema, and coordinated mutation probes. Its sole finding is a pre-existing TUI
+consumer bug: a completed Thread's sole member can be reopened with zero task
+impacts, so TUI feedback discards the nonempty Thread recovery remedy. The owner
+reproduced it and tracked
+[6ggkdbg0816h](6ggkdbg0816h-preserve-thread-only-lifecycle-recovery-guidance-in-the-tui.md)
+after this task in the TUI refinement Thread. It is not represented as fixed or
+added to this refactor's closure path.
+
+Review evidence also strengthened permanent tests, without production changes:
+
+- The real migration prefix test injects `ErrConflict` after each write with four
+  retries available, asserts one Service attempt and byte-level applied-ID parity,
+  then resumes from live operator-edited remaining declarations. It also covers
+  failure after the last planned write, which must remain visible rather than turn
+  into a successful no-op.
+- `TestMutationImpactSchemaBranches` validates 20 populated cases over dependency,
+  lifecycle, repair, and their nested error envelopes. True/false warning fields
+  remain required, optional remedy omission is deliberate, and structurally deleting
+  a required flag is rejected by the schema, not merely by an invalid-JSON parser.
+- Removing the durable-prefix retry stop in the independent non-Git probe copy
+  makes all three real prefix tests fail; restored tests pass. These permanent
+  regressions supplement, not replace, the review's sandbox-local evidence.
+
+Codex audit closure means M1 has an explicit task destination, not that its followup
+or integration is done. Antigravity still reviews the original captured implementation;
+the post-Codex delta is tests and planning only, and its assigned audit remains untouched.
 
 ## Out of scope
 

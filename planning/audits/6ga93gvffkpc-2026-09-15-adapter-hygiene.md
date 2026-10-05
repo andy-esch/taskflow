@@ -70,7 +70,7 @@ Read for context while evaluating the above: `internal/cli/render/render.go`,
 
 ### Medium
 
-#### M1. Dependency mutation receipts carry no remedy; the CLI adapter authors core's recovery prose  · **Status:** tracked by 6ggdkztshmzz
+#### M1. Dependency mutation receipts carry no remedy; the CLI adapter authors core's recovery prose  · **Status:** fixed 2026-10-04
 
 **File:** `internal/cli/render/dependency.go:223` (and `internal/core/dependency_operations.go:42`) | **Component:** cli/render + core
 **Effort:** S · **Urgency:** soon
@@ -131,10 +131,12 @@ it should survive the merge rather than be dropped in favour of the existing cor
 reports a `remedy` — would be better enforced than remembered. A table-driven wire test over
 the receipt DTOs would catch the next one; that is its own task, not part of this fix.
 
-**Resolution:** Task 6ggdkztshmzz owns core-defined dependency recovery intent
-and equivalent human/machine projections. The omission remains unfixed; choose
-the smallest semantic contract rather than mandating a generic Remedy field on
-every receipt.
+**Resolution:** Implemented locally in task 6ggdkztshmzz, pending external
+review and integration. Dependency receipts now publish core-owned remedy
+guidance; shared dependency/lifecycle task advice carries runnable stable-ID
+blocker commands. Preview, no-write refusal, durable prefix, and all-applied
+failures stay distinct, with human/error/JSON parity and semantic schema tests.
+No repair authorization or persistence transaction changes.
 
 #### M2. MarkerUnreadable brands readable tasks whose prerequisite is broken  · **Status:** open
 
@@ -200,7 +202,7 @@ arriving from the CLI side.
 
 ### Low
 
-#### L1. The "newly unsafe impact" predicate is spelled three times, twice inside the adapter  · **Status:** tracked by 6ggdkztshmzz
+#### L1. The "newly unsafe impact" predicate is spelled three times, twice inside the adapter  · **Status:** fixed 2026-10-04
 
 **File:** `internal/cli/render/render.go:291` (also `internal/cli/render/dependency.go:215`, `internal/core/service_task.go:414`) | **Component:** cli/render + core
 **Effort:** S · **Urgency:** eventually
@@ -239,10 +241,13 @@ decision as a field, which M1's fix makes natural.
 needs the predicate reachable from core's dependency path regardless, so the two land as
 one edit.
 
-**Resolution:** Folded into M1's task 6ggdkztshmzz: remove adapter-owned
-newly-unsafe Gate/Inconsistent policy, including the lifecycle renderer's
-wire-string comparison. The current spellings agree; this is a drift risk, not a
-verified incorrect mutation.
+**Resolution:** Implemented locally in task 6ggdkztshmzz, pending external
+review and integration. TaskGraphStateImpact.NewlyUnsafe and
+ThreadProjectionImpact.NewlyInconsistent own the existing predicates. Wire
+copies the decisions; lifecycle rendering trusts copied flags and dependency
+rendering invokes core, without string-based policy. Schema revision 1.81 is
+additive. Compiler-valid owner, mapper, renderer, guidance, and committed-retry
+mutation probes are killed by the named regression tests and restored.
 
 #### L2. The spatial anchor guard is narrower than its sibling render guards  · **Status:** open
 

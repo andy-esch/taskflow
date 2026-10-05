@@ -6,8 +6,8 @@ description: Make large Thread graphs comprehensible and shared TUI navigation p
 goal: Ship an evidence-backed large-graph experience and a coherent shared TUI navigation model.
 created: "2026-09-11"
 tags: [threads, tui, ux, dogfood]
-tasks: [6g6wdvfp2ksa, 6g86016qvk5d, 6g86c7y6hn41, 6g86g03zfj2f, 6g87qn72901g, 6g8vxbv3d4xn, 6g8vxcnezktm, 6g914ybs9t87, 6g9150nrt4p9, 6g95fc3aj4ye, 6g9g37bvetjy, 6g9g37c50qp1, 6g9mz2shwmb0]
-updated_at: "2026-09-13"
+tasks: [6g6wdvfp2ksa, 6g86016qvk5d, 6g86c7y6hn41, 6g86g03zfj2f, 6g87qn72901g, 6g8vxbv3d4xn, 6g8vxcnezktm, 6g914ybs9t87, 6g9150nrt4p9, 6g95fc3aj4ye, 6g9g37bvetjy, 6g9g37c50qp1, 6g9mz2shwmb0, 6ggkdbg0816h]
+updated_at: "2026-10-04"
 started_at: "2026-09-11"
 ---
 # Thread: Refine Thread and TUI navigation
@@ -41,3 +41,12 @@ recording that immediately becomes stale again.
 The v0.21.0 release task is an installed preview checkpoint after one-hop focus, its record-limit
 regressions, and the repository-global release validator. It does not block the information-
 architecture review or turn every remaining navigation refinement into release scope.
+
+## Lifecycle feedback followup (2026-10-04)
+
+[Preserve Thread-only lifecycle recovery guidance](../tasks/6ggkdbg0816h-preserve-thread-only-lifecycle-recovery-guidance-in-the-tui.md)
+tracks a reproduced consumer gap from the core impact/recovery review: reopening
+the only member of a completed Thread can drop its core-owned advice because no
+downstream task impacts exist. It follows the shared core warning contract and
+can proceed independently of graph/navigation design. Preserve cleanup warnings
+and reloads; do not turn this small feedback fix into a new notification system.

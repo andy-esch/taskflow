@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gcqz5aefjjf
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Keep cross-kind identity collisions visible in lint when either task or Thread source is malformed.
 effort: S
@@ -14,6 +14,7 @@ audit_sources: [planning/audits/6gch6xep2mh2-2026-09-22-correctness-and-errors.m
 depends_on: [6g5vm4efjcdv]
 updated_at: "2026-10-04"
 started_at: "2026-10-04"
+completed_at: "2026-10-04"
 ---
 
 # Lint cross-kind task and Thread ID collisions on unreadable records
@@ -38,7 +39,7 @@ silently dropping the cross-kind collision from the report.
 The lint-read prerequisite and workspace identity-parity task are merged. At the start of this
 slice, `core.Service.Lint` omitted safely recovered IDs carried by task load problems and Thread
 read problems. The local implementation now consumes those identity-bearing diagnostics without
-requiring a source path. This task remains **in-progress pending integration**; Thread-projection
+requiring a source path. PR #280 merged the work; this task is **completed**. Thread-projection
 behavior is not silently added to this lint slice.
 
 ## Implementation and evidence (2026-10-04)
@@ -67,8 +68,8 @@ with the worktree, and restored focused tests passed. This is owner verification
 
 `go test ./... -count=1`, `go test -race -count=1 ./...`, `just lint`, `just build`, and
 `just docs-check` pass with temporary caches. Repository planning lint is clean and the Thread
-frontier reports healthy graph/projection state. The source audit's M1 is fixed locally;
-no merge or release inclusion is claimed.
+frontier reports healthy graph/projection state. The source audit's M1 is fixed in PR #280;
+release inclusion remains a separate milestone.
 
 ## Acceptance criteria
 
