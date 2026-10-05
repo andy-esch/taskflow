@@ -10,9 +10,9 @@ priority: low
 autonomy_level: 3
 tags: [store, frontmatter]
 created: "2026-08-18"
-updated_at: "2026-09-27"
+updated_at: "2026-10-05"
 audited: "2026-09-27"
-audit_sources: [2026-09-27-weekly-task-sweep]
+audit_sources: [2026-09-27-weekly-task-sweep, 2026-10-05-arch-data-model-and-storage]
 ---
 
 # A surgical frontmatter write re-folds multi-line block scalars onto one line
@@ -125,3 +125,5 @@ Net priority judgment is deliberately left to a human.
 ## Progress Log
 
 - 2026-09-27: automated weekly sweep — reproduced the refold on HEAD in an isolated tree; found the blast radius has grown from 3 `set` verbs to 13 call sites including every lifecycle verb and `task edit`, confirmed via `task start` on a probe file; noted the chomping indicator is already preserved and that only one corpus file still carries a block scalar.
+
+Reinforced by audit 2026-10-05-arch-data-model-and-storage: H1. That finding is a PARTIAL overlap, not a duplicate — it measures a case this task's `## Reproduction` does not cover. For a `>` folded scalar whose body carries more-indented lines, each surgical write appends one newline to the *decoded* value (41 → 46 bytes over five `task set` calls, read back through `go.yaml.in/yaml/v3`), so the "**No data is lost**" premise above holds only for the uniformly-indented `>-` case it reproduces. Anchored to the open upstream defect yaml/go-yaml#337. AC-1 as already written ("byte-identical, including its wrap width and its chomping indicator") would cover both halves; the audit's note is about the severity assessment, not the scope. Propose-only — no field on this task was changed beyond this annotation and `audit_sources`.
