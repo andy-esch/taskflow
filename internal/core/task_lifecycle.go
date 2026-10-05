@@ -31,6 +31,15 @@ type TaskGraphStateImpact struct {
 	Direct bool
 }
 
+// NewlyUnsafe owns the warning/repair decision shared by graph and lifecycle
+// consumers. A different non-clear gate or newly inconsistent state warrants
+// inspection; this is not a severity ordering (broken -> blocked also qualifies).
+// After may be prospective: consult the containing receipt for durability.
+func (impact TaskGraphStateImpact) NewlyUnsafe() bool {
+	return (impact.Before.Gate != impact.After.Gate && impact.After.Gate != GateClear) ||
+		(!impact.Before.Inconsistent && impact.After.Inconsistent)
+}
+
 // TaskLifecycleCreation is the semantic seed document carried by the one guarded
 // create-and-start operation. The seed uses ready-to-start as a canonical internal
 // shape; it is never persisted in that state, and readiness is not an authorization

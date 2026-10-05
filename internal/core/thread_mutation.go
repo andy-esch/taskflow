@@ -396,6 +396,12 @@ type ThreadProjectionImpact struct {
 	After          ThreadView
 }
 
+// NewlyInconsistent is the core-owned warning decision for a Thread projection
+// impact. An already inconsistent Thread does not become newly inconsistent.
+func (impact ThreadProjectionImpact) NewlyInconsistent() bool {
+	return !impact.Before.Inconsistent && impact.After.Inconsistent
+}
+
 // TaskLifecycleThreadImpacts compares every Thread projection using the same
 // before/after task graphs as lifecycle authorization. Thread files are never
 // mutated by this analysis.
