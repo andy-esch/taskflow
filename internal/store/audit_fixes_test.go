@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
@@ -23,7 +24,7 @@ func TestFS_GetTask_MalformedFrontmatterIsValidation(t *testing.T) {
 	// decode — a malformed-frontmatter parse error.
 	writeTask(t, root, "ready-to-start", "alpha.md",
 		"---\nstatus: ready-to-start\ntier: \"4\"\ntags: [seed]\n---\n# Alpha\n")
-	if _, _, err := NewFS(root).GetTask("alpha"); !errors.Is(err, domain.ErrValidation) {
+	if _, _, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).GetTask("alpha"); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("malformed frontmatter on the read path must be ErrValidation (exit 11), got %v", err)
 	}
 }
@@ -34,11 +35,11 @@ func TestFS_SetFields_RejectsEmptyTagsOnActiveTask(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "alpha.md",
 		"---\nstatus: ready-to-start\ndescription: a\ntags: [seed]\n---\n# Alpha\n")
-	_, err := NewFS(root).SetFields("alpha", map[string]any{"tags": []string{}}, false)
+	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("alpha", map[string]any{"tags": []string{}}, false)
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("emptying tags on an active task must be rejected, got %v", err)
 	}
-	if tk, _, _ := NewFS(root).GetTask("alpha"); len(tk.Tags) != 1 || tk.Tags[0] != "seed" {
+	if tk, _, _ := testutil.Must(NewFS(root, core.UnrestrictedMutations())).GetTask("alpha"); len(tk.Tags) != 1 || tk.Tags[0] != "seed" {
 		t.Errorf("a rejected SetFields must not have written (tags=%v)", tk.Tags)
 	}
 }
@@ -49,7 +50,7 @@ func TestFS_SetFields_RejectsClearedDescriptionOnActive(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "in-progress", "alpha.md",
 		"---\nstatus: in-progress\ndescription: a\ntags: [seed]\n---\n# Alpha\n")
-	if _, err := NewFS(root).SetFields("alpha", map[string]any{"description": ""}, false); !errors.Is(err, domain.ErrValidation) {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("alpha", map[string]any{"description": ""}, false); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("clearing the description of an in-progress task must be rejected, got %v", err)
 	}
 }
@@ -61,7 +62,7 @@ func TestFS_SetFields_AllowsUntaggedCompletedTask(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "completed", "done.md",
 		"---\nstatus: completed\ndescription: d\n---\n# Done\n")
-	if _, err := NewFS(root).SetFields("done", map[string]any{"priority": "high"}, false); err != nil {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("done", map[string]any{"priority": "high"}, false); err != nil {
 		t.Fatalf("SetFields on an untagged completed task should succeed, got %v", err)
 	}
 }
@@ -103,7 +104,7 @@ func TestFS_MoveAudit_ConflictsWhenEditedConcurrently(t *testing.T) {
 	path, out := testutil.AuditFixture(root, "open", "a1.md",
 		"---\narea: store\ndate: \"2026-06-01\"\n---\n# Audit: store\n")
 	testutil.Write(t, path, out)
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	const concurrent = "---\nbucket: open\narea: store\ndate: \"2026-06-01\"\ntier: raced\n---\n# Audit: store\n"
 	testHookBeforeMoveAuditWrite = func() {
@@ -129,7 +130,7 @@ func TestFS_MoveAudit_RejectsOpenFindings(t *testing.T) {
 	root := t.TempDir()
 	path, out := testutil.AuditFixture(root, "open", "x.md", "---\narea: a\n---\n#### H1. t  · **Status:** open\n")
 	testutil.Write(t, path, out)
-	_, err := NewFS(root).MoveAudit("x", domain.AuditClosed, false)
+	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveAudit("x", domain.AuditClosed, false)
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("closing an audit with open findings must be rejected, got %v", err)
 	}
@@ -141,7 +142,7 @@ func TestFS_MoveAudit_RejectsOpenFindings(t *testing.T) {
 		t.Errorf("a rejected move must not change the audit's bucket frontmatter: %q", b)
 	}
 	// Deferring (also a non-open bucket) is refused for the same reason.
-	if _, err := NewFS(root).MoveAudit("x", domain.AuditDeferred, false); !errors.Is(err, domain.ErrValidation) {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveAudit("x", domain.AuditDeferred, false); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("deferring an audit with open findings must be rejected, got %v", err)
 	}
 }
@@ -153,7 +154,7 @@ func TestFS_SetFields_PreexistingCorruptionAttributedToFile(t *testing.T) {
 	// Duplicate top-level key: yaml.Node accepts it, but the typed decode rejects it.
 	writeTask(t, root, "ready-to-start", "dup.md",
 		"---\nstatus: ready-to-start\ntier: 2\ntier: 3\ntags: [x]\n---\n# Dup\n")
-	_, err := NewFS(root).SetFields("dup", map[string]any{"priority": "high"}, false)
+	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("dup", map[string]any{"priority": "high"}, false)
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("want ErrValidation, got %v", err)
 	}

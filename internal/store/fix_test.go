@@ -8,6 +8,7 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/domain"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/testutil"
 	yaml "go.yaml.in/yaml/v3"
 )
@@ -91,7 +92,7 @@ func TestFixFrontmatterRefusesGraphOwnedNormalization(t *testing.T) {
 	original := "---\nid: " + taskID + "\nstatus: ready-to-start\ndepends_on: " + testutil.TaskID("first") + ", " + testutil.TaskID("second") + "\ntags: one,two\n---\n# task\n"
 	testutil.Write(t, path, original)
 
-	results, err := NewFS(root).FixFrontmatter(false)
+	results, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).FixFrontmatter(false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -109,7 +110,7 @@ func TestFS_FixFrontmatter_DryRunThenWrite(t *testing.T) {
 	path, out := testutil.TaskFixture(root, "ready-to-start", "bad.md", "---\nstatus: ready-to-start\ntags: a,b\n---\n# B\n")
 	testutil.Write(t, path, out)
 
-	res, err := NewFS(root).FixFrontmatter(true) // dry-run
+	res, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).FixFrontmatter(true) // dry-run
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -120,10 +121,10 @@ func TestFS_FixFrontmatter_DryRunThenWrite(t *testing.T) {
 		t.Errorf("dry-run must not modify the file:\n%s", raw)
 	}
 
-	if _, err := NewFS(root).FixFrontmatter(false); err != nil { // real
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).FixFrontmatter(false); err != nil { // real
 		t.Fatal(err)
 	}
-	tasks, problems, err := NewFS(root).ListTasks()
+	tasks, problems, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).ListTasks()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,7 +145,7 @@ func TestFixRepairsMisspelledIDInFilenameAndFrontmatter(t *testing.T) {
 	r.Epic("01-e.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
 	testutil.Write(t, filepath.Join(r.Root, "tasks", "6fbj87000lt6-bad-id.md"), "---\nschema: 1\nid: 6fbj87000lt6\nstatus: ready-to-start\nepic: 01-e\ndescription: d\n---\n# Bad\n")
 
-	results, err := NewFS(r.Root).FixFrontmatter(false)
+	results, err := testutil.Must(NewFS(r.Root, core.UnrestrictedMutations())).FixFrontmatter(false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -176,7 +177,7 @@ func TestFixRefusesCanonicalIDRepairOwnedBySameKind(t *testing.T) {
 	invalidBody := "---\nschema: 1\nid: 6g7s6hr3qnfo\nstatus: ready-to-start\nepic: 01-e\ndescription: invalid alias\n---\n# Invalid alias\n"
 	testutil.Write(t, invalid, invalidBody)
 
-	results, err := NewFS(r.Root).FixFrontmatter(false)
+	results, err := testutil.Must(NewFS(r.Root, core.UnrestrictedMutations())).FixFrontmatter(false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -206,7 +207,7 @@ func TestFixRefusesToRepairAnIDThatIsReferencedElsewhere(t *testing.T) {
 	testutil.Write(t, filepath.Join(r.Root, "tasks", "6fbj87000lt6-bad-id.md"), "---\nschema: 1\nid: 6fbj87000lt6\nstatus: ready-to-start\nepic: 01-e\ndescription: d\n---\n# Bad\n")
 	testutil.Write(t, filepath.Join(r.Root, "tasks", "6fbj870009t6-refers.md"), "---\nschema: 1\nid: 6fbj870009t6\nstatus: ready-to-start\nepic: 01-e\ndescription: d\n---\n# Ref\n\nSee [bad](6fbj87000lt6-bad-id.md).\n")
 
-	results, err := NewFS(r.Root).FixFrontmatter(false)
+	results, err := testutil.Must(NewFS(r.Root, core.UnrestrictedMutations())).FixFrontmatter(false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -234,7 +235,7 @@ func TestFixRefusesAnIDContainingU(t *testing.T) {
 	r.Epic("01-e.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
 	testutil.Write(t, filepath.Join(r.Root, "tasks", "6fbj87000ut6-u-id.md"), "---\nschema: 1\nid: 6fbj87000ut6\nstatus: ready-to-start\nepic: 01-e\ndescription: d\n---\n# U\n")
 
-	results, err := NewFS(r.Root).FixFrontmatter(false)
+	results, err := testutil.Must(NewFS(r.Root, core.UnrestrictedMutations())).FixFrontmatter(false)
 	if err != nil {
 		t.Fatal(err)
 	}

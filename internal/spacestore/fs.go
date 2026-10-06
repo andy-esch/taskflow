@@ -17,31 +17,19 @@ import (
 )
 
 type FS struct {
-	mutationAuthorization func() error
+	mutationPolicy core.MutationPolicy
 }
 
-// Option configures the filesystem space-registry adapter.
-type Option func(*FS)
-
-// WithMutationAuthorization requires authorize to succeed before either
-// registry mutation use case, including a dry-run preview.
-func WithMutationAuthorization(authorize func() error) Option {
-	return func(store *FS) { store.mutationAuthorization = authorize }
-}
-
-func New(opts ...Option) *FS {
-	store := &FS{}
-	for _, opt := range opts {
-		opt(store)
+// New validates the explicit policy without invoking its authorizer or doing I/O.
+func New(policy core.MutationPolicy) (*FS, error) {
+	if err := policy.Validate(); err != nil {
+		return nil, err
 	}
-	return store
+	return &FS{mutationPolicy: policy}, nil
 }
 
 func (f *FS) authorizeMutation() error {
-	if f.mutationAuthorization == nil {
-		return nil
-	}
-	return f.mutationAuthorization()
+	return f.mutationPolicy.Authorize()
 }
 
 var (
@@ -109,7 +97,16 @@ func (f *FS) ForgetSpace(id string, dryRun bool) (core.SpaceEntryPoint, bool, er
 }
 
 func (f *FS) OpenPlanningStore(root string) (core.PlanningSummarySource, error) {
-	return store.NewFS(root), nil
+	if err := f.mutationPolicy.Validate(); err != nil {
+		return nil, err
+	}
+	// Atlas summaries cannot inherit the registry's write privilege, even if a
+	// caller widens the returned capability through a type assertion.
+	fs, err := store.NewFS(root, core.ReadOnlyMutations())
+	if err != nil {
+		return nil, err
+	}
+	return fs, nil
 }
 
 func toCoreEntry(diagnosis spacehealth.SpaceProblem) core.SpaceEntryPoint {

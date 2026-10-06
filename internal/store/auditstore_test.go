@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
@@ -24,7 +25,7 @@ func TestFS_ListAudits_MissingFrontmatterIsLoud(t *testing.T) {
 	root := t.TempDir()
 	writeAudit(t, root, "open", "notes.md", "# Some audit notes\n\nno frontmatter\n")
 
-	audits, problems, err := NewFS(root).ListAudits()
+	audits, problems, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ListAudits()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +45,7 @@ func TestFS_AuditReadsKeepFilenameIdentityOutsideSemanticValue(t *testing.T) {
 	const declaredID = "6g0000000002"
 	path, content := testutil.AuditFixture(root, "open", "drifted.md", "---\nid: "+declaredID+"\narea: drifted\ndate: 2026-09-01\n---\n# Drifted\n")
 	testutil.Write(t, path, content)
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.ReadOnlyMutations()))
 	want := auditSource(path)
 	read, err := fs.ReadAudits()
 	if err != nil || len(read.Records) != 1 || read.Records[0].Value.ID != declaredID || read.Records[0].Source != want {
@@ -67,7 +68,7 @@ func TestFS_ListAudits_FindingCounts(t *testing.T) {
 	body := "# Audit\n\n#### H1. thing  · **Status:** open\n\nblah\n\n#### M2. other  · **Status:** fixed 2026-01-01\n"
 	writeAudit(t, root, "open", "a.md", "---\narea: dispatcher\ndate: 2026-06-01\n---\n"+body)
 
-	audits, problems, err := NewFS(root).ListAudits()
+	audits, problems, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ListAudits()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -95,7 +96,7 @@ func TestFS_FindingCounts_IgnoresFencesAndOpenIsh(t *testing.T) {
 		"#### L3. done  · **Status:** fixed\n"
 	writeAudit(t, root, "open", "b.md", "---\narea: x\n---\n"+body)
 
-	audits, _, err := NewFS(root).ListAudits()
+	audits, _, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ListAudits()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -117,7 +118,7 @@ func TestFS_ListAuditsWithFindings(t *testing.T) {
 	body := "# Audit\n\n#### H1. open thing  · **Status:** open\n\n#### M2. fixed thing  · **Status:** fixed 2026-01-01\n"
 	writeAudit(t, root, "open", "a.md", "---\narea: dispatcher\ndate: 2026-06-01\n---\n"+body)
 
-	got, problems, err := NewFS(root).ListAuditsWithFindings()
+	got, problems, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ListAuditsWithFindings()
 	if err != nil || len(problems) != 0 {
 		t.Fatalf("ListAuditsWithFindings: %v / %+v", err, problems)
 	}
@@ -143,7 +144,7 @@ func TestFS_MoveAudit(t *testing.T) {
 	// is an in-place frontmatter edit.
 	wantPath := filepath.Join(root, "audits", testutil.TaskID("x")+"-x.md")
 
-	a, err := NewFS(root).MoveAudit("x", domain.AuditClosed, false)
+	a, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveAudit("x", domain.AuditClosed, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -151,7 +152,7 @@ func TestFS_MoveAudit(t *testing.T) {
 		t.Errorf("bucket = %s", a.Bucket)
 	}
 	// The path is unchanged — no relocation between buckets under flat.
-	if got, err := NewFS(root).ResolveAuditPath("x"); err != nil || got != wantPath {
+	if got, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).ResolveAuditPath("x"); err != nil || got != wantPath {
 		t.Errorf("path moved: got %q err=%v want %q", got, err, wantPath)
 	}
 	if _, err := os.Stat(wantPath); err != nil {
@@ -170,7 +171,7 @@ func TestFS_MoveAudit(t *testing.T) {
 }
 
 func TestFS_GetAudit_NotFound(t *testing.T) {
-	if _, _, err := NewFS(t.TempDir()).GetAudit("nope"); !errors.Is(err, domain.ErrNotFound) {
+	if _, _, err := testutil.Must(NewFS(t.TempDir(), core.ReadOnlyMutations())).GetAudit("nope"); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
 }

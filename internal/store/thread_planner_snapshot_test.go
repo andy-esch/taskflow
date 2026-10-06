@@ -28,7 +28,7 @@ func TestThreadPlannerCannotRewriteTerminalLifecycleAuthorization(t *testing.T) 
 		t.Fatal(err)
 	}
 	for _, dry := range []bool{true, false} {
-		result, err := NewFS(root).MutateThread(threadMutationStoreNow, dry, func(snapshot core.ThreadMutationSnapshot) (core.ThreadMutationPlan, error) {
+		result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateThread(threadMutationStoreNow, dry, func(snapshot core.ThreadMutationSnapshot) (core.ThreadMutationPlan, error) {
 			snapshot.Threads[0].Status = domain.ThreadStatusUnstarted
 			return core.ThreadMutationPlan{ThreadID: created.Thread.ID, Operation: core.ThreadMutationStart}, nil
 		})
@@ -48,7 +48,7 @@ func TestThreadPlannerDispatchersIsolateNestedValuesAndBodies(t *testing.T) {
 			thread := domain.Thread{ID: testutil.TaskID("snapshot-owner"), Tags: []string{"original"}, Tasks: []string{testutil.TaskID("snapshot-member")}}
 			threads := []domain.Thread{thread}
 			bodies := map[string]string{thread.ID: "Original body"}
-			fs := NewFS(t.TempDir())
+			fs := testutil.Must(NewFS(t.TempDir(), core.ReadOnlyMutations()))
 			mutate := func(input []domain.Thread) {
 				input[0].ID = "rewritten"
 				input[0].Tags[0] = "rewritten"

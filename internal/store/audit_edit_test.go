@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
@@ -25,7 +26,7 @@ func auditEditRepo(t *testing.T) (*FS, string) {
 	root := t.TempDir()
 	path, out := testutil.AuditFixture(root, "open", "2026-06-20-store.md", auditEditSeed)
 	testutil.Write(t, path, out)
-	return NewFS(root), path
+	return testutil.Must(NewFS(root, core.UnrestrictedMutations())), path
 }
 
 // EditAudit mirrors EditTask: a valid edit parses, writes atomically, reports changed,
@@ -119,7 +120,7 @@ func TestAppendAuditBody_PreservesTrailingCandidateProjection(t *testing.T) {
 	path, content := testutil.AuditFixture(root, "open", "2026-06-20-append.md", source)
 	testutil.Write(t, path, content)
 
-	_, body, err := NewFS(root).AppendAuditBody("2026-06-20-append", "## Progress\n\nNarrative update.", auditEditNow, false)
+	_, body, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).AppendAuditBody("2026-06-20-append", "## Progress\n\nNarrative update.", auditEditNow, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +251,7 @@ func TestAppendAuditBody_BrokenFrontmatter_Errors(t *testing.T) {
 	root := t.TempDir()
 	path, out := testutil.AuditFixture(root, "open", "2026-06-20-broken.md", "---\narea: store\nno closing fence\n")
 	testutil.Write(t, path, out)
-	if _, _, err := NewFS(root).AppendAuditBody("2026-06-20-broken", "y", bodyNow, false); err == nil {
+	if _, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).AppendAuditBody("2026-06-20-broken", "y", bodyNow, false); err == nil {
 		t.Fatal("appending to a file with unterminated frontmatter should error")
 	}
 }

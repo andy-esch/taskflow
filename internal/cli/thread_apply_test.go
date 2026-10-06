@@ -86,7 +86,7 @@ func TestThreadComposeAndApplyCLIConvergesExistingTasks(t *testing.T) {
 			t.Fatalf("applied operation = %+v", operation)
 		}
 	}
-	graph, err := core.LoadTaskGraph(store.NewFS(root))
+	graph, err := core.LoadTaskGraph(testutil.Must(store.NewFS(root, core.ReadOnlyMutations())))
 	if err != nil || graph.Health() != core.GraphHealthy {
 		t.Fatalf("graph health=%s err=%v", graph.Health(), err)
 	}
@@ -96,7 +96,7 @@ func TestThreadComposeAndApplyCLIConvergesExistingTasks(t *testing.T) {
 	if !slices.Contains(gate.DependsOn, contextID) || !slices.Contains(first.DependsOn, gateID) || !slices.Contains(second.DependsOn, firstID) {
 		t.Fatalf("gate=%v first=%v second=%v", gate.DependsOn, first.DependsOn, second.DependsOn)
 	}
-	thread, body, err := store.NewFS(root).GetThread(plan.Thread.ID)
+	thread, body, err := testutil.Must(store.NewFS(root, core.ReadOnlyMutations())).GetThread(plan.Thread.ID)
 	if err != nil || !slices.Equal(thread.Tasks, plan.Thread.Tasks) || body != plan.Thread.Body {
 		t.Fatalf("thread=%+v body=%q err=%v", thread, body, err)
 	}

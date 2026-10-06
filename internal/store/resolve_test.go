@@ -26,7 +26,7 @@ func fuzzyRepo(t *testing.T) *FS {
 	// "polish" is also a strict prefix of this one — exact must still win.
 	writeTask(t, root, "completed", "polish-batch.md",
 		"---\nid: "+testutil.TaskID("polish-batch")+"\nstatus: completed\ndescription: x\n---\n# t\n")
-	return NewFS(root)
+	return testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 }
 
 func TestResolve_FuzzyTiers(t *testing.T) {
@@ -187,7 +187,7 @@ func TestResolveAuditAndEpic_Fuzzy(t *testing.T) {
 	testutil.Write(t, auditPath, auditContent)
 	write("epics/17-pm-go-cli.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
 	write("epics/18-tui-browser.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.ReadOnlyMutations()))
 
 	if a, _, err := fs.GetAudit("store-review"); err != nil || a.Slug != "2026-06-01-store-review" {
 		t.Errorf("audit substring should resolve: %v %q", err, a.Slug)

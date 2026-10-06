@@ -6,6 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 func TestFenceSpans(t *testing.T) {
@@ -59,7 +62,7 @@ func TestDanglingLinks_RefStyleAndFences(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	probs, err := NewFS(root).DanglingLinks()
+	probs, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).DanglingLinks()
 	if err != nil {
 		t.Fatal(err)
 	}

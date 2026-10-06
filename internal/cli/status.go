@@ -38,6 +38,9 @@ func newStatusCmd(app *App) *cobra.Command {
 			if err := app.bindCommandSafety(cmd); err != nil {
 				return err
 			}
+			if app.compositionErr != nil {
+				return app.compositionErr
+			}
 			// Cross-space status works anywhere. Presentation warnings are deferred to
 			// RunE because an empty registry falls back to current-repo resolution first.
 			app.setStyle()

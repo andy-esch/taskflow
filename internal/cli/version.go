@@ -33,7 +33,7 @@ func newVersionCmd(app *App) *cobra.Command {
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
 		// Works anywhere — no planning repo needed; styling + its warnings only.
-		PersistentPreRunE: app.styleOnlyPreRun,
+		PersistentPreRunE: app.metadataOnlyPreRun,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			if app.JSON {
 				return render.VersionJSON(app.Out, versionString())

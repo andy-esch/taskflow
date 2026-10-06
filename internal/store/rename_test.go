@@ -10,6 +10,7 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 // renameRepo seeds a scratch tree: an epic, task A (id-old.md) with an H1, and task B that
@@ -38,7 +39,7 @@ func TestRenameTask_RenamesAndCascades(t *testing.T) {
 	root, aPath, bPath := renameRepo(t)
 	newPath := filepath.Join(root, "tasks", "6fjangd7kva1-shiny-new-title.md")
 
-	result, err := NewFS(root).RenameTask("old", "Shiny New Title", false)
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).RenameTask("old", "Shiny New Title", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -78,7 +79,7 @@ func TestRenameTask_PreservesSourceFileMode(t *testing.T) {
 	}
 	newPath := filepath.Join(root, "tasks", "6fjangd7kva1-new-title.md")
 
-	result, err := NewFS(root).RenameTask("old", "New title", false)
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).RenameTask("old", "New title", false)
 	if err != nil || !result.Complete {
 		t.Fatalf("restricted-mode rename = %+v, %v", result, err)
 	}
@@ -110,7 +111,7 @@ func TestRenameTask_CrossDirSameNameLeftAlone(t *testing.T) {
 	cPath := "tasks/6fjangd7kvc3-c.md"
 	write(cPath, "---\nid: 6fjangd7kvc3\nstatus: ready-to-start\nepic: 01-e\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\n---\n# C\n\nElsewhere: [old](../research/6fjangd7kva1-old.md).\n")
 
-	result, err := NewFS(root).RenameTask("old", "New Title", false)
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).RenameTask("old", "New Title", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -133,7 +134,7 @@ func TestRenameTask_DryRunTouchesNothing(t *testing.T) {
 	aBefore, _ := os.ReadFile(aPath)
 	bBefore, _ := os.ReadFile(bPath)
 
-	result, err := NewFS(root).RenameTask("old", "New", true)
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).RenameTask("old", "New", true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -159,7 +160,7 @@ func TestRenameTask_SameSlugDoesNotCascadeOrRemoveSource(t *testing.T) {
 	root, oldPath, bPath := renameRepo(t)
 	bBefore, _ := os.ReadFile(bPath)
 
-	result, err := NewFS(root).RenameTask("old", "Old", false)
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).RenameTask("old", "Old", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -191,7 +192,7 @@ func TestRenameTask_ExactRetitleNoOpDoesNotWrite(t *testing.T) {
 	}
 	bBefore, _ := os.ReadFile(bPath)
 
-	result, err := NewFS(root).RenameTask("old", "Old", false)
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).RenameTask("old", "Old", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +213,7 @@ func TestRenameTask_ExactRetitleNoOpDoesNotWrite(t *testing.T) {
 
 func TestRenameTask_EmptyTitleRejected(t *testing.T) {
 	root, _, _ := renameRepo(t)
-	if _, err := NewFS(root).RenameTask("old", "…", false); !errors.Is(err, domain.ErrValidation) {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).RenameTask("old", "…", false); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("a title that slugifies to empty must be ErrValidation, got %v", err)
 	}
 }
@@ -229,7 +230,7 @@ func TestRenameTask_TargetCollisionRefused(t *testing.T) {
 	}
 	aBefore, _ := os.ReadFile(aPath)
 
-	if _, err := NewFS(root).RenameTask("old", "Taken", false); !errors.Is(err, domain.ErrConflict) {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).RenameTask("old", "Taken", false); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("rename onto an existing target must be ErrConflict, got %v", err)
 	}
 	// The source is untouched and the pre-existing target is intact.
@@ -260,7 +261,7 @@ func TestRenameTask_RefStyleAndFencedExamples(t *testing.T) {
 	write("tasks/6fjangd7kvb2-b.md", "---\nid: 6fjangd7kvb2\nstatus: ready-to-start\nepic: 01-e\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\n---\n# B\n\n"+
 		"Ref: see the [old task][a].\n\n[a]: 6fjangd7kva1-old.md\n\nExample:\n\n```\n[old](6fjangd7kva1-old.md)\n```\n")
 
-	result, err := NewFS(root).RenameTask("old", "Renamed", false)
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).RenameTask("old", "Renamed", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,7 +296,7 @@ func TestRenameTask_ConcurrentRenamesCommitOneSourceSnapshot(t *testing.T) {
 	for _, title := range []string{"Alpha title", "Beta title"} {
 		title := title
 		go func() {
-			result, err := NewFS(root).RenameTask("old", title, false)
+			result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).RenameTask("old", title, false)
 			outcomes <- outcome{result: result, err: err}
 		}()
 	}
@@ -349,11 +350,11 @@ func TestRenameTask_ReplansAfterCooperatingCascadeDocumentWrite(t *testing.T) {
 	}
 	done := make(chan outcome, 1)
 	go func() {
-		result, err := NewFS(root).RenameTask("old", "New title", false)
+		result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).RenameTask("old", "New title", false)
 		done <- outcome{result: result, err: err}
 	}()
 	<-ready
-	if _, err := NewFS(root).SetFields("b", map[string]any{"priority": "low"}, false); err != nil {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("b", map[string]any{"priority": "low"}, false); err != nil {
 		t.Fatal(err)
 	}
 	close(release)
@@ -362,7 +363,7 @@ func TestRenameTask_ReplansAfterCooperatingCascadeDocumentWrite(t *testing.T) {
 		t.Fatalf("rename after cooperating write = %+v, %v", got.result, got.err)
 	}
 
-	task, body, err := NewFS(root).GetTask("b")
+	task, body, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).GetTask("b")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -394,11 +395,11 @@ func TestRenameTask_RejectsSourceChangedWhileWaitingBeforeCascadeWrites(t *testi
 	}
 	done := make(chan renameOutcome, 1)
 	go func() {
-		result, err := NewFS(root).RenameTask("old", "New title", false)
+		result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).RenameTask("old", "New title", false)
 		done <- renameOutcome{result: result, err: err}
 	}()
 	<-ready
-	if _, err := NewFS(root).SetFields("old", map[string]any{"priority": "low"}, false); err != nil {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("old", map[string]any{"priority": "low"}, false); err != nil {
 		t.Fatal(err)
 	}
 	close(release)
@@ -406,7 +407,7 @@ func TestRenameTask_RejectsSourceChangedWhileWaitingBeforeCascadeWrites(t *testi
 	if !errors.Is(got.err, domain.ErrConflict) || got.result.Committed || got.result.AppliedDocuments != 0 {
 		t.Fatalf("rename over a changed source = %+v, %v; want an uncommitted conflict", got.result, got.err)
 	}
-	task, _, err := NewFS(root).GetTask("old")
+	task, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).GetTask("old")
 	if err != nil || task.Priority != "low" {
 		t.Fatalf("guarded source edit was not preserved: %+v, %v", task, err)
 	}
@@ -429,7 +430,7 @@ func TestRenameTask_RechecksTargetAfterRepositoryGuard(t *testing.T) {
 	}
 	defer func() { testHookBeforeTaskRenameLock = nil }()
 
-	result, err := NewFS(root).RenameTask("old", "New title", false)
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).RenameTask("old", "New title", false)
 	if !errors.Is(err, domain.ErrConflict) || result.Committed {
 		t.Fatalf("post-lock target collision = %+v, %v; want uncommitted conflict", result, err)
 	}
@@ -458,7 +459,7 @@ func TestRenameTask_ExclusiveDestinationCreateRejectsPostCASTarget(t *testing.T)
 	}
 	defer func() { testHookBeforeTaskRenameDestinationCreate = nil }()
 
-	result, err := NewFS(root).RenameTask("old", "New title", false)
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).RenameTask("old", "New title", false)
 	if !errors.Is(err, domain.ErrConflict) || result.Committed || result.DestinationWritten {
 		t.Fatalf("post-CAS target race = %+v, %v; want an uncommitted conflict", result, err)
 	}
@@ -480,7 +481,7 @@ func TestRenameTask_ExclusiveDestinationCreatePreservesDanglingSymlink(t *testin
 		t.Fatal(err)
 	}
 
-	result, err := NewFS(root).RenameTask("old", "New title", false)
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).RenameTask("old", "New title", false)
 	if !errors.Is(err, domain.ErrConflict) || result.Committed || result.DestinationWritten {
 		t.Fatalf("dangling target symlink = %+v, %v; want an uncommitted conflict", result, err)
 	}
@@ -510,7 +511,7 @@ func TestRenameTask_CASCatchesRawCascadeDocumentEdit(t *testing.T) {
 	}
 	defer func() { testHookBeforeTaskRenameWrite = nil }()
 
-	result, err := NewFS(root).RenameTask("old", "New title", false)
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).RenameTask("old", "New title", false)
 	if !errors.Is(err, domain.ErrConflict) || result.Committed {
 		t.Fatalf("raw cascade race = %+v, %v; want uncommitted conflict", result, err)
 	}
@@ -540,7 +541,7 @@ func TestRenameTask_PreDestinationCASCatchesRawSourceEdit(t *testing.T) {
 	}
 	defer func() { testHookBeforeTaskRenameWrite = nil }()
 
-	result, err := NewFS(root).RenameTask("old", "New title", false)
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).RenameTask("old", "New title", false)
 	if !errors.Is(err, domain.ErrConflict) || !result.Committed || result.DestinationWritten ||
 		result.AppliedDocuments != 1 || result.AppliedLinks != 1 {
 		t.Fatalf("raw pre-destination source race = %+v, %v", result, err)
@@ -572,7 +573,7 @@ func TestRenameTask_PartialCascadeReceiptIsResumable(t *testing.T) {
 		return nil
 	}
 
-	receipt, err := core.MustNewService(NewFS(root)).RenameTask("old", "New title", false)
+	receipt, err := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations()))).RenameTask("old", "New title", false)
 	var partial *core.TaskRenameFailure
 	if !errors.As(err, &partial) || !receipt.Committed || receipt.Complete || receipt.DestinationWritten ||
 		receipt.AppliedDocuments != 1 || receipt.PlannedDocuments != 3 || receipt.AppliedLinks != 1 || receipt.PlannedLinks != 2 {
@@ -596,7 +597,7 @@ func TestRenameTask_PartialCascadeReceiptIsResumable(t *testing.T) {
 	}
 
 	testHookAfterTaskRenameWrite = nil
-	completed, err := core.MustNewService(NewFS(root)).RenameTask("6fjangd7kva1", "New title", false)
+	completed, err := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations()))).RenameTask("6fjangd7kva1", "New title", false)
 	if err != nil || !completed.Complete || !completed.Committed {
 		t.Fatalf("retry did not converge: %+v, %v", completed, err)
 	}
@@ -615,7 +616,7 @@ func TestRenameTask_DestinationWrittenCleanupFailureRequiresInspection(t *testin
 	}
 	defer func() { testHookBeforeTaskRenameSourceRemove = nil }()
 
-	receipt, err := core.MustNewService(NewFS(root)).RenameTask("old", "New title", false)
+	receipt, err := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations()))).RenameTask("old", "New title", false)
 	var partial *core.TaskRenameFailure
 	if !errors.As(err, &partial) || !receipt.Committed || receipt.Complete || !receipt.DestinationWritten || receipt.SourceRemoved {
 		t.Fatalf("destination-written receipt = %+v, err=%v", receipt, err)
@@ -644,7 +645,7 @@ func TestRenameTask_SourceRemovalCASCatchesRawEdit(t *testing.T) {
 	}
 	defer func() { testHookBeforeTaskRenameSourceRemove = nil }()
 
-	receipt, err := core.MustNewService(NewFS(root)).RenameTask("old", "New title", false)
+	receipt, err := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations()))).RenameTask("old", "New title", false)
 	var partial *core.TaskRenameFailure
 	if !errors.As(err, &partial) || !errors.Is(err, domain.ErrConflict) ||
 		!receipt.Committed || receipt.Complete || !receipt.DestinationWritten || receipt.SourceRemoved {
@@ -666,7 +667,7 @@ func TestRenameTask_CompleteUnlockFailureIsNotRetryable(t *testing.T) {
 	testHookRepositoryUnlockError = func() error { return errors.New("injected unlock failure") }
 	defer func() { testHookRepositoryUnlockError = nil }()
 
-	receipt, err := core.MustNewService(NewFS(root)).RenameTask("old", "New title", false)
+	receipt, err := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations()))).RenameTask("old", "New title", false)
 	var committed *core.TaskRenameFailure
 	if !errors.As(err, &committed) || !receipt.Committed || !receipt.Complete {
 		t.Fatalf("completed unlock failure = %+v, %v", receipt, err)
@@ -684,7 +685,7 @@ func TestRenameTask_CompleteUnlockFailureIsNotRetryable(t *testing.T) {
 
 func TestRenameTask_SuccessHasNoRecoveryRemedy(t *testing.T) {
 	root, _, _ := renameRepo(t)
-	receipt, err := core.MustNewService(NewFS(root)).RenameTask("old", "New title", false)
+	receipt, err := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations()))).RenameTask("old", "New title", false)
 	if err != nil || !receipt.Complete || receipt.Remedy != "" {
 		t.Fatalf("successful rename receipt = %+v, %v; want no recovery remedy", receipt, err)
 	}

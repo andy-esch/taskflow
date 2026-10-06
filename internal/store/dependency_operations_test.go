@@ -26,7 +26,7 @@ func TestDependencyMigrationPreservesBodyCommentsAndConverges(t *testing.T) {
 		"blocked_by: [legacy-prerequisite]\ndependencies: ["+secondID+"]\n")
 	writeGraphMutationTask(t, root, "legacy-second", domain.StatusCompleted, nil, "")
 
-	svc := core.MustNewService(NewFS(root), core.WithClock(func() time.Time { return graphMutationNow }))
+	svc := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())), core.WithClock(func() time.Time { return graphMutationNow }))
 	receipt, err := svc.MigrateTaskDependencies(false)
 	if err != nil {
 		t.Fatal(err)
@@ -52,7 +52,7 @@ func TestDependencyMigrationPreservesBodyCommentsAndConverges(t *testing.T) {
 	if !strings.Contains(string(prerequisiteContent), "custom_key: keep-me # keep this comment") {
 		t.Fatalf("frontmatter comment was lost:\n%s", prerequisiteContent)
 	}
-	dependent, _, err := NewFS(root).GetTask(dependentID)
+	dependent, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).GetTask(dependentID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestDependencyMigrationPreservesBodyCommentsAndConverges(t *testing.T) {
 	if !slices.Equal(dependent.DependsOn, want) {
 		t.Fatalf("depends_on = %v, want %v", dependent.DependsOn, want)
 	}
-	graph, err := core.LoadTaskGraph(NewFS(root))
+	graph, err := core.LoadTaskGraph(testutil.Must(NewFS(root, core.UnrestrictedMutations())))
 	if err != nil || graph.Health() != core.GraphHealthy {
 		t.Fatalf("post-migration graph = %v health=%s", err, graph.Health())
 	}
@@ -73,7 +73,7 @@ func TestDependencyMigrationFailureCarriesDurablePrefixAndRerunConverges(t *test
 		"blocks: [prefix-dependent]\n")
 	writeGraphMutationTask(t, root, "prefix-dependent", domain.StatusReadyToStart, nil,
 		"blocked_by: [prefix-prerequisite]\n")
-	svc := core.MustNewService(NewFS(root), core.WithClock(func() time.Time { return graphMutationNow }))
+	svc := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())), core.WithClock(func() time.Time { return graphMutationNow }))
 
 	original := testHookAfterGraphWrite
 	defer func() { testHookAfterGraphWrite = original }()
@@ -94,7 +94,7 @@ func TestDependencyMigrationFailureCarriesDurablePrefixAndRerunConverges(t *test
 	if err != nil || !completed.Changed || len(completed.AppliedTaskIDs) != 1 {
 		t.Fatalf("convergent rerun=%+v err=%v", completed, err)
 	}
-	graph, loadErr := core.LoadTaskGraph(NewFS(root))
+	graph, loadErr := core.LoadTaskGraph(testutil.Must(NewFS(root, core.UnrestrictedMutations())))
 	if loadErr != nil || graph.Health() != core.GraphHealthy {
 		t.Fatalf("rerun graph health=%s err=%v", graph.Health(), loadErr)
 	}
@@ -107,7 +107,7 @@ func TestDependencyMigrationBlocksOnlyWritesDependentBeforeClearingOwner(t *test
 	writeGraphMutationTask(t, root, "blocks-only-owner", domain.StatusCompleted, nil,
 		"blocks: [blocks-only-dependent]\n")
 	writeGraphMutationTask(t, root, "blocks-only-dependent", domain.StatusReadyToStart, nil, "")
-	svc := core.MustNewService(NewFS(root), core.WithClock(func() time.Time { return graphMutationNow }))
+	svc := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())), core.WithClock(func() time.Time { return graphMutationNow }))
 
 	original := testHookAfterGraphWrite
 	defer func() { testHookAfterGraphWrite = original }()
@@ -120,15 +120,15 @@ func TestDependencyMigrationBlocksOnlyWritesDependentBeforeClearingOwner(t *test
 		!slices.Equal(partial.AppliedTaskIDs, []string{dependentID}) {
 		t.Fatalf("blocks-only prefix receipt=%+v err=%v", partial, err)
 	}
-	dependent, _, getErr := NewFS(root).GetTask(dependentID)
+	dependent, _, getErr := testutil.Must(NewFS(root, core.UnrestrictedMutations())).GetTask(dependentID)
 	if getErr != nil || !slices.Equal(dependent.DependsOn, []string{ownerID}) {
 		t.Fatalf("dependent canonical prefix=%v err=%v", dependent.DependsOn, getErr)
 	}
-	owner, _, getErr := NewFS(root).GetTask(ownerID)
+	owner, _, getErr := testutil.Must(NewFS(root, core.UnrestrictedMutations())).GetTask(ownerID)
 	if getErr != nil || !slices.Equal(owner.LegacyBlocks, []string{"blocks-only-dependent"}) {
 		t.Fatalf("owner legacy prefix=%v err=%v", owner.LegacyBlocks, getErr)
 	}
-	graph, loadErr := core.LoadTaskGraph(NewFS(root))
+	graph, loadErr := core.LoadTaskGraph(testutil.Must(NewFS(root, core.UnrestrictedMutations())))
 	if loadErr != nil || graph.Health() != core.GraphDegraded {
 		t.Fatalf("blocks-only prefix health=%s err=%v problems=%+v", graph.Health(), loadErr, graph.Problems())
 	}
@@ -136,7 +136,7 @@ func TestDependencyMigrationBlocksOnlyWritesDependentBeforeClearingOwner(t *test
 	if err != nil || !slices.Equal(completed.AppliedTaskIDs, []string{ownerID}) {
 		t.Fatalf("blocks-only rerun=%+v err=%v", completed, err)
 	}
-	graph, loadErr = core.LoadTaskGraph(NewFS(root))
+	graph, loadErr = core.LoadTaskGraph(testutil.Must(NewFS(root, core.UnrestrictedMutations())))
 	if loadErr != nil || graph.Health() != core.GraphHealthy {
 		t.Fatalf("blocks-only final health=%s err=%v", graph.Health(), loadErr)
 	}
@@ -147,7 +147,7 @@ func TestDependencyMigrationClearsAndReportsPresentEmptyLegacyFields(t *testing.
 	taskID := testutil.TaskID("empty-legacy-owner")
 	path := writeGraphMutationTask(t, root, "empty-legacy-owner", domain.StatusReadyToStart, nil,
 		"blocked_by: []\ndependencies: []\nblocks: []\n")
-	svc := core.MustNewService(NewFS(root), core.WithClock(func() time.Time { return graphMutationNow }))
+	svc := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())), core.WithClock(func() time.Time { return graphMutationNow }))
 	receipt, err := svc.MigrateTaskDependencies(false)
 	if err != nil || !receipt.Changed || len(receipt.ClearedLegacyFields) != 3 ||
 		!slices.Equal(receipt.AppliedTaskIDs, []string{taskID}) {
@@ -197,7 +197,7 @@ func TestDependencyMigrationEveryDurablePrefixStaysSoundAndResumes(t *testing.T)
 					t.Fatal(readErr)
 				}
 			}
-			fs := &dependencyMutationCountingFS{FS: NewFS(root)}
+			fs := &dependencyMutationCountingFS{FS: testutil.Must(NewFS(root, core.UnrestrictedMutations()))}
 			svc := core.MustNewService(fs, core.WithClock(func() time.Time { return graphMutationNow }), core.WithRetry(4, func(int) {}))
 
 			original := testHookAfterGraphWrite
@@ -240,7 +240,7 @@ func TestDependencyMigrationEveryDurablePrefixStaysSoundAndResumes(t *testing.T)
 			if failAfter < 3 && !strings.Contains(partial.Remedy, "applied/remaining task IDs") {
 				t.Fatalf("partial-write recovery omitted inspection of durable progress: %+v", partial)
 			}
-			graph, loadErr := core.LoadTaskGraph(NewFS(root))
+			graph, loadErr := core.LoadTaskGraph(testutil.Must(NewFS(root, core.UnrestrictedMutations())))
 			if loadErr != nil || graph.Health() == core.GraphBroken {
 				t.Fatalf("prefix %d left broken graph: health=%s err=%v problems=%+v", failAfter, graph.Health(), loadErr, graph.Problems())
 			}
@@ -271,7 +271,7 @@ func TestDependencyMigrationEveryDurablePrefixStaysSoundAndResumes(t *testing.T)
 					t.Fatalf("resume ignored current operator intent: task=%+v body=%s err=%v", task, body, readErr)
 				}
 			}
-			graph, loadErr = core.LoadTaskGraph(NewFS(root))
+			graph, loadErr = core.LoadTaskGraph(testutil.Must(NewFS(root, core.UnrestrictedMutations())))
 			if loadErr != nil || graph.Health() != core.GraphHealthy {
 				t.Fatalf("prefix %d rerun health=%s err=%v", failAfter, graph.Health(), loadErr)
 			}

@@ -38,6 +38,9 @@ func newUICmd(app *App) *cobra.Command {
 			if err := app.bindCommandSafety(cmd); err != nil {
 				return err
 			}
+			if app.compositionErr != nil {
+				return app.compositionErr
+			}
 			app.setStyle()
 			if err := app.resolve(); err != nil {
 				if app.bindings.IsMissingPlanning == nil || !app.bindings.IsMissingPlanning(err) {

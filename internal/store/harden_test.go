@@ -26,7 +26,7 @@ func TestFS_Move_RejectsUnreloadableWithoutMoving(t *testing.T) {
 	path, out := testutil.TaskFixture(root, "ready-to-start", "alpha.md", original)
 	testutil.Write(t, path, out)
 
-	_, err := moveTaskForTest(NewFS(root), "alpha", domain.StatusInProgress, time.Now(), false, core.TaskLifecycleOverrideNone)
+	_, err := moveTaskForTest(testutil.Must(NewFS(root, core.UnrestrictedMutations())), "alpha", domain.StatusInProgress, time.Now(), false, core.TaskLifecycleOverrideNone)
 	if err == nil {
 		t.Fatal("want an error for a move that wouldn't reload")
 	}
@@ -51,7 +51,7 @@ func TestFS_MoveAudit_RejectsMalformedWithoutMoving(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "a1.md"), []byte("---\narea: store\n# no closing fence\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := NewFS(root).MoveAudit("a1", domain.AuditClosed, false)
+	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveAudit("a1", domain.AuditClosed, false)
 	if err == nil {
 		t.Fatal("want an error for a malformed audit")
 	}
@@ -69,7 +69,7 @@ func TestFS_SetFields_ConflictsWhenEditedConcurrently(t *testing.T) {
 	path, out := testutil.TaskFixture(root, "ready-to-start", "alpha.md",
 		"---\nstatus: ready-to-start\ntags: [seed]\n---\n# Alpha\n")
 	testutil.Write(t, path, out)
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	const concurrent = "---\nstatus: ready-to-start\ntags: [seed]\ndescription: raced\n---\n# Alpha\n"
 	testHookBeforeSetFieldsWrite = func() {
@@ -98,7 +98,7 @@ func TestFS_Move_ConflictsWhenEditedConcurrently(t *testing.T) {
 	path, out := testutil.TaskFixture(root, "ready-to-start", "alpha.md",
 		"---\nid: "+testutil.TaskID("alpha")+"\nstatus: ready-to-start\ndescription: alpha\ntags: [test]\n---\n# Alpha\n")
 	testutil.Write(t, path, out)
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	const concurrent = "---\nstatus: ready-to-start\ndescription: raced\n---\n# Alpha\n"
 	testHookBeforeLifecycleVerify = func() {
@@ -127,7 +127,7 @@ func TestFS_SetFields_CRLFRoundTrip(t *testing.T) {
 	path, out := testutil.TaskFixture(root, "ready-to-start", "alpha.md", crlf)
 	testutil.Write(t, path, out)
 
-	task, err := NewFS(root).SetFields("alpha", map[string]any{"description": "new desc"}, false)
+	task, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("alpha", map[string]any{"description": "new desc"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +142,7 @@ func TestFS_SetFields_CRLFRoundTrip(t *testing.T) {
 		t.Errorf("CRLF file came back with %d bare-LF line endings (mixed endings):\n%q", lone, b)
 	}
 	// And it still reads back correctly.
-	got, _, err := NewFS(root).GetTask("alpha")
+	got, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).GetTask("alpha")
 	if err != nil || got.Description != "new desc" {
 		t.Errorf("CRLF file should round-trip: %v %+v", err, got)
 	}
@@ -156,7 +156,7 @@ func TestFS_UnterminatedFrontmatterIsAProblemNotAnEmptyTask(t *testing.T) {
 	const broken = "---\nstatus: ready-to-start\ndescription: x\n# no closing fence\n"
 	path, out := testutil.TaskFixture(root, "ready-to-start", "alpha.md", broken)
 	testutil.Write(t, path, out)
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	tasks, problems, err := fs.ListTasks()
 	if err != nil {
@@ -214,7 +214,7 @@ func TestFS_ListTasks_SkipsSymlinkedMarkdown(t *testing.T) {
 		t.Skipf("symlinks unsupported here: %v", err)
 	}
 
-	tasks, problems, err := NewFS(root).ListTasks()
+	tasks, problems, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ListTasks()
 	if err != nil {
 		t.Fatal(err)
 	}

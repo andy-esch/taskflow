@@ -3,7 +3,9 @@ package cli
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
+	"maps"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -17,6 +19,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
+	"github.com/andy-esch/taskflow/internal/userconfig"
 )
 
 // Integration tests select the same local composition as the binary. These
@@ -36,7 +39,7 @@ func newTestChromeTheme(args []string) design.Theme {
 func TestCommandTreeConstructionDoesNotReadInvocationData(t *testing.T) {
 	reads, compositions := 0, 0
 	bindings := ports.Bindings{
-		Compose: func(authorize func() error) ports.Services {
+		Compose: func(authorize func() error) (ports.Services, error) {
 			compositions++
 			if err := authorize(); err == nil {
 				t.Fatal("new command tree authorized a mutation before binding safety")
@@ -44,7 +47,7 @@ func TestCommandTreeConstructionDoesNotReadInvocationData(t *testing.T) {
 			return ports.Services{OpenPlanning: func(string) (ports.Planning, error) {
 				reads++
 				return ports.Planning{}, errors.New("must not open during construction")
-			}}
+			}}, nil
 		},
 		ReadUser: func() (core.UserConfiguration, error) {
 			reads++
@@ -58,6 +61,86 @@ func TestCommandTreeConstructionDoesNotReadInvocationData(t *testing.T) {
 	root := NewRootCmd(strings.NewReader(""), io.Discard, io.Discard, bindings)
 	if _, err := commandSafetySurface(root); err != nil || reads != 0 || compositions != 1 {
 		t.Fatalf("tree construction reads=%d compositions=%d err=%v", reads, compositions, err)
+	}
+}
+
+func TestFailedCompositionDiscardsPartialServicesAndPreservesMetadata(t *testing.T) {
+	t.Setenv("TSKFLW_SPACE", "")
+	repo, home := setupRepo(t), t.TempDir()
+	t.Setenv(userconfig.DirEnv, home)
+	t.Chdir(repo) // a fallback would find real planning records
+	beforeRepo, beforeHome := testutil.SnapshotTree(t, repo), testutil.SnapshotTree(t, home)
+	for _, cause := range []error{
+		core.ErrInvalidMutationPolicy,
+		fmt.Errorf("composition: %w", config.ErrNoConfig),
+		fmt.Errorf("composition: %w", domain.ErrConflict),
+	} {
+		for _, args := range [][]string{
+			{"task", "show", "alpha"}, {"space", "list"}, {"space", "add"},
+			{"task", "set", "alpha", "--description", "changed"},
+			{"config", "show"}, {"config", "migrate"}, {"config", "edit"}, {"doctor"},
+			{"status", "--all"}, {"ui"}, {"init"}, {"template", "list"}, {"theme", "list"},
+			{"init", "--path", filepath.Join(repo, "not-created"), "--no-register"},
+			{"schema", "--json"}, {"version"}, {"--help"}, {"completion", "bash"},
+			{"__complete", "task", "show", ""},
+			{"__completeNoDesc", "task", "show", ""},
+		} {
+			t.Run(cause.Error()+"/"+strings.Join(args, "/"), func(t *testing.T) {
+				openCalls, launchCalls := 0, 0
+				bindings := appwiring.LocalBindings()
+				compose := bindings.Compose
+				bindings.Compose = func(authorize func() error) (ports.Services, error) {
+					// Return a complete, usable local bundle alongside the failure, not
+					// only an opener stub. The controller must discard every capability.
+					partial, err := compose(authorize)
+					if err != nil {
+						t.Fatal(err)
+					}
+					open := partial.OpenPlanning
+					partial.OpenPlanning = func(start string) (ports.Planning, error) {
+						openCalls++
+						return open(start)
+					}
+					return partial, cause
+				}
+				bindings.RunBrowser = func(ports.Browser) error { launchCalls++; return nil }
+				bindings.RunConfiguration = func(ports.ConfigurationEditor) error { launchCalls++; return nil }
+				var stdout, stderr bytes.Buffer
+				root, app := newRootCmd(strings.NewReader(""), &stdout, &stderr, bindings)
+				if app.ConfigSvc != nil || app.SpaceSvc != nil || app.SpaceOverviewSvc != nil || app.WorkspaceSvc != nil || app.openPlanning != nil {
+					t.Fatal("failed composition published partial services")
+				}
+				root.SetArgs(args)
+				err := root.Execute()
+				switch args[0] {
+				case "schema", "version", "--help", "completion":
+					if err != nil || stdout.Len() == 0 {
+						t.Fatalf("metadata failed: err=%v stdout=%q", err, stdout.String())
+					}
+				case "__complete", "__completeNoDesc":
+					if err != nil || stdout.String() != ":4\n" || strings.Contains(stderr.String(), cause.Error()) {
+						t.Fatalf("completion leaked error or fell back: err=%v stdout=%q stderr=%q", err, stdout.String(), stderr.String())
+					}
+				default:
+					if !errors.Is(err, cause) || ExitCode(err) != ExitCode(cause) || stdout.Len() != 0 {
+						t.Fatalf("composition failure swallowed: err=%v stdout=%q", err, stdout.String())
+					}
+				}
+				if openCalls != 0 || launchCalls != 0 || app.Svc != nil || app.Cfg != nil {
+					t.Fatalf("failed bundle was used: opens=%d launches=%d svc=%v cfg=%v", openCalls, launchCalls, app.Svc, app.Cfg)
+				}
+				if !maps.Equal(beforeRepo, testutil.SnapshotTree(t, repo)) || !maps.Equal(beforeHome, testutil.SnapshotTree(t, home)) {
+					t.Fatal("failed composition changed repository or user configuration")
+				}
+			})
+		}
+	}
+	// An invocation-local failure must not poison a fresh, healthy command tree.
+	var stdout bytes.Buffer
+	root := newTestRootCmd(strings.NewReader(""), &stdout, io.Discard)
+	root.SetArgs([]string{"task", "show", "alpha"})
+	if err := root.Execute(); err != nil || stdout.Len() == 0 {
+		t.Fatalf("fresh invocation failed: err=%v stdout=%q", err, stdout.String())
 	}
 }
 
@@ -89,7 +172,7 @@ func TestInjectedPlanningOpenerRunsAfterCompletionFlagsAndSafety(t *testing.T) {
 	svc := core.MustNewService(nil, core.WithCompletionSource(fake))
 	var stdout, stderr bytes.Buffer
 	var starts []string
-	bindings := ports.Bindings{Compose: func(authorize func() error) ports.Services {
+	bindings := ports.Bindings{Compose: func(authorize func() error) (ports.Services, error) {
 		return ports.Services{OpenPlanning: func(start string) (ports.Planning, error) {
 			starts = append(starts, start)
 			if err := authorize(); err == nil || !strings.Contains(err.Error(), "read-only command") {
@@ -99,7 +182,7 @@ func TestInjectedPlanningOpenerRunsAfterCompletionFlagsAndSafety(t *testing.T) {
 				Repository: core.RepositoryConfiguration{PlanningRoot: "opaque:corpus", ThemeName: "neon"},
 				Service:    svc,
 			}, nil
-		}}
+		}}, nil
 	}}
 	root, app := newRootCmd(strings.NewReader(""), &stdout, &stderr, bindings)
 	root.SetArgs([]string{"__complete", "-C", "opaque:entry", "task", "show", "por"})
@@ -113,13 +196,13 @@ func TestInjectedPlanningOpenerRunsAfterCompletionFlagsAndSafety(t *testing.T) {
 
 func TestMissingNamedServicesFailWithoutPersistenceFallback(t *testing.T) {
 	t.Chdir(setupRepo(t))
-	bindings := ports.Bindings{Compose: func(func() error) ports.Services {
+	bindings := ports.Bindings{Compose: func(func() error) (ports.Services, error) {
 		return ports.Services{OpenPlanning: func(string) (ports.Planning, error) {
 			return ports.Planning{
 				Repository: core.RepositoryConfiguration{PlanningRoot: "opaque:corpus"},
 				Service:    core.MustNewService(nil),
 			}, nil
-		}}
+		}}, nil
 	}}
 	for _, args := range [][]string{
 		{"config"}, {"config", "show"}, {"config", "migrate"}, {"config", "doctor"},
@@ -144,14 +227,14 @@ func TestFailedPlanningOpenerDoesNotPublishPartialInvocation(t *testing.T) {
 	sentinel := errors.New("explicit target failed")
 	for _, failed := range []bool{false, true} {
 		t.Run(map[bool]string{false: "incomplete", true: "failed"}[failed], func(t *testing.T) {
-			bindings := ports.Bindings{Compose: func(func() error) ports.Services {
+			bindings := ports.Bindings{Compose: func(func() error) (ports.Services, error) {
 				return ports.Services{OpenPlanning: func(string) (ports.Planning, error) {
 					partial := ports.Planning{Repository: core.RepositoryConfiguration{PlanningRoot: "partial"}}
 					if failed {
 						return partial, sentinel
 					}
 					return partial, nil
-				}}
+				}}, nil
 			}}
 			_, app := newRootCmd(strings.NewReader(""), io.Discard, io.Discard, bindings)
 			err := app.resolveFrom("opaque:entry")
@@ -175,11 +258,11 @@ func TestFailedPlanningOpenerCommandsDoNotFallbackToPopulatedCWD(t *testing.T) {
 	for _, complete := range []bool{false, true} {
 		t.Run(map[bool]string{false: "show", true: "completion"}[complete], func(t *testing.T) {
 			calls := 0
-			bindings := ports.Bindings{Compose: func(func() error) ports.Services {
+			bindings := ports.Bindings{Compose: func(func() error) (ports.Services, error) {
 				return ports.Services{OpenPlanning: func(string) (ports.Planning, error) {
 					calls++
 					return ports.Planning{}, sentinel
-				}}
+				}}, nil
 			}}
 			var stdout, stderr bytes.Buffer
 			root, app := newRootCmd(strings.NewReader(""), &stdout, &stderr, bindings)

@@ -35,7 +35,7 @@ func TestFS_OpenWorkspaceResolvesDirectAndPointerEntries(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	service := core.NewWorkspaceService(New())
+	service := core.NewWorkspaceService(testutil.Must(New(core.ReadOnlyMutations())))
 	direct, err := service.Open(core.WorkspaceRequest{Start: planning, SpaceID: "planning"})
 	if err != nil {
 		t.Fatal(err)
@@ -80,7 +80,7 @@ func TestFS_OpenWorkspacePreservesDiscoveryFailureCause(t *testing.T) {
 		t.Fatal("test requires a changed planning id")
 	}
 
-	_, err = core.NewWorkspaceService(New()).Open(core.WorkspaceRequest{Start: pointer})
+	_, err = core.NewWorkspaceService(testutil.Must(New(core.ReadOnlyMutations()))).Open(core.WorkspaceRequest{Start: pointer})
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("identity mismatch error = %v", err)
 	}
@@ -93,7 +93,7 @@ func TestFS_MultiWorkspaceSourceSetsCannotBeCrossWired(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	opener := New()
+	opener := testutil.Must(New(core.ReadOnlyMutations()))
 	a, err := opener.OpenWorkspace(first)
 	if err != nil {
 		t.Fatal(err)
@@ -124,7 +124,7 @@ func TestFS_MultiWorkspaceSourceSetsCannotBeCrossWired(t *testing.T) {
 }
 
 func TestFS_OpenWorkspaceDoesNotFallbackFromMissingOrMalformedEntry(t *testing.T) {
-	service := core.NewWorkspaceService(New())
+	service := core.NewWorkspaceService(testutil.Must(New(core.ReadOnlyMutations())))
 	missing := t.TempDir()
 	if workspace, err := service.Open(core.WorkspaceRequest{Start: missing}); err == nil ||
 		workspace.Planning != nil || !strings.Contains(err.Error(), "not a taskflow planning repo") {
@@ -138,5 +138,81 @@ func TestFS_OpenWorkspaceDoesNotFallbackFromMissingOrMalformedEntry(t *testing.T
 	if workspace, err := service.Open(core.WorkspaceRequest{Start: malformed}); err == nil ||
 		workspace.Planning != nil || !strings.Contains(err.Error(), "parse") {
 		t.Fatalf("malformed entry = %+v, %v", workspace, err)
+	}
+}
+
+func TestWorkspaceOpeningCarriesPolicyAcrossDirectAndPointerEntryPoints(t *testing.T) {
+	for _, pointer := range []bool{false, true} {
+		for _, mode := range []string{"read-only", "guarded", "unrestricted"} {
+			t.Run(map[bool]string{true: "pointer", false: "direct"}[pointer]+"/"+mode, func(t *testing.T) {
+				repo := t.TempDir()
+				if _, err := config.Init(repo, "", false); err != nil {
+					t.Fatal(err)
+				}
+				cfg, err := config.Discover(repo)
+				if err != nil {
+					t.Fatal(err)
+				}
+				testutil.Write(t, filepath.Join(cfg.Root, domain.TasksDir, testutil.TaskID("probe")+"-probe.md"),
+					"---\nid: "+testutil.TaskID("probe")+"\nstatus: ready-to-start\ndescription: probe\ntags: [test]\n---\n")
+				start := repo
+				if pointer {
+					start = t.TempDir()
+					if _, err := config.InitPointer(start, repo, false); err != nil {
+						t.Fatal(err)
+					}
+				}
+				denied := errors.New("late workspace denied")
+				calls := 0
+				decision := denied
+				policy := core.ReadOnlyMutations()
+				switch mode {
+				case "unrestricted":
+					policy = core.UnrestrictedMutations()
+				case "guarded":
+					policy = core.GuardedMutations(func() error { calls++; return decision })
+				}
+				opener := testutil.Must(New(policy))
+				workspace, err := core.NewWorkspaceService(opener).Open(core.WorkspaceRequest{Start: start})
+				if err != nil || calls != 0 {
+					t.Fatalf("opening authorized mutation: workspace=%v calls=%d err=%v", workspace, calls, err)
+				}
+				for _, dryRun := range []bool{true, false} {
+					_, err := workspace.Planning.SetFields("probe", map[string]any{"priority": "low"}, false, dryRun)
+					want := core.ErrReadOnlyPersistence
+					switch mode {
+					case "guarded":
+						want = denied
+					case "unrestricted":
+						want = nil
+					}
+					if !errors.Is(err, want) {
+						t.Fatalf("late workspace mutation = %v; want %v", err, want)
+					}
+				}
+				if mode == "guarded" {
+					if calls != 2 {
+						t.Fatalf("guard was not invoked for each refusal: %d", calls)
+					}
+					decision = nil
+					if _, err := workspace.Planning.SetFields("probe", map[string]any{"priority": "low"}, false, false); err != nil || calls <= 2 {
+						t.Fatalf("authorization cached after opening: calls=%d err=%v", calls, err)
+					}
+					// A successful operation may cross multiple guarded persistence
+					// boundaries. Assert a fresh decision, not their implementation count.
+					previous := calls
+					decision = denied
+					if _, err := workspace.Planning.SetFields("probe", map[string]any{"priority": "high"}, false, true); !errors.Is(err, denied) || calls != previous+1 {
+						t.Fatalf("allowed decision was cached: calls=%d previous=%d err=%v", calls, previous, err)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestZeroWorkspaceAdapterRefusesBeforeDiscovery(t *testing.T) {
+	if opened, err := (&FS{}).OpenWorkspace(t.TempDir()); !errors.Is(err, core.ErrInvalidMutationPolicy) || opened.Store != nil {
+		t.Fatalf("zero workspace opened/discovered planning: %+v %v", opened, err)
 	}
 }

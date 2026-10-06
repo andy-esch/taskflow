@@ -40,9 +40,9 @@ func representativeThreadApplyFixture(tb testing.TB) (*FS, core.ThreadApplyPlan)
 	}
 	plan := storeThreadApplyPlan(testutil.TaskID("bulk-benchmark-thread"), members, dependencies...)
 	repoID := "planning"
-	fs := NewFS(root, WithPlanningIdentityReader(func() (string, string, error) {
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations(), WithPlanningIdentityReader(func() (string, string, error) {
 		return root, repoID, nil
-	}))
+	})))
 	return fs, plan
 }
 

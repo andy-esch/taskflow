@@ -4,7 +4,7 @@ id: 6gefs7wbbcyt
 bucket: closed
 area: arch-hexagonal-boundaries
 date: "2026-09-28"
-updated_at: "2026-10-04"
+updated_at: "2026-10-05"
 ---
 # Weekly Architecture Audit: hexagonal-boundaries — 2026-09-28
 
@@ -374,7 +374,7 @@ probes rejected an unknown adapter, children of allowed core, all four known
 persistence adapters, and appwiring under standard lint. The descriptive
 import-graph checker remains separate work.
 
-#### M2. Mutation authorization is fail-open when a composition root omits the option · **Status:** tracked by 6gg7e59cyxxh
+#### M2. Mutation authorization is fail-open when a composition root omits the option · **Status:** fixed
 
 **File:** internal/store/fsstore.go:86-90 | **Component:** store + configstore + spacestore + workspacestore
 **Effort:** S · **Urgency:** soon
@@ -434,11 +434,15 @@ nothing was edited.
 
 **Recommendation:** Make the guard a required construction parameter rather than an optional functional option, in the shape core.NewService already uses: have NewFS return (*FS, error) and reject a nil authorizer, with an explicit store.WithoutMutationAuthorization() opt-out for the read-only cases that genuinely need it (completion). Minimum viable alternative: a test that walks every store.NewFS construction site in internal/ and asserts each supplies an authorizer.
 
-**Resolution:** Current binary composition carries one invocation authorizer
-through all persistence families; constructor omission still fails open
-elsewhere. Track an explicit-policy design and compatibility checkpoint
-separately rather than changing adapter constructors during the CLI wiring
-extraction.
+**Resolution:** Implemented by 6gg7e59cyxxh on
+feat/explicit-persistence-authorization. All persistence constructors require
+validated core.MutationPolicy values; zero/nil policies and zero-value adapters
+fail closed. Atlas summaries are read-only and guards survive direct/pointer
+late opening. Both implementation reviews are reconciled and closed; populated
+no-op/callback, full real-bundle composition, and constructor-option regressions
+are permanent. Full normal/race tests, lint, build, generated-output
+comparisons, and planning/audit lint pass. Completed locally, pending merge and
+release.
 
 #### M3. The cli/tui/core/store layering is the repo's central architectural rule and has no ADR · **Status:** tracked by 6gg7e59mm68g
 
@@ -668,6 +672,6 @@ has been released.
 <!-- Add or replace one row with `tskflwctl audit finding <audit> <code> --candidate "<one line>"`; an empty value removes it. -->
 
 - ✔ M1 · fixed — Implemented by task 6gcwcf8rxe72, merged in PR #277; both implementation reviews reconciled.
-- → M2 · tracked — Tracked by task 6gg7e59cyxxh; explicit mutation-policy compatibility design required.
+- ✔ M2 · fixed — Implemented by task 6gg7e59cyxxh; both reviews reconciled and closed, pending merge and release.
 - → M3 · tracked — Tracked by task 6gg7e59mm68g; propose the dependency-policy ADR for user acceptance.
 - ✔ M4 · fixed — Resolved in PR #275 by CLI planning-data application-port task 6gcwcf8gzn50.

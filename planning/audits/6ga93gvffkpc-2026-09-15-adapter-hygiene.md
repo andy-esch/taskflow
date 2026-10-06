@@ -131,14 +131,14 @@ it should survive the merge rather than be dropped in favour of the existing cor
 reports a `remedy` — would be better enforced than remembered. A table-driven wire test over
 the receipt DTOs would catch the next one; that is its own task, not part of this fix.
 
-**Resolution:** Implemented in 6ggdkztshmzz for PR #282; both implementation
-reviews are reconciled, with integration pending. Dependency receipts publish
-core-owned recovery guidance shared with lifecycle receipts, including runnable
-stable-ID blocker commands. Preview, no-write refusal, durable-prefix, and
-all-applied failures remain distinct, with human/error/JSON parity and populated
-semantic schema regressions. Antigravity's mapper-test gap is fixed and Codex's
-pre-existing TUI consumer gap is tracked by 6ggkdbg0816h. Repair authorization
-and transaction behavior are unchanged.
+**Resolution:** Implemented by 6ggdkztshmzz and merged in PR #282. Dependency
+receipts now publish core-owned recovery guidance shared with lifecycle
+receipts, including runnable stable-ID blocker commands. Preview, no-write
+refusal, durable-prefix, and all-applied failures remain distinct with
+human/error/JSON parity and populated semantic schema regressions. Both reviews
+are reconciled; Antigravity's mapper-test gap is fixed and Codex's pre-existing
+TUI consumer gap is tracked by 6ggkdbg0816h. Release inclusion remains separate;
+repair authorization and transactions are unchanged.
 
 #### M2. MarkerUnreadable brands readable tasks whose prerequisite is broken  · **Status:** open
 
@@ -243,14 +243,12 @@ decision as a field, which M1's fix makes natural.
 needs the predicate reachable from core's dependency path regardless, so the two land as
 one edit.
 
-**Resolution:** Implemented in 6ggdkztshmzz for PR #282; both implementation
-reviews are reconciled, with integration pending.
-TaskGraphStateImpact.NewlyUnsafe and ThreadProjectionImpact.NewlyInconsistent
-own the existing warning predicates; wire copies core decisions and renderers
-consume them without string-based policy. Schema 1.81 is additive. The
-strengthened wire matrix covers 36 task state transitions and all four Thread
-consistency transitions; three additional compiler-valid shallow mapper probes
-fail and restored tests pass. No production semantics changed after review.
+**Resolution:** Implemented by 6ggdkztshmzz and merged in PR #282. Core owns
+task/Thread warning predicates, wire copies decisions, and renderers consume
+them without string-based policy. Schema 1.81 is additive. Both reviews are
+reconciled; the strengthened mapper regression covers 36 task and four Thread
+transition cases and rejects three compiler-valid shallow-rule mutants. Release
+inclusion remains a separate milestone.
 
 #### L2. The spatial anchor guard is narrower than its sibling render guards  · **Status:** open
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/store"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 type tuiConfigStore struct {
@@ -48,7 +49,7 @@ func configuredModel(t *testing.T) (Model, *tuiConfigStore) {
 		User: core.UserConfiguration{Path: "/home/config.toml"},
 	}}
 	configSvc := core.NewConfigurationService(cfgStore)
-	m := New(core.MustNewService(store.NewFS(root)), WithConfiguration(configSvc, root, core.ConfigurationOverrides{
+	m := New(core.MustNewService(testutil.Must(store.NewFS(root, core.UnrestrictedMutations()))), WithConfiguration(configSvc, root, core.ConfigurationOverrides{
 		DefaultTheme: "neon", KnownThemes: []string{"catppuccin", "neon"},
 		DefaultPagerEnable: true, DefaultPager: "less -FRX",
 	}))

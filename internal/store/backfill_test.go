@@ -8,6 +8,7 @@ import (
 
 	yaml "go.yaml.in/yaml/v3"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
@@ -66,7 +67,7 @@ func TestFixFrontmatter_BackfillsMissingTaskID(t *testing.T) {
 	p, out := testutil.TaskFixture(root, "ready-to-start", "t.md", idlessTask)
 	seedFile(t, p, out)
 
-	results, err := NewFS(root).FixFrontmatter(false)
+	results, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).FixFrontmatter(false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -84,7 +85,7 @@ func TestFixFrontmatter_BackfillsMissingAuditID(t *testing.T) {
 	p, out := testutil.AuditFixture(root, "open", "2026-01-02-x.md", "---\narea: x\ndate: 2026-01-02\n---\n#### H1. t  · **Status:** open\n")
 	seedFile(t, p, out)
 
-	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).FixFrontmatter(false); err != nil {
 		t.Fatal(err)
 	}
 	if got := frontmatterID(t, p); got != filenameID(t, p) {
@@ -99,7 +100,7 @@ func TestFixFrontmatter_KeepsExistingID(t *testing.T) {
 	p, out := testutil.TaskFixture(root, "ready-to-start", "t.md", "---\nid: "+existing+"\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ncreated: 2026-01-05\ntags: [a]\n---\n# T\n")
 	seedFile(t, p, out)
 
-	results, err := NewFS(root).FixFrontmatter(false)
+	results, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).FixFrontmatter(false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +120,7 @@ func TestFixFrontmatter_BackfillsWithoutDate(t *testing.T) {
 	p, out := testutil.TaskFixture(root, "ready-to-start", "t.md", "---\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 2h\ntags: [a]\n---\n# T\n")
 	seedFile(t, p, out)
 
-	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).FixFrontmatter(false); err != nil {
 		t.Fatal(err)
 	}
 	if got := frontmatterID(t, p); got != filenameID(t, p) {
@@ -135,7 +136,7 @@ func TestFixFrontmatter_SkipsStrayWithoutIDLedName(t *testing.T) {
 	p := filepath.Join(root, "tasks", "not-an-entity.md")
 	seedFile(t, p, idlessTask)
 
-	results, err := NewFS(root).FixFrontmatter(false)
+	results, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).FixFrontmatter(false)
 	if err != nil {
 		t.Fatal(err)
 	}

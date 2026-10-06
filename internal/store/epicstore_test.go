@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
@@ -23,7 +24,7 @@ func TestFS_ListEpics_MissingFrontmatterIsLoud(t *testing.T) {
 	root := t.TempDir()
 	writeEpic(t, root, "01-x.md", "# Just a heading\n\nno frontmatter here\n")
 
-	epics, problems, err := NewFS(root).ListEpics()
+	epics, problems, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ListEpics()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -44,7 +45,7 @@ func TestFS_ListEpics_NumericOrder(t *testing.T) {
 	for _, id := range []string{"09-i", "10-j", "100-k", "02-b"} {
 		writeEpic(t, root, id+".md", "---\nstatus: active\n---\n# "+id+"\n")
 	}
-	epics, _, err := NewFS(root).ListEpics()
+	epics, _, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ListEpics()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +65,7 @@ func TestFS_ListEpics_NumericOrder(t *testing.T) {
 func TestFS_WatchPaths(t *testing.T) {
 	root := filepath.Join("x", "plan")
 	got := map[string]bool{}
-	for _, d := range NewFS(root).WatchPaths() {
+	for _, d := range testutil.Must(NewFS(root, core.ReadOnlyMutations())).WatchPaths() {
 		got[d] = true
 	}
 	for _, parent := range []string{"epics", "tasks", "audits", "research", "threads"} {
@@ -88,7 +89,7 @@ func TestFS_ListEpics_And_GetEpic(t *testing.T) {
 	root := t.TempDir()
 	writeEpic(t, root, "17-x.md", "---\nstatus: active\ndescription: x epic\ntags: [a]\n---\n# Epic X\nbody\n")
 
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.ReadOnlyMutations()))
 	epics, _, err := fs.ListEpics()
 	if err != nil {
 		t.Fatal(err)
@@ -118,7 +119,7 @@ func TestFS_MoveEpic(t *testing.T) {
 	writeEpic(t, root, "18-tui.md",
 		"---\nstatus: active\ndescription: tui epic\ncustom: keep\n---\n# TUI Epic\nbody\n")
 
-	ep, err := NewFS(root).MoveEpic("18-tui", "retired", bodyNow, false)
+	ep, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveEpic("18-tui", "retired", bodyNow, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +155,7 @@ func TestFS_MoveEpic(t *testing.T) {
 func TestFS_MoveEpic_NoOp_NoStamp(t *testing.T) {
 	root := t.TempDir()
 	writeEpic(t, root, "18-tui.md", "---\nstatus: active\ndescription: x\n---\n# X\n")
-	ep, err := NewFS(root).MoveEpic("18-tui", "active", bodyNow, false)
+	ep, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveEpic("18-tui", "active", bodyNow, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -171,7 +172,7 @@ func TestFS_MoveEpic_InvalidStatus(t *testing.T) {
 	const original = "---\nstatus: active\ndescription: x\n---\n# X\n"
 	writeEpic(t, root, "18-tui.md", original)
 
-	if _, err := NewFS(root).MoveEpic("18-tui", "bogus", bodyNow, false); !errors.Is(err, domain.ErrValidation) {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveEpic("18-tui", "bogus", bodyNow, false); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("invalid status should be ErrValidation, got %v", err)
 	}
 	b, _ := os.ReadFile(filepath.Join(root, "epics", "18-tui.md"))
@@ -186,7 +187,7 @@ func TestFS_MoveEpic_DryRun(t *testing.T) {
 	const original = "---\nstatus: active\n---\n# X\n"
 	writeEpic(t, root, "18-tui.md", original)
 
-	ep, err := NewFS(root).MoveEpic("18-tui", "retired", bodyNow, true)
+	ep, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveEpic("18-tui", "retired", bodyNow, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -200,13 +201,13 @@ func TestFS_MoveEpic_DryRun(t *testing.T) {
 }
 
 func TestFS_MoveEpic_NotFound(t *testing.T) {
-	if _, err := NewFS(t.TempDir()).MoveEpic("ghost", "retired", bodyNow, false); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := testutil.Must(NewFS(t.TempDir(), core.UnrestrictedMutations())).MoveEpic("ghost", "retired", bodyNow, false); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
 }
 
 func TestFS_ListEpics_NoDir(t *testing.T) {
-	epics, _, err := NewFS(t.TempDir()).ListEpics()
+	epics, _, err := testutil.Must(NewFS(t.TempDir(), core.ReadOnlyMutations())).ListEpics()
 	if err != nil {
 		t.Fatalf("missing epics dir should not error: %v", err)
 	}

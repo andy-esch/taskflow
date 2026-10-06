@@ -17,7 +17,7 @@ import (
 )
 
 func TestCreateTask_OrderQuotingClobber(t *testing.T) {
-	fs := NewFS(t.TempDir())
+	fs := testutil.Must(NewFS(t.TempDir(), core.UnrestrictedMutations()))
 	task := domain.Task{
 		Slug: "demo", ID: "0abcdef12345", Status: domain.StatusReadyToStart, Epic: "e1",
 		Description: "has a colon: yes", Effort: "Unknown", Tier: 3,
@@ -78,7 +78,7 @@ func TestOrdinaryCreateReceiptsSeparatePlannedAndCommittedPaths(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			root := t.TempDir()
-			fs := NewFS(root)
+			fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 			preview, committed, err := tc.make(fs, true)
 			if err != nil || committed || preview.PlannedPath == "" || preview.CommittedPath != "" ||
 				preview.DisplayPath(true) != preview.PlannedPath {
@@ -129,7 +129,7 @@ func TestOrdinaryCreateReportsCommittedGuardReleaseFailure(t *testing.T) {
 			root := t.TempDir()
 			calls := 0
 			testHookRepositoryUnlockError = func() error { calls++; return releaseErr }
-			local, committed, err := tc.create(NewFS(root))
+			local, committed, err := tc.create(testutil.Must(NewFS(root, core.UnrestrictedMutations())))
 			if !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "release repository entity creation guard") ||
 				!committed || local.PlannedPath == "" || local.CommittedPath != local.PlannedPath {
 				t.Fatalf("post-commit result local=%+v committed=%v err=%v", local, committed, err)
@@ -165,7 +165,7 @@ func TestNewResearchDoesNotRetryCollisionWhenGuardReleaseFails(t *testing.T) {
 		return nil
 	}
 	minted := 0
-	svc := core.MustNewService(NewFS(root), core.WithIDGen(func() string {
+	svc := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())), core.WithIDGen(func() string {
 		minted++
 		if minted == 1 {
 			return "6ge7qn9ptaa1"
@@ -194,7 +194,7 @@ func TestCreateEntityFileKeepsDryRunAndPreCommitFailuresDistinct(t *testing.T) {
 		return entityFileCreation{dir: filepath.Join(root, "tasks"), path: filepath.Join(root, "tasks", "preview.md"),
 			content: []byte("preview"), kind: "task", name: "preview"}, nil
 	}
-	preview, committed, err := NewFS(root).createEntityFile(true, prepare)
+	preview, committed, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).createEntityFile(true, prepare)
 	if err != nil || committed || preview.path == "" || calls != 0 {
 		t.Fatalf("dry run result=%+v committed=%v calls=%d err=%v", preview, committed, calls, err)
 	}
@@ -202,7 +202,7 @@ func TestCreateEntityFileKeepsDryRunAndPreCommitFailuresDistinct(t *testing.T) {
 		t.Fatalf("dry run wrote destination: %v", err)
 	}
 	preCommitErr := fmt.Errorf("preparation failed: %w", domain.ErrValidation)
-	result, committed, err := NewFS(root).createEntityFile(false, func() (entityFileCreation, error) {
+	result, committed, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).createEntityFile(false, func() (entityFileCreation, error) {
 		return entityFileCreation{}, preCommitErr
 	})
 	if committed || result.path != "" || !errors.Is(err, preCommitErr) || !errors.Is(err, domain.ErrConflict) || calls != 1 {
@@ -212,7 +212,7 @@ func TestCreateEntityFileKeepsDryRunAndPreCommitFailuresDistinct(t *testing.T) {
 
 func TestCreateTaskCreatesMissingPlanningRootBeforeLocking(t *testing.T) {
 	root := filepath.Join(t.TempDir(), "new-planning-root")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	task := domain.Task{
 		Slug: "first", ID: "0abcdef12345", Status: domain.StatusReadyToStart, Epic: "e1",
 		Description: "first task", Effort: "Unknown", Tier: 3,
@@ -236,7 +236,7 @@ func TestCreateEntityFileSerializesPreparationWithWrite(t *testing.T) {
 	results := make(chan error, 2)
 
 	go func() {
-		_, _, err := NewFS(root).createEntityFile(false, func() (entityFileCreation, error) {
+		_, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).createEntityFile(false, func() (entityFileCreation, error) {
 			close(firstPrepared)
 			<-releaseFirst
 			return entityFileCreation{
@@ -248,7 +248,7 @@ func TestCreateEntityFileSerializesPreparationWithWrite(t *testing.T) {
 	<-firstPrepared
 
 	go func() {
-		_, _, err := NewFS(root).createEntityFile(false, func() (entityFileCreation, error) {
+		_, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).createEntityFile(false, func() (entityFileCreation, error) {
 			close(secondPrepared)
 			return entityFileCreation{
 				dir: dir, path: filepath.Join(dir, "second.md"), content: []byte("second"), kind: "test entity", name: "second",
@@ -276,10 +276,10 @@ func TestCreateTaskRefusesDuplicateIDAcrossDifferentSlugs(t *testing.T) {
 	newTask := func(slug string) domain.Task {
 		return domain.Task{ID: shared, Slug: slug, Status: domain.StatusReadyToStart, Created: "2026-09-07"}
 	}
-	if _, err := NewFS(root).CreateTask(newTask("alpha"), "# Alpha\n", false); err != nil {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).CreateTask(newTask("alpha"), "# Alpha\n", false); err != nil {
 		t.Fatal(err)
 	}
-	_, err := NewFS(root).CreateTask(newTask("beta"), "# Beta\n", false)
+	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).CreateTask(newTask("beta"), "# Beta\n", false)
 	if !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "alpha") {
 		t.Fatalf("duplicate task id error = %v, want conflict naming the existing owner", err)
 	}
@@ -300,7 +300,7 @@ func TestCreateTaskTreatsUnreadableFilenameIdentityAsOwned(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := NewFS(root).CreateTask(domain.Task{
+	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).CreateTask(domain.Task{
 		ID: shared, Slug: "replacement", Status: domain.StatusReadyToStart, Created: "2026-09-07",
 	}, "# Replacement\n", false)
 	if !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "broken-owner") {
@@ -309,7 +309,7 @@ func TestCreateTaskTreatsUnreadableFilenameIdentityAsOwned(t *testing.T) {
 }
 
 func TestCreateTask_IDRoundTrips(t *testing.T) {
-	fs := NewFS(t.TempDir())
+	fs := testutil.Must(NewFS(t.TempDir(), core.UnrestrictedMutations()))
 	// Alphanumeric and all-digit ids: the latter must survive YAML as a string, not
 	// be coerced to an int (which would drop the leading zero).
 	for _, wantID := range []string{"0abcdef12345", "012345678901"} {
@@ -342,7 +342,7 @@ func TestCreateTask_IDRoundTrips(t *testing.T) {
 }
 
 func TestCreateAudit_OpenBucketOrderClobber(t *testing.T) {
-	fs := NewFS(t.TempDir())
+	fs := testutil.Must(NewFS(t.TempDir(), core.UnrestrictedMutations()))
 	a := domain.Audit{ID: "0abcdef45678", Slug: "2026-06-16-dispatcher", Area: "dispatcher", Date: "2026-06-16"}
 
 	got, err := fs.CreateAudit(a, "\n# Audit\n", false)
@@ -376,7 +376,7 @@ func TestCreateAudit_OpenBucketOrderClobber(t *testing.T) {
 }
 
 func TestCreateAudit_IDRoundTrips(t *testing.T) {
-	fs := NewFS(t.TempDir())
+	fs := testutil.Must(NewFS(t.TempDir(), core.UnrestrictedMutations()))
 	const wantID = "0abcdef12345"
 	a := domain.Audit{Slug: "2026-07-02-x", ID: wantID, Area: "x", Date: "2026-07-02"}
 	got, err := fs.CreateAudit(a, "\n# x\n", false)
@@ -403,7 +403,7 @@ func TestCreateAudit_IDRoundTrips(t *testing.T) {
 
 func TestCreateAudit_RefusesDuplicateIDAcrossDifferentSlugs(t *testing.T) {
 	root := t.TempDir()
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	const shared = "6g7s4k845fsb"
 	alpha := domain.Audit{ID: shared, Slug: "2026-09-07-alpha", Area: "alpha", Date: "2026-09-07"}
 	beta := domain.Audit{ID: shared, Slug: "2026-09-07-beta", Area: "beta", Date: "2026-09-07"}
@@ -429,7 +429,7 @@ func TestCreateAudit_RefusesDuplicateIDAcrossDifferentSlugs(t *testing.T) {
 
 func TestCreateAudit_SerializesDuplicateIDCheckWithCreate(t *testing.T) {
 	root := t.TempDir()
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	const shared = "6g7s4k845fsc"
 	start := make(chan struct{})
 	results := make(chan error, 2)
@@ -468,7 +468,7 @@ func TestCreateAudit_SerializesDuplicateIDCheckWithCreate(t *testing.T) {
 }
 
 func TestCreateEpic_AutoNumber(t *testing.T) {
-	fs := NewFS(t.TempDir())
+	fs := testutil.Must(NewFS(t.TempDir(), core.UnrestrictedMutations()))
 	// First epic → 01; with an existing 04-... the next is 05.
 	first, err := fs.CreateEpic("alpha", domain.Epic{Status: "active", Description: "d", Priority: "medium", Created: "2026-06-08"}, "\n# Alpha\n", false)
 	if err != nil {
@@ -501,7 +501,7 @@ func TestCreateEpicSerializesNumberAllocation(t *testing.T) {
 		slug := slug
 		go func() {
 			<-start
-			epic, err := NewFS(root).CreateEpic(slug, domain.Epic{
+			epic, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).CreateEpic(slug, domain.Epic{
 				Status: "active", Description: slug, Priority: "medium", Created: "2026-09-07",
 			}, "# "+slug+"\n", false)
 			results <- result{epic: epic, err: err}
@@ -522,7 +522,7 @@ func TestCreateEpicSerializesNumberAllocation(t *testing.T) {
 // file the scanner then refuses to parse. Catch it at the write, not at the next lint.
 func TestCreateRejectsAnInvalidEntityID(t *testing.T) {
 	r := testutil.NewRepo(t)
-	fs := NewFS(r.Root)
+	fs := testutil.Must(NewFS(r.Root, core.UnrestrictedMutations()))
 	if _, err := fs.CreateTask(domain.Task{ID: "6fbj87000lt6", Slug: "s"}, "# T\n", false); err == nil {
 		t.Error("CreateTask accepted an invalid id")
 	} else if !errors.Is(err, domain.ErrValidation) {
@@ -551,7 +551,7 @@ func TestCreateTaskRejectsLifecycleOwnedAndInvalidStatuses(t *testing.T) {
 		domain.StatusDeprecated, domain.Status("invented"), "",
 	} {
 		t.Run(string(status), func(t *testing.T) {
-			fs := NewFS(t.TempDir())
+			fs := testutil.Must(NewFS(t.TempDir(), core.UnrestrictedMutations()))
 			_, err := fs.CreateTask(domain.Task{
 				ID: testutil.TaskID("ordinary-create-" + string(status)), Slug: "task",
 				Status: status, Tags: []string{"test"}, Created: "2026-08-29",

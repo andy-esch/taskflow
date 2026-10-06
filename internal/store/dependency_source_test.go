@@ -17,7 +17,7 @@ import (
 func TestFilesystemTaskGraphKeepsGuardedEvidenceOutsideSemanticTask(t *testing.T) {
 	root := t.TempDir()
 	path := writeGraphMutationTask(t, root, "guarded-source-evidence", domain.StatusReadyToStart, nil, "")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.ReadOnlyMutations()))
 	beforeRead, err := fs.ReadTaskGraph()
 	if err != nil || len(beforeRead.GuardedRecords) != 1 {
 		t.Fatalf("guarded read = %+v, %v", beforeRead, err)
@@ -72,7 +72,7 @@ func TestFilesystemTaskReadsKeepSourceIdentityDespiteFrontmatterDrift(t *testing
 	if err := os.WriteFile(path, content, 0o644); err != nil {
 		t.Fatal(err)
 	}
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.ReadOnlyMutations()))
 	graph, err := fs.ReadTaskGraph()
 	if err != nil || len(graph.GuardedRecords) != 1 {
 		t.Fatalf("graph read = %+v, err=%v", graph, err)
@@ -112,7 +112,7 @@ func TestReadTaskGraphPopulatesLosslessDependencySourceProjection(t *testing.T) 
 	unreadablePath := filepath.Join(root, domain.TasksDir, unreadableID+"-source-adapter-unreadable.md")
 	testutil.Write(t, unreadablePath, "---\nid: [unterminated\n---\n# Broken\n")
 
-	read, err := NewFS(root).ReadTaskGraph()
+	read, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ReadTaskGraph()
 	if err != nil || len(read.Problems) != 1 || read.Problems[0].SourceVersion == "" {
 		t.Fatalf("read=%+v err=%v", read, err)
 	}

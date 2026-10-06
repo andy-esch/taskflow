@@ -314,7 +314,7 @@ func startPlannerWindow(root string) (release func() error, err error) {
 	var mutateErr error
 	go func() {
 		defer close(done)
-		_, mutateErr = store.NewFS(root).MutateTaskGraph(time.Now(), true,
+		_, mutateErr = testutil.Must(store.NewFS(root, core.UnrestrictedMutations())).MutateTaskGraph(time.Now(), true,
 			func(*core.TaskGraph) (core.TaskGraphMutationPlan, error) {
 				close(inside)
 				<-resume
@@ -373,7 +373,7 @@ func TestPlannerWindowSetupFailureReturnsInsteadOfHanging(t *testing.T) {
 // converges on its own retry once the window closes.
 func TestPlannerWindowRetainsEveryLoadedSurface(t *testing.T) {
 	root := threadRepo(t)
-	m := New(core.MustNewService(store.NewFS(root)))
+	m := New(core.MustNewService(testutil.Must(store.NewFS(root, core.UnrestrictedMutations()))))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
 	m = drainNested(t, m, m.Init()) // dashboard
@@ -457,7 +457,7 @@ func TestPlannerWindowRetainsEveryLoadedSurface(t *testing.T) {
 // at must still be recoverable by the next watcher reload.
 func TestFirstLoadContentionIsNotAFalseEmptyState(t *testing.T) {
 	root := threadRepo(t)
-	m := New(core.MustNewService(store.NewFS(root)))
+	m := New(core.MustNewService(testutil.Must(store.NewFS(root, core.UnrestrictedMutations()))))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
 

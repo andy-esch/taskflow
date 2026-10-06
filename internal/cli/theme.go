@@ -35,6 +35,9 @@ func newThemeCmd(app *App) *cobra.Command {
 			if err := app.bindCommandSafety(cmd); err != nil {
 				return err
 			}
+			if app.compositionErr != nil {
+				return app.compositionErr
+			}
 			app.setStyle()
 			// Ordinary cwd discovery is best-effort, but an explicit space selection
 			// is an address assertion and therefore cannot silently fall back.

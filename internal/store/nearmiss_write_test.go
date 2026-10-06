@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
@@ -24,7 +25,7 @@ func auditRepo(t *testing.T, name, source string) (*FS, string) {
 	root := t.TempDir()
 	p, content := testutil.AuditFixture(root, "open", name, source)
 	testutil.Write(t, p, content)
-	return NewFS(root), p
+	return testutil.Must(NewFS(root, core.UnrestrictedMutations())), p
 }
 
 // `audit append --help` promises the finding grammar is checked. Until now it was

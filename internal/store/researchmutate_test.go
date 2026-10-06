@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
@@ -28,14 +29,14 @@ func TestFS_SetResearchFields_PreservesUnknownKeysAndOrder(t *testing.T) {
 		"# a comment the tool must not eat\nstatus: reference\ntopic: something bespoke\ntags: [old]\n---\n# Legacy\n\nbody\n"
 	researchFixture(t, root, "legacy.md", original)
 
-	got, err := NewFS(root).SetResearchFields("legacy", map[string]any{"description": "now described"}, false)
+	got, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetResearchFields("legacy", map[string]any{"description": "now described"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if got.Description != "now described" {
 		t.Errorf("description = %q", got.Description)
 	}
-	path, err := NewFS(root).ResolveResearchPath(got.ID)
+	path, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).ResolveResearchPath(got.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,11 +61,11 @@ func TestFS_SetResearchFields_UnsetRemovesKey(t *testing.T) {
 	root := t.TempDir()
 	researchFixture(t, root, "doc.md", "---\nschema: 1\nid: "+testutil.TaskID("doc")+"\ncreated: \"2026-01-03\"\nstatus: reference\n---\n# Doc\n")
 
-	got, err := NewFS(root).SetResearchFields("doc", map[string]any{"status": domain.UnsetField{}}, false)
+	got, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetResearchFields("doc", map[string]any{"status": domain.UnsetField{}}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	path, err := NewFS(root).ResolveResearchPath(got.ID)
+	path, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).ResolveResearchPath(got.ID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +81,7 @@ func TestFS_SetResearchFields_DryRunWritesNothing(t *testing.T) {
 	path := researchFixture(t, root, "doc.md", "---\nschema: 1\nid: "+testutil.TaskID("doc")+"\ncreated: \"2026-01-03\"\n---\n# Doc\n")
 	before, _ := os.ReadFile(path)
 
-	if _, err := NewFS(root).SetResearchFields("doc", map[string]any{"description": "preview"}, true); err != nil {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetResearchFields("doc", map[string]any{"description": "preview"}, true); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := os.ReadFile(path)
@@ -98,7 +99,7 @@ func TestFS_SetResearchFields_RefusesUnreloadableUpdate(t *testing.T) {
 
 	// A scalar written into the list-typed `tags` cannot unmarshal, so the reload fails.
 	// No t.Skip: a skip here would silently retire the guard behind a green suite.
-	_, err := NewFS(root).SetResearchFields("doc", map[string]any{"tags": "not-a-list"}, false)
+	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetResearchFields("doc", map[string]any{"tags": "not-a-list"}, false)
 	if err == nil {
 		t.Fatal("an update that makes the file unreloadable must be refused")
 	}
@@ -124,7 +125,7 @@ func TestFS_AppendResearchBody(t *testing.T) {
 	researchFixture(t, root, "doc.md", "---\nschema: 1\nid: "+testutil.TaskID("doc")+"\ncreated: \"2026-01-03\"\n---\n# Doc\n\nfirst\n")
 	now := time.Date(2026, 8, 18, 0, 0, 0, 0, time.UTC)
 
-	got, body, err := NewFS(root).AppendResearchBody("doc", "## Addendum\n\nmore", now, false)
+	got, body, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).AppendResearchBody("doc", "## Addendum\n\nmore", now, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +146,7 @@ func TestFS_AppendResearchBody_DryRunWritesNothing(t *testing.T) {
 	path := researchFixture(t, root, "doc.md", "---\nschema: 1\nid: "+testutil.TaskID("doc")+"\ncreated: \"2026-01-03\"\n---\n# Doc\n")
 	before, _ := os.ReadFile(path)
 
-	if _, _, err := NewFS(root).AppendResearchBody("doc", "## X", time.Now(), true); err != nil {
+	if _, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).AppendResearchBody("doc", "## X", time.Now(), true); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := os.ReadFile(path)
@@ -161,7 +162,7 @@ func TestFS_AppendResearchBody_RefusesBrokenFrontmatter(t *testing.T) {
 	testutil.Write(t, filepath.Join(root, domain.ResearchDir, testutil.TaskID("bad")+"-bad.md"),
 		"---\nid: [unclosed\ncreated: \"2026-01-03\"\n---\n# Bad\n")
 
-	if _, _, err := NewFS(root).AppendResearchBody("bad", "## X", time.Now(), false); err == nil {
+	if _, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).AppendResearchBody("bad", "## X", time.Now(), false); err == nil {
 		t.Error("appending to a doc with malformed frontmatter must fail, not half-write")
 	}
 }
@@ -172,7 +173,7 @@ func TestFS_AppendResearchBody_RefusesBrokenFrontmatter(t *testing.T) {
 // has to be refused at create.
 func TestFS_CreateResearch_RefusesDuplicateID(t *testing.T) {
 	root := t.TempDir()
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	const shared = "6dr29v000zzr"
 	if _, err := fs.CreateResearch(domain.Research{Slug: "alpha", ID: shared, Created: "2026-01-03"}, "# A\n", false); err != nil {
 		t.Fatal(err)
@@ -195,7 +196,7 @@ func TestFS_CreateResearch_RefusesDuplicateID(t *testing.T) {
 // The dry-run path must apply the same check — a preview that would fail must fail.
 func TestFS_CreateResearch_DuplicateIDRefusedOnDryRun(t *testing.T) {
 	root := t.TempDir()
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	const shared = "6dr29v000zzr"
 	if _, err := fs.CreateResearch(domain.Research{Slug: "alpha", ID: shared, Created: "2026-01-03"}, "# A\n", false); err != nil {
 		t.Fatal(err)
@@ -214,7 +215,7 @@ func TestFS_CreateResearch_SerializesDuplicateIDCheckWithCreate(t *testing.T) {
 		slug := slug
 		go func() {
 			<-start
-			_, err := NewFS(root).CreateResearch(domain.Research{
+			_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).CreateResearch(domain.Research{
 				Slug: slug, ID: shared, Created: "2026-09-07",
 			}, "# Research\n", false)
 			results <- err
@@ -270,7 +271,7 @@ func TestFS_ResearchWritePaths_RefuseFrontmatterlessDoc(t *testing.T) {
 			root := t.TempDir()
 			path := researchFixture(t, root, "legacy.md", body)
 
-			err := tc.write(NewFS(root))
+			err := tc.write(testutil.Must(NewFS(root, core.UnrestrictedMutations())))
 			if err == nil {
 				t.Fatal("writing to a frontmatter-less doc must be refused, not fabricate a block")
 			}
@@ -295,7 +296,7 @@ func TestFS_SetResearchFields_ConcurrentEditConflicts(t *testing.T) {
 	root := t.TempDir()
 	fmBase := "---\nschema: 1\nid: " + testutil.TaskID("doc") + "\ncreated: \"2026-01-03\"\n"
 	path := researchFixture(t, root, "doc.md", fmBase+"description: original\n---\n# Doc\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	orig := testHookBeforeResearchWrite
 	defer func() { testHookBeforeResearchWrite = orig }()
@@ -321,7 +322,7 @@ func TestFS_AppendResearchBody_ConcurrentEditConflicts(t *testing.T) {
 	root := t.TempDir()
 	fmBase := "---\nschema: 1\nid: " + testutil.TaskID("doc") + "\ncreated: \"2026-01-03\"\n---\n"
 	path := researchFixture(t, root, "doc.md", fmBase+"# Doc\n\noriginal\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	orig := testHookBeforeBodyWrite
 	defer func() { testHookBeforeBodyWrite = orig }()

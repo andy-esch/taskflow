@@ -7,7 +7,7 @@ goal: Core use cases consume identity-bearing semantic ports; local paths are op
 created: "2026-09-23"
 tags: [architecture, ports, adapters, hardening]
 tasks: [6g5vm4efjcdv, 6g6jqqcdehne, 6gcqz5aefjjf, 6gcwcf77tvgq, 6gcwcf7gjayh, 6gcwcf7rgxef, 6gcwcf80v8hg, 6gcwcf88z57p, 6gcwcf8gzn50, 6gcwcf8rxe72, 6gdx7mcqm371, 6gdx7mcqq67d, 6gdx7mcrq8s8, 6ge1bacd3bd2, 6ge7qn9ptaxv, 6gg7e594gcms, 6gg7e59cyxxh, 6ggdkztshmzz, 6ggdkzv2tnta]
-updated_at: "2026-10-04"
+updated_at: "2026-10-05"
 started_at: "2026-09-23"
 ---
 
@@ -32,9 +32,10 @@ receipts and ordinary-create recovery no longer depend on domain paths. TUI iden
 readable occurrence locations have shipped, and semantic entity values no longer carry local paths,
 filename identities, or guarded revisions. CLI repair, body-link checking, and completion have
 merged in PR #275. Concrete composition isolation and executable controller enforcement merged
-in PR #277; workspace identity parity merged in PR #279. The remaining work is bounded to explicit
-persistence authorization, core-owned impact/recovery semantics, and a final guarded-contract
-regression pass. Cross-kind collision lint merged in PR #280.
+in PR #277; workspace identity parity merged in PR #279. Cross-kind collision lint merged in
+PR #280 and core-owned impact/recovery semantics merged in PR #282. Explicit persistence
+authorization is completed and reviewed locally, pending merge. The only remaining task is the
+final guarded-contract regression pass.
 
 This Thread closes those seams in evidence-driven stages:
 
@@ -67,13 +68,19 @@ This Thread closes those seams in evidence-driven stages:
      coverage plus an executable direct-discovery guard. The pre-existing
      markerless recovery hint is tracked separately, not added as a refactor closure blocker.
    - [Explicit persistence authorization](../tasks/6gg7e59cyxxh-require-an-explicit-mutation-authorization-policy-at-persistence-composition.md),
-     retaining its user checkpoint before choosing constructor compatibility and opt-out policy.
+     **Completed locally, not yet merged:** required policy arguments and deliberate unrestricted
+     fixture mode were user-approved before implementation. All adapters fail closed on omission;
+     Atlas readers are read-only and late opening preserves guards. Both independent reviews are
+     reconciled and closed; their useful populated-record/full-bundle probes are now permanent
+     regressions. Validation is green; no new data-safety blocker was demonstrated.
    - [Cross-kind collision lint on unreadable records](../tasks/6gcqz5aefjjf-lint-cross-kind-task-and-thread-id-collisions-on-unreadable-records.md),
      **Completed, merged in PR #280:** portable recovered identity now participates in lint,
      including both unreadable owners. Membership validity and creation policy are unchanged;
      core/CLI regressions and four restored owner mutation probes pass.
    - [Core-owned dependency impact and recovery semantics](../tasks/6ggdkztshmzz-make-dependency-impact-and-recovery-semantics-core-owned.md),
-     **In progress:** folding adapter-hygiene M1/L1 without changing graph eligibility.
+     **Completed, merged in PR #282:** adapter-hygiene M1/L1 are fixed without changing graph
+     eligibility. Both reviews are reconciled; the reproduced Thread-only TUI feedback gap is
+     tracked in the TUI refinement Thread rather than added to this closure path.
 
    These slices can progress independently; graph edges impose no artificial serial order.
 10. [Pin guarded planning mutation boundary contracts](../tasks/6ggdkzv2tnta-pin-guarded-planning-mutation-boundary-contracts.md)
@@ -103,12 +110,14 @@ identity, an optional source location, or an explicit local capability is the ho
   data-safety blocker.
   Review findings handed to followups are marked **tracked**, never represented as implemented fixes.
 
-## Scope boundary and bookkeeping (2026-10-04)
+## Scope boundary and bookkeeping (2026-10-05)
 
 This Thread has a finish line, not a mandate to absorb every architecture audit. The two new tasks
 above and the existing collision-lint task are members of this graph. Composition and workspace
-parity and collision lint are completed in PRs #277, #279, and #280; three tasks remain.
-Older loaded-record TUI reviews are
+parity, collision lint, and core recovery semantics are completed in PRs #277, #279, #280,
+and #282; explicit persistence authorization is completed and reviewed locally, pending merge.
+**18 of 19 members are completed**; the final guarded-contract regression pass is now eligible
+and remains the sole closeout task. Older loaded-record TUI reviews are
 closed because their recorded findings were fixed (or absent), not because a new review was
 performed today.
 

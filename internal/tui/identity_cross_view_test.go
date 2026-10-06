@@ -32,7 +32,7 @@ func TestEntityViewFiltersCannotHideDuplicateSourceIDs(t *testing.T) {
 		"---\nid: "+auditID+"\nbucket: open\narea: review\ndate: 2026-09-28\n---\n# Open\n")
 	testutil.Write(t, filepath.Join(root, domain.AuditsDir, auditID+"-closed.md"),
 		"---\nid: "+testutil.TaskID("other-audit-declaration")+"\nbucket: closed\narea: review\ndate: 2026-09-28\n---\n# Closed\n")
-	fs := store.NewFS(root)
+	fs := testutil.Must(store.NewFS(root, core.UnrestrictedMutations()))
 	svc := core.MustNewService(fs)
 	tasks := loadTaskList(&entityTab{statusView: "", loadGen: 1}, svc)().(listLoadedMsg)
 	if len(tasks.items) != 1 || tasks.identityErr == nil || !strings.Contains(tasks.identityErr.Error(), "shared") {

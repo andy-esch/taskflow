@@ -396,7 +396,7 @@ func TestThreadMembershipAndLifecycleCommands(t *testing.T) {
 			t.Fatalf("%v: %v", args, err)
 		}
 	}
-	view, _, err := core.MustNewService(store.NewFS(root)).ShowThread("lifecycle")
+	view, _, err := core.MustNewService(testutil.Must(store.NewFS(root, core.ReadOnlyMutations()))).ShowThread("lifecycle")
 	if err != nil || view.Thread.Status != domain.ThreadStatusCancelled || view.Thread.EndedAt == "" {
 		t.Fatalf("lifecycle Thread = %+v err=%v", view.Thread, err)
 	}

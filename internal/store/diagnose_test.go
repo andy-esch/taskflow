@@ -3,6 +3,9 @@ package store
 import (
 	"strings"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 func TestFrontmatterError_GitConflictMarkers(t *testing.T) {
@@ -40,7 +43,7 @@ func TestFS_ListTasks_SkipsBadFileWithProblem(t *testing.T) {
 	writeTask(t, root, "ready-to-start", "good.md", "---\nstatus: ready-to-start\ntags: [a]\n---\n# G\n")
 	writeTask(t, root, "ready-to-start", "bad.md", "---\nstatus: ready-to-start\ntags: a,b,c\n---\n# B\n")
 
-	tasks, problems, err := NewFS(root).ListTasks()
+	tasks, problems, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ListTasks()
 	if err != nil {
 		t.Fatal(err) // a single bad file must NOT be fatal
 	}

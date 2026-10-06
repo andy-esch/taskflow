@@ -49,7 +49,7 @@ func newBareVerbCmd(app *App, verb string, forms []string) *cobra.Command {
 		// This is a usage error, so it must not depend on repo discovery: outside a
 		// planning tree the caller would otherwise be told to run `init`, which is
 		// not what they got wrong. Same opt-out `schema` uses.
-		PersistentPreRunE: app.styleOnlyPreRun,
+		PersistentPreRunE: app.metadataOnlyPreRun,
 		RunE: func(_ *cobra.Command, _ []string) error {
 			qualified := make([]string, len(forms))
 			for i, f := range forms {

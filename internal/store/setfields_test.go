@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 	yaml "go.yaml.in/yaml/v3"
@@ -17,7 +18,7 @@ func TestFS_SetFields(t *testing.T) {
 	writeTask(t, root, "ready-to-start", "alpha.md",
 		"---\nstatus: ready-to-start\nepic: 01-x\ntier: 2\ncustom: keep\n---\n# Alpha\nbody\n")
 
-	task, err := NewFS(root).SetFields("alpha", map[string]any{
+	task, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("alpha", map[string]any{
 		"priority":    "high",
 		"tags":        []string{"a", "b"},
 		"description": "new desc",
@@ -55,7 +56,7 @@ func TestFS_SetFieldsRejectsEveryGraphOwnedField(t *testing.T) {
 	for _, field := range []string{"depends_on", "blocked_by", "dependencies", "blocks"} {
 		root := t.TempDir()
 		writeTask(t, root, "ready-to-start", "alpha.md", editSeed)
-		_, err := NewFS(root).SetFields("alpha", map[string]any{field: []string{testutil.TaskID("beta")}}, false)
+		_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("alpha", map[string]any{field: []string{testutil.TaskID("beta")}}, false)
 		if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), "graph-owned") {
 			t.Fatalf("SetFields %s error = %v", field, err)
 		}
@@ -63,7 +64,7 @@ func TestFS_SetFieldsRejectsEveryGraphOwnedField(t *testing.T) {
 }
 
 func TestFS_SetFields_NotFound(t *testing.T) {
-	_, err := NewFS(t.TempDir()).SetFields("ghost", map[string]any{"priority": "low"}, false)
+	_, err := testutil.Must(NewFS(t.TempDir(), core.UnrestrictedMutations())).SetFields("ghost", map[string]any{"priority": "low"}, false)
 	if err == nil {
 		t.Fatal("want error for missing task")
 	}
@@ -81,7 +82,7 @@ func TestFS_SetFields_RejectsUnreloadable(t *testing.T) {
 
 	// tier as a string serializes to `tier: "4"` (!!str), which the strict Task
 	// loader can't read back into an int.
-	_, err := NewFS(root).SetFields("alpha", map[string]any{"tier": "4"}, false)
+	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("alpha", map[string]any{"tier": "4"}, false)
 	if err == nil {
 		t.Fatal("want an error for an update that wouldn't reload")
 	}

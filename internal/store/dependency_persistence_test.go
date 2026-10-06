@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
@@ -19,7 +20,7 @@ func TestTaskDependencyFieldsRoundTrip(t *testing.T) {
 		"depends_on: [" + second + ", " + first + "]\n" +
 		"blocked_by: [legacy-a]\ndependencies: [legacy-b]\nblocks: [legacy-c]\n---\n# dependent\n"
 	writeTask(t, root, "ready-to-start", "dependent.md", content)
-	task, _, err := NewFS(root).GetTask("dependent")
+	task, _, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).GetTask("dependent")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -43,7 +44,7 @@ func TestCreateTaskRejectsDependenciesUntilGuardedCreationExists(t *testing.T) {
 		ID: testutil.TaskID("dependent"), Slug: "dependent", Status: domain.StatusReadyToStart,
 		DependsOn: []string{second, first},
 	}
-	if _, err := NewFS(root).CreateTask(task, "# dependent\n", false); !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), "graph-owned") {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).CreateTask(task, "# dependent\n", false); !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), "graph-owned") {
 		t.Fatalf("unguarded create error = %v", err)
 	}
 	if entries, err := os.ReadDir(filepath.Join(root, "tasks")); err == nil && len(entries) != 0 {
@@ -68,7 +69,7 @@ func TestEditTaskRejectsDependencyDeltaButAllowsReordering(t *testing.T) {
 	original := "---\nid: " + testutil.TaskID("dependent") + "\nstatus: ready-to-start\n" +
 		"depends_on: [" + second + ", " + first + "]\n---\n# dependent\n"
 	writeTask(t, root, "ready-to-start", "dependent.md", original)
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	attempts := 0
 	_, changed, err := fs.EditTask("dependent", bodyNow, func(current string, prevErr error) (string, error) {
@@ -97,7 +98,7 @@ func TestEditTaskRejectsLegacyDependencyDeltaButAllowsReordering(t *testing.T) {
 	original := "---\nid: " + testutil.TaskID("dependent") + "\nstatus: ready-to-start\n" +
 		"blocked_by: [legacy-b, legacy-a]\ndependencies: [legacy-c]\nblocks: [legacy-d]\n---\n# dependent\n"
 	writeTask(t, root, "ready-to-start", "dependent.md", original)
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	attempts := 0
 	_, changed, err := fs.EditTask("dependent", bodyNow, func(current string, prevErr error) (string, error) {
@@ -126,7 +127,7 @@ func TestEditTaskMalformedDependencyCannotBeDeletedAsRepair(t *testing.T) {
 	taskID := testutil.TaskID("malformed-dependent")
 	original := "---\nid: " + taskID + "\nstatus: ready-to-start\ndepends_on: " + testutil.TaskID("prerequisite") + "\n---\n# dependent\n"
 	writeTask(t, root, "ready-to-start", "malformed-dependent.md", original)
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	attempts := 0
 	_, changed, err := fs.EditTask(taskID, bodyNow, func(current string, prevErr error) (string, error) {

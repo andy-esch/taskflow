@@ -10,12 +10,13 @@ import (
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/spacehealth"
+	"github.com/andy-esch/taskflow/internal/testutil"
 	"github.com/andy-esch/taskflow/internal/userconfig"
 )
 
 func TestFSRegistryMutationsRequireAuthorizationBeforeDryRun(t *testing.T) {
 	blocked := errors.New("mutation denied")
-	store := New(WithMutationAuthorization(func() error { return blocked }))
+	store := testutil.Must(New(core.GuardedMutations(func() error { return blocked })))
 	if _, _, err := store.AddSpace(core.SpaceRegistration{ID: "x", Checkout: "/x"}, true); !errors.Is(err, blocked) {
 		t.Fatalf("AddSpace error = %v, want authorization error", err)
 	}
@@ -33,7 +34,7 @@ func TestFSRegistryAdapter_PreparesListsAndMutatesThroughCoreValues(t *testing.T
 		t.Fatal(err)
 	}
 
-	adapter := New()
+	adapter := testutil.Must(New(core.UnrestrictedMutations()))
 	prepared, err := adapter.PrepareSpace(nested)
 	if err != nil {
 		t.Fatal(err)
@@ -92,7 +93,7 @@ func TestFSRegistryAdapter_PreservesPointerEntryAndClassifiesRegistryErrors(t *t
 	if _, err := config.InitPointer(pointer, planning, false); err != nil {
 		t.Fatal(err)
 	}
-	adapter := New()
+	adapter := testutil.Must(New(core.UnrestrictedMutations()))
 	service := core.NewSpaceRegistryService(adapter)
 	mutation, err := service.Add(pointer, "implementation", false)
 	if err != nil {

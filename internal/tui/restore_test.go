@@ -86,7 +86,7 @@ func TestModel_ReloadDuringJumpKeepsTarget(t *testing.T) {
 	writeTaskFixture("in-progress", "active-one.md", "---\nstatus: in-progress\nepic: 01-x\ndescription: a\n---\n# a\n")
 	writeTaskFixture("completed", "done-one.md", "---\nstatus: completed\nepic: 01-x\ndescription: d\n---\n# d\n")
 
-	m := New(core.MustNewService(store.NewFS(root)))
+	m := New(core.MustNewService(testutil.Must(store.NewFS(root, core.UnrestrictedMutations()))))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())

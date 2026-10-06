@@ -8,12 +8,13 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/config"
 	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/testutil"
 	"github.com/andy-esch/taskflow/internal/userconfig"
 )
 
 func TestFSMutationsRequireAuthorizationBeforeDryRun(t *testing.T) {
 	blocked := errors.New("mutation denied")
-	store := New(WithMutationAuthorization(func() error { return blocked }))
+	store := testutil.Must(New(core.GuardedMutations(func() error { return blocked })))
 	if _, err := store.MigrateConfiguration(t.TempDir(), true); !errors.Is(err, blocked) {
 		t.Fatalf("MigrateConfiguration error = %v, want authorization error", err)
 	}
@@ -47,7 +48,7 @@ func TestFSLoadsBothScopesAndPendingMigration(t *testing.T) {
 	}
 	_ = b
 
-	state, err := New().LoadConfiguration(repo)
+	state, err := testutil.Must(New(core.ReadOnlyMutations())).LoadConfiguration(repo)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +67,7 @@ func TestFSSetPreferencePreservesOtherScopeText(t *testing.T) {
 	if _, err := config.Init(repo, "", false); err != nil {
 		t.Fatal(err)
 	}
-	svc := core.NewConfigurationService(New())
+	svc := core.NewConfigurationService(testutil.Must(New(core.UnrestrictedMutations())))
 	result, err := svc.SetPreference(repo, core.PreferenceChange{
 		Scope: core.ConfigScopeUser, Field: core.PreferencePagerCommand, Value: `delta --dark="x"`,
 	}, false)

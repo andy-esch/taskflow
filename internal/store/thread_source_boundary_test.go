@@ -18,7 +18,7 @@ import (
 func TestThreadMutationMaterializerRequiresExplicitSourceEvidence(t *testing.T) {
 	root := t.TempDir()
 	created, _ := createThreadForMutation(t, root, "source-target")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.ReadOnlyMutations()))
 	read, err := fs.ReadThreads()
 	if err != nil || len(read.Records) != 1 {
 		t.Fatalf("read=%+v err=%v", read, err)
@@ -80,7 +80,7 @@ func TestThreadMutationMaterializerRequiresExplicitSourceEvidence(t *testing.T) 
 func TestThreadSourceSnapshotRetainsReadableHandleAndRevision(t *testing.T) {
 	root := t.TempDir()
 	created, _ := createThreadForMutation(t, root, "source-snapshot")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.ReadOnlyMutations()))
 	read, err := fs.ReadThreads()
 	if err != nil {
 		t.Fatal(err)
@@ -137,7 +137,7 @@ func TestThreadIdentityDefectsRemainReadableButBlockGuardedPlanners(t *testing.T
 				testutil.Write(t, filepath.Join(root, domain.ThreadsDir, created.Thread.ID+"-shadow.md"), string(content))
 			}
 			testutil.Write(t, path, string(content))
-			fs := NewFS(root)
+			fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 			read, err := fs.ReadThreads()
 			if err != nil || len(read.Records) == 0 || read.Records[0].Record.Source.ID != created.Thread.ID {
 				t.Fatalf("source identity disappeared: read=%+v err=%v", read, err)
@@ -189,7 +189,7 @@ func TestGraphRepairReceiptRetainsReadableThreadIdentityDrift(t *testing.T) {
 			path := filepath.Join(root, domain.ThreadsDir, sourceID+"-drift-impact.md")
 			content := fmt.Sprintf("---\nid: %s\nstatus: unstarted\ndescription: Keep drift visible\ngoal: Repair only task dependencies\ncreated: \"2026-10-03\"\ntasks: [%s]\n---\n# Drift\n", declaredID, memberID)
 			testutil.Write(t, path, content)
-			receipt, err := core.MustNewService(NewFS(root)).RepairTaskGraph(core.TaskGraphRepairRequest{Auto: true}, dry)
+			receipt, err := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations()))).RepairTaskGraph(core.TaskGraphRepairRequest{Auto: true}, dry)
 			if err != nil || !receipt.Changed || receipt.Committed == dry || receipt.FinalHealth != core.GraphHealthy || len(receipt.ThreadImpacts) != 1 {
 				t.Fatalf("repair=%+v err=%v", receipt, err)
 			}
@@ -225,7 +225,7 @@ func TestGraphRepairReceiptRetainsDuplicateThreadSources(t *testing.T) {
 			for _, slug := range []string{"alpha", "beta"} {
 				testutil.Write(t, filepath.Join(root, domain.ThreadsDir, sourceID+"-"+slug+".md"), content)
 			}
-			svc := core.MustNewService(NewFS(root))
+			svc := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())))
 			receipt, err := svc.RepairTaskGraph(core.TaskGraphRepairRequest{Auto: true}, dry)
 			if err != nil || !receipt.Changed || receipt.Committed == dry || receipt.FinalHealth != core.GraphHealthy || len(receipt.ThreadImpacts) != 2 {
 				t.Fatalf("repair=%+v err=%v", receipt, err)

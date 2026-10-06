@@ -20,7 +20,7 @@ func transformAuditRepo(t *testing.T) (*FS, string) {
 	root := t.TempDir()
 	p, content := testutil.AuditFixture(root, "open", "2026-01-01-a.md", transformAuditSource)
 	testutil.Write(t, p, content)
-	return NewFS(root), p
+	return testutil.Must(NewFS(root, core.UnrestrictedMutations())), p
 }
 
 var transformAuditNow = time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC)

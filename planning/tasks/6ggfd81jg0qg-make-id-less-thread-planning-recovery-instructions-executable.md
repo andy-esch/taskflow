@@ -10,8 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [cli, recovery, threads, testing]
 created: "2026-10-04"
-audit_sources: [2026-10-04-workspace-thread-apply-identity-parity-implementation-codex]
-updated_at: "2026-10-04"
+audit_sources: [2026-10-04-workspace-thread-apply-identity-parity-implementation-codex, 2026-10-05-explicit-persistence-authorization-implementation-codex]
+updated_at: "2026-10-05"
 depends_on: [6g1xp8qymz1m]
 ---
 # Make ID-less Thread planning recovery instructions executable
@@ -29,6 +29,12 @@ removed, Thread apply says to run `config migrate`, but that command refuses the
 and says to initialize it first. `internal/config/migrate.go:143` requires a governing marker;
 the hint in `internal/store/threadapply.go:218` and related core compose/prepare errors cannot
 assume one exists. This limitation predates the workspace parity change.
+
+The independent [authorization Codex review](../audits/6ggw69vdfk1z-2026-10-05-explicit-persistence-authorization-implementation-codex.md)
+reproduced it again on 2026-10-05 using the fresh binary: markerless `config migrate` exits 11
+and asks for initialization. Explicit initialization preserves documents; recomposition succeeds,
+while the old plan still conflicts with the regenerated identity. This strengthens the existing
+task's recovery evidence; no repair is claimed implemented and no refactor prerequisite is added.
 
 ## Scope
 

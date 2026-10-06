@@ -20,6 +20,16 @@ import (
 // pass id.Valid to be recognized as an entity under the flat layout.
 const idAlphabet = "0123456789abcdefghjkmnpqrstvwxyz"
 
+// Must unwraps fixture construction with deliberately valid inputs. Tests of
+// invalid inputs must inspect errors directly instead. Keeping this generic
+// avoids importing concrete adapters here (store tests also use this package).
+func Must[T any](value T, err error) T {
+	if err != nil {
+		panic(err)
+	}
+	return value
+}
+
 // TaskID derives a stable, valid 12-char id from a seed (a slug), so flat-layout
 // task fixtures get a deterministic id-led filename (tasks/<id>-<slug>.md) without
 // threading real minted ids through every test.
