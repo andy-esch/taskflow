@@ -3,7 +3,9 @@ package cli
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"io"
+	"maps"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -17,6 +19,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/design"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
+	"github.com/andy-esch/taskflow/internal/userconfig"
 )
 
 // Integration tests select the same local composition as the binary. These
@@ -58,6 +61,86 @@ func TestCommandTreeConstructionDoesNotReadInvocationData(t *testing.T) {
 	root := NewRootCmd(strings.NewReader(""), io.Discard, io.Discard, bindings)
 	if _, err := commandSafetySurface(root); err != nil || reads != 0 || compositions != 1 {
 		t.Fatalf("tree construction reads=%d compositions=%d err=%v", reads, compositions, err)
+	}
+}
+
+func TestFailedCompositionDiscardsPartialServicesAndPreservesMetadata(t *testing.T) {
+	t.Setenv("TSKFLW_SPACE", "")
+	repo, home := setupRepo(t), t.TempDir()
+	t.Setenv(userconfig.DirEnv, home)
+	t.Chdir(repo) // a fallback would find real planning records
+	beforeRepo, beforeHome := testutil.SnapshotTree(t, repo), testutil.SnapshotTree(t, home)
+	for _, cause := range []error{
+		core.ErrInvalidMutationPolicy,
+		fmt.Errorf("composition: %w", config.ErrNoConfig),
+		fmt.Errorf("composition: %w", domain.ErrConflict),
+	} {
+		for _, args := range [][]string{
+			{"task", "show", "alpha"}, {"space", "list"}, {"space", "add"},
+			{"task", "set", "alpha", "--description", "changed"},
+			{"config", "show"}, {"config", "migrate"}, {"config", "edit"}, {"doctor"},
+			{"status", "--all"}, {"ui"}, {"init"}, {"template", "list"}, {"theme", "list"},
+			{"init", "--path", filepath.Join(repo, "not-created"), "--no-register"},
+			{"schema", "--json"}, {"version"}, {"--help"}, {"completion", "bash"},
+			{"__complete", "task", "show", ""},
+			{"__completeNoDesc", "task", "show", ""},
+		} {
+			t.Run(cause.Error()+"/"+strings.Join(args, "/"), func(t *testing.T) {
+				openCalls, launchCalls := 0, 0
+				bindings := appwiring.LocalBindings()
+				compose := bindings.Compose
+				bindings.Compose = func(authorize func() error) (ports.Services, error) {
+					// Return a complete, usable local bundle alongside the failure, not
+					// only an opener stub. The controller must discard every capability.
+					partial, err := compose(authorize)
+					if err != nil {
+						t.Fatal(err)
+					}
+					open := partial.OpenPlanning
+					partial.OpenPlanning = func(start string) (ports.Planning, error) {
+						openCalls++
+						return open(start)
+					}
+					return partial, cause
+				}
+				bindings.RunBrowser = func(ports.Browser) error { launchCalls++; return nil }
+				bindings.RunConfiguration = func(ports.ConfigurationEditor) error { launchCalls++; return nil }
+				var stdout, stderr bytes.Buffer
+				root, app := newRootCmd(strings.NewReader(""), &stdout, &stderr, bindings)
+				if app.ConfigSvc != nil || app.SpaceSvc != nil || app.SpaceOverviewSvc != nil || app.WorkspaceSvc != nil || app.openPlanning != nil {
+					t.Fatal("failed composition published partial services")
+				}
+				root.SetArgs(args)
+				err := root.Execute()
+				switch args[0] {
+				case "schema", "version", "--help", "completion":
+					if err != nil || stdout.Len() == 0 {
+						t.Fatalf("metadata failed: err=%v stdout=%q", err, stdout.String())
+					}
+				case "__complete", "__completeNoDesc":
+					if err != nil || stdout.String() != ":4\n" || strings.Contains(stderr.String(), cause.Error()) {
+						t.Fatalf("completion leaked error or fell back: err=%v stdout=%q stderr=%q", err, stdout.String(), stderr.String())
+					}
+				default:
+					if !errors.Is(err, cause) || ExitCode(err) != ExitCode(cause) || stdout.Len() != 0 {
+						t.Fatalf("composition failure swallowed: err=%v stdout=%q", err, stdout.String())
+					}
+				}
+				if openCalls != 0 || launchCalls != 0 || app.Svc != nil || app.Cfg != nil {
+					t.Fatalf("failed bundle was used: opens=%d launches=%d svc=%v cfg=%v", openCalls, launchCalls, app.Svc, app.Cfg)
+				}
+				if !maps.Equal(beforeRepo, testutil.SnapshotTree(t, repo)) || !maps.Equal(beforeHome, testutil.SnapshotTree(t, home)) {
+					t.Fatal("failed composition changed repository or user configuration")
+				}
+			})
+		}
+	}
+	// An invocation-local failure must not poison a fresh, healthy command tree.
+	var stdout bytes.Buffer
+	root := newTestRootCmd(strings.NewReader(""), &stdout, io.Discard)
+	root.SetArgs([]string{"task", "show", "alpha"})
+	if err := root.Execute(); err != nil || stdout.Len() == 0 {
+		t.Fatalf("fresh invocation failed: err=%v stdout=%q", err, stdout.String())
 	}
 }
 

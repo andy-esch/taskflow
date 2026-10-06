@@ -25,6 +25,9 @@ func newTemplateCmd(app *App) *cobra.Command {
 			if err := app.bindCommandSafety(cmd); err != nil {
 				return err
 			}
+			if app.compositionErr != nil {
+				return app.compositionErr
+			}
 			app.setStyle()
 			defer app.warnPresentation(cmd)
 			// Best-effort: a planning repo (when present) lets repo-local templates

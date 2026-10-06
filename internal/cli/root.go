@@ -146,16 +146,24 @@ func (a *App) warnPresentation(cmd *cobra.Command) {
 	a.warnUnknownTheme()
 }
 
-// styleOnlyPreRun is the PersistentPreRunE for commands that must run ANYWHERE, with
-// no planning repo required (`version`, `init`, `schema`): resolve presentation, emit
-// its warnings, skip discovery entirely.
-func (a *App) styleOnlyPreRun(cmd *cobra.Command, _ []string) error {
+// metadataOnlyPreRun permits repository-independent metadata even if persistence
+// composition failed. It binds safety but does not require application services.
+func (a *App) metadataOnlyPreRun(cmd *cobra.Command, _ []string) error {
 	if err := a.bindCommandSafety(cmd); err != nil {
 		return err
 	}
 	a.setStyle()
 	a.warnPresentation(cmd)
 	return nil
+}
+
+// styleOnlyPreRun skips planning discovery, but operational commands (init,
+// config, spaces) must still refuse an invalid persistence composition.
+func (a *App) styleOnlyPreRun(cmd *cobra.Command, args []string) error {
+	if a.compositionErr != nil {
+		return a.compositionErr
+	}
+	return a.metadataOnlyPreRun(cmd, args)
 }
 
 // resolveTheme picks the active color theme by precedence: --theme flag >
@@ -341,6 +349,7 @@ func newRootCmd(in io.Reader, out, errOut io.Writer, bindings ports.Bindings) (*
 	}
 	if completion, _, err := root.Find([]string{"completion"}); err == nil {
 		markCommandTreeReadOnly(completion)
+		completion.PersistentPreRunE = app.metadataOnlyPreRun
 	}
 	return root, app
 }
@@ -358,6 +367,9 @@ func (a *App) repoPreRun(cmd *cobra.Command, _ []string) error {
 	// Missing discovery stays silent on that protocol path.
 	if isCompletionCommand(cmd) {
 		return nil
+	}
+	if a.compositionErr != nil {
+		return a.compositionErr
 	}
 	if err := a.resolve(); err != nil {
 		return err
@@ -443,6 +455,9 @@ func (a *App) resolve() error {
 // it from startDir lets `status --all` implement its empty-registry compatibility fallback
 // without letting ambient TSKFLW_SPACE turn an all-spaces request into a named selection.
 func (a *App) resolveFrom(start string) error {
+	if a.compositionErr != nil {
+		return a.compositionErr
+	}
 	if a.openPlanning == nil {
 		return fmt.Errorf("%w: planning opener is unavailable from this invocation", domain.ErrValidation)
 	}

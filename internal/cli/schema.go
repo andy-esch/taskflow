@@ -51,7 +51,7 @@ func newSchemaCmd(app *App) *cobra.Command {
 		// Pure self-description — no planning repo needed. Overriding the root's
 		// resolve() lets an agent run `schema` in any repo to learn the contract
 		// (the strongest reason this command exists). Just set up styling.
-		PersistentPreRunE: app.styleOnlyPreRun,
+		PersistentPreRunE: app.metadataOnlyPreRun,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if jsonSchema {
 				return runJSONSchema(app)

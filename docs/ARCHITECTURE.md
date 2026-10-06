@@ -115,6 +115,11 @@ CAS, or domain rules. Direct zero-value adapters also fail closed. This is a com
 not a security boundary against arbitrary code. See the
 [policy task](../planning/tasks/6gg7e59cyxxh-require-an-explicit-mutation-authorization-policy-at-persistence-composition.md).
 
+Invocation composition validates policy without discovery or executing the callback. A failed
+`cli/ports.Bindings.Compose` publishes no partial services and prevents operational commands
+from falling back to local persistence; help, version, schema, and completion-script generation
+remain usable. Entity completion returns its quiet empty protocol result on composition failure.
+
 The shared constructor's fitness test permits config types but no direct config API access;
 reader counters alone cannot observe a bypassing `config.Discover` call. A real-opener regression
 repoints a direct/pointer marker between the first observation and construction: metadata, task
