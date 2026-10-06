@@ -11,7 +11,8 @@ autonomy_level: 3
 tags: [cli, safety, contracts]
 created: "2026-10-04"
 depends_on: [6g1xp8qymz1m]
-updated_at: "2026-10-04"
+updated_at: "2026-10-06"
+audit_sources: [planning/audits/6gh1frgyz2fh-2026-10-06-adapter-hygiene.md]
 ---
 # Prevent silently ignored target selectors during init
 
@@ -48,3 +49,5 @@ Independent CLI safety followup, not a blocker for the adapter-neutral refactor 
 
 - [Core impact/recovery task](6ggdkztshmzz-make-dependency-impact-and-recovery-semantics-core-owned.md)
 - [Configuration lifecycle](6g1xp8qymz1m-consolidate-the-configuration-lifecycle-under-one-config-command-hub.md)
+
+Reinforced by audit 2026-10-06-adapter-hygiene: H1. Both selector variants this task records as not yet reproduced now reproduce deterministically — `-C` plus `--space` bypasses the mutual-exclusion guard in `startDir()`, and an unknown `--space` is swallowed; each scaffolds the caller's cwd at exit 0. The finding also notes that `git -C` resolves later relative path options against the `-C` target, which is a ready precedent for the open "support `-C` or reject it" decision: `init --path` would resolve relative to `-C` rather than the process cwd.
