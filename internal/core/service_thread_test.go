@@ -3,6 +3,8 @@ package core
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -184,16 +186,24 @@ func TestServiceNewThreadRejectsDuplicateResolvedMember(t *testing.T) {
 }
 
 func TestServiceThreadCommittedFailureIsNotRetried(t *testing.T) {
-	fake := &threadCreationFake{
-		snapshot: ThreadCreationSnapshot{Graph: NewTaskGraph(nil, nil)},
-		result:   ThreadCreationMutationResult{Changed: true, Committed: true},
-		err:      errors.New("unlock failed"),
-	}
-	svc := MustNewService(nil, WithThreadCreationMutationStore(fake), WithIDGen(func() string { return "6g3q4rtmv4ak" }), WithRetry(4, func(int) {}))
-	receipt, err := svc.NewThread(NewThreadParams{Title: "Implementation", Description: "Thread implementation", Goal: "Ship"})
-	var committed *ThreadCreationMutationFailure
-	if !errors.As(err, &committed) || !receipt.Committed || fake.calls != 1 {
-		t.Fatalf("receipt=%+v err=%v calls=%d", receipt, err, fake.calls)
+	for _, cause := range []error{errors.New("unlock failed"), fmt.Errorf("unlock failed: %w", domain.ErrConflict)} {
+		t.Run(cause.Error(), func(t *testing.T) {
+			local := LocalCreateOutcome{PlannedPath: "fixture/thread.md", CommittedPath: "fixture/thread.md"}
+			fake := &threadCreationFake{
+				snapshot: ThreadCreationSnapshot{Graph: NewTaskGraph(nil, nil)},
+				result:   ThreadCreationMutationResult{Changed: true, Committed: true, Local: local}, err: cause,
+			}
+			minted, retries := 0, 0
+			svc := MustNewService(nil, WithThreadCreationMutationStore(fake),
+				WithIDGen(func() string { minted++; return "6g3q4rtmv4ak" }), WithRetry(4, func(int) { retries++ }))
+			receipt, err := svc.NewThread(NewThreadParams{Title: "Implementation", Description: "Thread implementation", Goal: "Ship"})
+			var committed *ThreadCreationMutationFailure
+			if !errors.As(err, &committed) || !errors.Is(err, cause) || !receipt.Committed || !receipt.Changed || receipt.DryRun ||
+				fake.calls != 1 || retries != 0 || minted != 1 || receipt.Thread.ID != "6g3q4rtmv4ak" || receipt.Local != local ||
+				!reflect.DeepEqual(committed.Receipt, receipt) {
+				t.Fatalf("receipt=%+v err=%v calls=%d retries=%d minted=%d", receipt, err, fake.calls, retries, minted)
+			}
+		})
 	}
 }
 

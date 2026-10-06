@@ -2,8 +2,10 @@ package store
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -285,25 +287,41 @@ func TestThreadCreationWaitsForLifecycleMutationAndReadsFreshSnapshot(t *testing
 }
 
 func TestThreadCreationAttributesReleaseFailureAfterCommit(t *testing.T) {
-	root := t.TempDir()
-	threadID := testutil.TaskID("thread-release-failure")
-	original := testHookRepositoryUnlockError
-	t.Cleanup(func() { testHookRepositoryUnlockError = original })
-	testHookRepositoryUnlockError = func() error { return errors.New("injected release failure") }
-
-	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateThreadCreation(threadCreationNow, false, func(core.ThreadCreationSnapshot) (core.ThreadCreationPlan, error) {
-		return core.ThreadCreationPlan{Thread: domain.Thread{
-			ID: threadID, Slug: "release-failure", Status: domain.ThreadStatusUnstarted,
-			Description: "Recovery test", Goal: "Retain committed truth", Created: "2026-08-29",
-		}, Body: "# Recovery\n"}, nil
-	})
-	if err == nil || !strings.Contains(err.Error(), "release repository Thread creation guard") || !result.Committed {
-		t.Fatalf("result=%+v err=%v", result, err)
-	}
-	testHookRepositoryUnlockError = nil
-	thread, _, readErr := testutil.Must(NewFS(root, core.UnrestrictedMutations())).GetThread(threadID)
-	if readErr != nil || thread.ID != threadID {
-		t.Fatalf("committed Thread was not readable: Thread=%+v err=%v", thread, readErr)
+	for _, cause := range []error{errors.New("injected release failure"), fmt.Errorf("injected release failure: %w", domain.ErrConflict)} {
+		t.Run(cause.Error(), func(t *testing.T) {
+			root := t.TempDir()
+			threadID := testutil.TaskID("thread-release-failure")
+			original := testHookRepositoryUnlockError
+			t.Cleanup(func() { testHookRepositoryUnlockError = original })
+			releases, retries, minted := 0, 0, 0
+			testHookRepositoryUnlockError = func() error { releases++; return cause }
+			svc := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())),
+				core.WithClock(func() time.Time { return threadCreationNow }),
+				core.WithIDGen(func() string { minted++; return threadID }),
+				core.WithRetry(3, func(int) { retries++ }),
+			)
+			receipt, err := svc.NewThread(core.NewThreadParams{
+				Title: "Release failure", Description: "Recovery test", Goal: "Retain committed truth", Body: "# Recovery\n",
+			})
+			var failure *core.ThreadCreationMutationFailure
+			wantPath := filepath.Join(root, domain.ThreadsDir, threadID+"-release-failure.md")
+			if !errors.As(err, &failure) || !errors.Is(err, cause) || !strings.Contains(err.Error(), "release repository Thread creation guard") ||
+				!receipt.Committed || !receipt.Changed || receipt.DryRun || receipt.Thread.ID != threadID ||
+				receipt.Local.PlannedPath != wantPath || receipt.Local.CommittedPath != wantPath ||
+				!reflect.DeepEqual(failure.Receipt, receipt) ||
+				releases != 1 || retries != 0 || minted != 1 {
+				t.Fatalf("receipt=%+v err=%v releases=%d retries=%d minted=%d", receipt, err, releases, retries, minted)
+			}
+			testHookRepositoryUnlockError = nil
+			thread, body, readErr := testutil.Must(NewFS(root, core.ReadOnlyMutations())).GetThread(threadID)
+			if readErr != nil || thread.ID != threadID || thread.Status != domain.ThreadStatusUnstarted || body != "# Recovery\n" {
+				t.Fatalf("committed Thread was not readable: Thread=%+v body=%q err=%v", thread, body, readErr)
+			}
+			entries, readErr := os.ReadDir(filepath.Join(root, domain.ThreadsDir))
+			if readErr != nil || len(entries) != 1 || entries[0].Name() != filepath.Base(wantPath) {
+				t.Fatalf("post-commit failure left extra documents or temp files: entries=%v err=%v", entries, readErr)
+			}
+		})
 	}
 }
 
