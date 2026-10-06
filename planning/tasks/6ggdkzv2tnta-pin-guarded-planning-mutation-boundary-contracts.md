@@ -188,7 +188,12 @@ were verified; raw probe logs and transfer-result attestation were not retained.
 closed as qualified corroboration, not credited as an evidence-complete independent clean review.
 Codex's accepted review and the owner executed checks remain the closeout basis.
 
-No implementation change was required. This task is complete locally in PR #284, not merged
-or released. The Thread now has 19/19 completed members and healthy graph/projection; keep the
-Thread itself in progress until this PR merges, then use guarded Thread completion. Existing
-followups remain in their stated homes and are not represented as fixes.
+No implementation change was required. PR #284 is now merged in `f50deee`; the Thread's guarded
+completion succeeded with 19/19 soundly completed members, all 107 ACs checked, three sound external
+gates, and healthy graph/projection. Existing followups remain in their stated homes and are not
+represented as fixes. Release inclusion is a separate milestone.
+
+The [Thread retrospective](../threads/6gcwd78p9r04-make-planning-data-access-adapter-neutral.md#closeout-and-retrospective-2026-10-05)
+records the merged-main verification and bounded closure. The new
+[architecture checklist](../../docs/ARCHITECTURE.md#planning-data-change-checklist) routes future planning-data changes to
+the implemented contracts and tests without treating historical review prose as policy.

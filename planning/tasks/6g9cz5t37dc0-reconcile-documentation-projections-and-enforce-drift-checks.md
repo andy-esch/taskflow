@@ -10,8 +10,8 @@ priority: medium
 autonomy_level: 4
 tags: [documentation, ci, agents, maintainability]
 created: "2026-09-12"
-depends_on: [6g63hjm7cp6w, 6g6x7e2ef37r, 6g9cz5sv6kck]
-updated_at: "2026-09-13"
+depends_on: [6g63hjm7cp6w, 6g6x7e2ef37r, 6g9cz5sv6kck, 6ggxymjbf86r]
+updated_at: "2026-10-05"
 ---
 # Reconcile documentation projections and enforce drift checks
 
@@ -19,7 +19,12 @@ updated_at: "2026-09-13"
 
 Finish the documentation restructuring with a repository-wide reconciliation pass and small, high-signal checks that keep each projection aligned with its canonical owner.
 
-Known local drift includes the obsolete Thread limitation in `CLAUDE.md`, the “one-screen” label for an 8,000-word architecture document, dated package/status snapshots, and a role table that omits or inconsistently places newer packages. The fix should prevent recurrence without snapshot-testing prose.
+Historical local drift included obsolete Thread limitations in `CLAUDE.md`, the “one-screen” label
+for a large architecture document, dated package/status snapshots, and incomplete package roles.
+The adapter-neutral migration corrected the command guidance and role map; its closeout corrected
+the README label and added a short [architecture checklist](../../docs/ARCHITECTURE.md#planning-data-change-checklist).
+Re-measure remaining drift rather than repeating those resolved examples. The fix should prevent
+recurrence without snapshot-testing prose.
 
 ## Acceptance criteria
 
@@ -36,6 +41,10 @@ Known local drift includes the obsolete Thread limitation in `CLAUDE.md`, the �
 - A new documentation-site framework or hosted portal.
 - Treating historical planning audits as normative project documentation.
 - Broad code refactors unrelated to documentation ownership or its executable checks.
+
+The [focused pure-layer import guard](6ggxymjbf86r-guard-core-and-domain-against-direct-i-o-and-framework-imports.md)
+now follows the dependency-policy ADR and feeds this final reconciliation. Verify guidance against
+its actual enforcement, without claiming that import checks prove behavioral safety.
 
 ## Related
 

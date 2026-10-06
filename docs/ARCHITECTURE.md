@@ -5,6 +5,10 @@ A local-first planning CLI over markdown+frontmatter. Design rationale lives in
 and [`planning/epics/17-pm-go-cli.md`](../planning/epics/17-pm-go-cli.md); this is
 the architecture reference for contributors, starting with the package map below.
 
+For a planning-data change, use the [change checklist](#planning-data-change-checklist)
+to route identity, local capabilities, authorization, and recovery work to the owning
+contracts and tests. This reference remains the current package map and exception inventory.
+
 ## The rule: CLI/TUI are primary adapters over a shared core; the filesystem is a secondary adapter
 
 ```
@@ -56,6 +60,54 @@ cli         -> cli/ports, core, domain, wire + presentation/process utilities
 appwiring   -> cli/ports, core, design, config, configstore, spacestore,
                userconfig, workspacestore, tui, configui
 ```
+
+### Planning-data change checklist
+
+Use the owning type/port comments as the detailed contracts; this checklist routes changes to
+their implementation and regression evidence without defining a second package map.
+
+- Put use cases, graph/impact/recovery policy, and consumer-owned ports in core. Controllers use
+  injected services, never a fallback store; adapters own decoding and guarded persistence.
+  Follow the [named composition exceptions](#explicit-composition-and-named-local-exceptions),
+  not a blanket exemption for local code. TUI I/O belongs in commands, not `Update` or `View`.
+- Keep semantic values separate from source evidence: use adapter-established `RecordSource.ID`
+  for actions, not the document's declaration or a parsed location. `Location` is opaque context;
+  `LocationIsPath` is presentation evidence, not authority to open a file. Local navigation needs
+  an explicit entity-specific path capability; guarded repair needs an explicit local handle.
+  See [loaded/versioned records](../internal/core/entity_read.go) and [ports](../internal/core/store.go).
+- Pair split capabilities with a stable nonzero [source-set witness](../internal/core/source_set.go).
+  It proves composition agreement, not snapshot consistency or security. Preserve compatible
+  snapshots, path-source detach/override behavior, lazy target opening, and identity revalidation.
+- Supply an explicit [mutation policy](../internal/core/mutation_policy.go). Read-only refuses
+  even previews; guarded authorization runs at each mutation before effects/callbacks. Carry the
+  policy into later-opened workspaces; unrestricted is a deliberate choice, not an omitted default.
+- Retain typed committed/partial receipts on error. Proposed impacts are not durable progress;
+  core owns recovery guidance, and a committed result must not trigger blind retry or reminting.
+  Do not serialize revisions or repair handles accidentally; observable wire changes follow
+  [ADR-0008](../planning/adrs/0008-use-monotonic-revisions-for-the-json-machine-contract.md) and
+  the [compatibility boundary](THREADS_COMPATIBILITY.md).
+
+For the behavior you change, use both portable fixtures and real adapter evidence where relevant:
+
+- **Reads/diagnostics:** pathless data, source/declaration drift, unreadable occurrences, duplicate
+  IDs, and one authoritative snapshot. Start with [core read tests](../internal/core/entity_read_test.go),
+  [source-boundary tests](../internal/core/thread_source_boundary_test.go), and
+  [wire projections](../internal/wire/envelopes_test.go).
+- **Composition/opening:** missing, mismatched, unstable, and typed-nil capabilities; no foreign
+  path fallback; direct/pointer identity changes and late authorization. See
+  [source-set tests](../internal/core/source_set_test.go), [path tests](../internal/core/service_entity_path_test.go),
+  [real opening tests](../internal/appwiring/thread_apply_test.go), and [explicit-space tests](../internal/cli/space_selection_test.go).
+- **Writes/recovery:** denied previews, callbacks and no-ops before effects, stale-source refusal,
+  and committed/partial failures. See [authorization tests](../internal/store/mutation_authorization_test.go),
+  [whole-tree no-effects tests](../internal/store/threadapply_test.go), and [core recovery tests](../internal/core/dependency_recovery_test.go).
+- **TUI actions:** stable identity through refresh and no conversion of diagnostic context into
+  a file path. See [identity tests](../internal/tui/identity_test.go) and [local-action tests](../internal/tui/local_path_test.go).
+
+Run `just test`, `just lint`, and `just build`; add `just docs-check` when command metadata changes.
+Import checks enforce the [rules below](#enforced-fitness-rules), not snapshot coherence, no-effects,
+or safe recovery. Direct-I/O/external-framework import bans for core/domain are a
+[tracked followup](../planning/tasks/6ggxymjbf86r-guard-core-and-domain-against-direct-i-o-and-framework-imports.md),
+not a current lint guarantee. The dependency-policy ADR remains proposed work requiring user acceptance.
 
 ### Enforced fitness rules
 

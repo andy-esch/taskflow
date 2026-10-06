@@ -1,6 +1,8 @@
 // Package appwiring is the binary's local-adapter composition boundary.
 // CLI controllers depend on their own ports, never on this package. Every
 // command tree receives a fresh application bundle and authorization closure.
+// Preserve lazy opening, source-set identity, and policy propagation when adding
+// bindings; see docs/ARCHITECTURE.md#planning-data-change-checklist and core port contracts.
 package appwiring
 
 import (

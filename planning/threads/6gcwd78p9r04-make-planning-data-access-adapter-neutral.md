@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gcwd78p9r04
-status: in-progress
+status: completed
 description: Eliminate path-shaped application contracts and primary-to-secondary planning-data bypasses.
 goal: Core use cases consume identity-bearing semantic ports; local paths are optional capabilities, and primary adapters cannot bypass the application boundary.
 created: "2026-09-23"
@@ -9,6 +9,7 @@ tags: [architecture, ports, adapters, hardening]
 tasks: [6g5vm4efjcdv, 6g6jqqcdehne, 6gcqz5aefjjf, 6gcwcf77tvgq, 6gcwcf7gjayh, 6gcwcf7rgxef, 6gcwcf80v8hg, 6gcwcf88z57p, 6gcwcf8gzn50, 6gcwcf8rxe72, 6gdx7mcqm371, 6gdx7mcqq67d, 6gdx7mcrq8s8, 6ge1bacd3bd2, 6ge7qn9ptaxv, 6gg7e594gcms, 6gg7e59cyxxh, 6ggdkztshmzz, 6ggdkzv2tnta]
 updated_at: "2026-10-05"
 started_at: "2026-09-23"
+ended_at: "2026-10-05"
 ---
 
 # Thread: Make planning data access adapter neutral
@@ -34,8 +35,8 @@ filename identities, or guarded revisions. CLI repair, body-link checking, and c
 merged in PR #275. Concrete composition isolation and executable controller enforcement merged
 in PR #277; workspace identity parity merged in PR #279. Cross-kind collision lint merged in
 PR #280 and core-owned impact/recovery semantics merged in PR #282. Explicit persistence
-authorization merged in PR #283. The final guarded-contract regression pass is reviewed and
-completed locally in [PR #284](https://github.com/andy-esch/taskflow/pull/284), awaiting merge.
+authorization merged in PR #283. The final guarded-contract regression pass merged in
+[PR #284](https://github.com/andy-esch/taskflow/pull/284); this Thread is completed.
 
 This Thread closes those seams in evidence-driven stages:
 
@@ -84,9 +85,10 @@ This Thread closes those seams in evidence-driven stages:
 
    These slices can progress independently; graph edges impose no artificial serial order.
 10. [Pin guarded planning mutation boundary contracts](../tasks/6ggdkzv2tnta-pin-guarded-planning-mutation-boundary-contracts.md)
-    after all four slices. Fill the demonstrated malformed/stale-plan, committed-conflict retry,
-    and explicit-space theme regression gaps, then review identity, authorization, recovery, and
-    adapter ownership against the completed boundary. Task-local tests are not postponed to this pass.
+    after all four slices. **Completed, merged in PR #284:** malformed/stale-plan, committed-conflict
+    retry, and explicit-space theme regressions now pin the functioning guards. The bounded final
+    review covered identity, authorization, recovery, and adapter ownership; no production guard
+    needed changing. Task-local tests were not postponed to this pass.
 
 Markdown-first and git-native behavior remain product constraints. The goal is not to hide Markdown
 or replace storage; it is to stop application semantics from requiring a filesystem path when stable
@@ -116,8 +118,8 @@ This Thread has a finish line, not a mandate to absorb every architecture audit.
 above and the existing collision-lint task are members of this graph. Composition and workspace
 parity, collision lint, and core recovery semantics are completed in PRs #277, #279, #280,
 and #282; explicit persistence authorization merged in PR #283.
-**19 of 19 members are completed locally**; the final guarded-contract regression pass in
-PR #284 awaits merge before guarded Thread completion. Older loaded-record TUI reviews are
+**19 of 19 members are completed and merged**; PR #284 landed and guarded Thread completion
+succeeded. Older loaded-record TUI reviews are
 closed because their recorded findings were fixed (or absent), not because a new review was
 performed today.
 
@@ -129,37 +131,66 @@ outside this Thread; the related audit findings remain open. The
 [`cli.App` breadth decision](../tasks/6g63hjme8czk-decide-whether-cli.apps-breadth-has-a-real-trigger-yet.md)
 has refreshed assumptions, not a pre-approved refactor.
 
-## Pre-closeout check (2026-10-05)
+## Closeout and retrospective (2026-10-05)
 
-The [final contract task](../tasks/6ggdkzv2tnta-pin-guarded-planning-mutation-boundary-contracts.md)
-records the executed boundary matrix and isolated guard-removal evidence. At review handoff, all 18 completed
-members have checked acceptance criteria; the three external gates are soundly completed.
-The graph and projection were healthy, with only the final task in flight and no blocked
-member. Owner validation found no unresolved safety blocker in the port migration; the final
-review reconciliation below records the subsequent completion checkpoint.
+PR #284 is merged in `f50deee`. The guarded `thread complete` preview and commit succeeded:
+19/19 members are completed and soundly drained, all 107 member ACs are checked, all three external
+gates are soundly complete, and graph/projection health is healthy with no in-flight or frontier
+work. The [final task's boundary matrix](../tasks/6ggdkzv2tnta-pin-guarded-planning-mutation-boundary-contracts.md#pre-closeout-boundary-matrix)
+records the behavior-level evidence for every completion signal above.
 
-Known followups are not hidden by that bounded verdict:
+The original goal is met: semantic records no longer require filesystem evidence; diagnostic/source
+identity is explicit; local navigation and guarded versions are separate capabilities; composition
+checks paired corpora and explicit authorization; and controllers use application-owned policy and
+recovery rather than constructing persistence. The CLI and TUI are real consumers of that boundary.
+Future adapters have an honest contract, not a claim that a remote/database backend has been built.
+Named topology, checkout, watcher, and process exceptions remain deliberate local integration.
 
-- [ID-less recovery instructions](../tasks/6ggfd81jg0qg-make-id-less-thread-planning-recovery-instructions-executable.md)
-  remain in the CLI-contract Thread.
-- [Thread-only TUI recovery](../tasks/6ggkdbg0816h-preserve-thread-only-lifecycle-recovery-guidance-in-the-tui.md)
-  remains in the TUI refinement Thread.
-- [Untouched YAML scalar fidelity](../tasks/6g1dhhk6721x-a-surgical-frontmatter-write-re-folds-multi-line-block-scalars-onto-one-line.md)
-  is an independently reproduced, pre-existing storage defect, now high priority in epic 21.
-  It is not fixed by this migration and should be addressed before the next release.
-- The dependency-policy ADR still requires acceptance in the documentation Thread.
+Lessons worth retaining:
 
-This is a bounded pre-closeout check, not a new release claim or a retrospective independent
-review of every historical slice. The Thread remains in progress until PR #284 merges.
+- **Optional fields were not enough.** Removing source metadata from domain values, after supplying
+  loaded records and operation-specific receipts, prevented consumers from quietly rebuilding a
+  filesystem dependency. Keep meaning, source context, and authority separate.
+- **Ports alone do not make composition safe.** Source-set witnesses, late identity revalidation,
+  explicit policies, and no-fallback opening were necessary complements. Witness equality does not
+  replace snapshot consistency, CAS, or adapter tests.
+- **Recovery is part of the application contract.** An error can accompany durable success;
+  preserving the original receipt and suppressing blind retries matters more than a generic error
+  label. Proposed impacts are not proof that writes committed.
+- **Negative tests need reachability and evidence.** Real populated adapters, whole-tree no-effects
+  checks, and compiler-valid guard-removal probes caught weaknesses happy-path coverage missed.
+  The final Codex review is accepted; Antigravity is only qualified corroboration because its
+  inaccurate inventory and missing attestation are recorded, not papered over.
 
-Codex's final review is now reconciled and closed with no new findings: independently executed
-mutation, real-store recovery, oracle, composition, and bookkeeping checks corroborate the bounded
-verdict. Antigravity is reconciled and closed as qualified corroboration: its inaccurate inventory
-and gate claims were corrected, and missing raw logs/transfer attestation are explicit limitations.
-It is not counted as a fully verified independent clean review. No implementation change was
-made while its review snapshot was active.
+Reviewed the 32 audits linked by member task bodies: 30 are closed; the mixed adapter-hygiene and
+test-rigour source audits remain open for five unrelated TUI/test findings. The final contract
+findings now say merged in PR #284, and stale workspace review dispositions now link PR #279.
+Tracked historical handoffs are not rewritten as proof of a new independent review.
 
-The final task is now completed locally; fresh projection reports 19/19 done, no in-flight or
-frontier members, and healthy graph/projection. Once PR #284 merges, this Thread is ready for
-guarded completion. Closing the Thread does not close or de-prioritize the tracked YAML storage
-safety followup, nor imply release readiness.
+Fresh merged-main race tests, standard lint, and build passed. The closeout documentation adds
+the short [architecture checklist](../../docs/ARCHITECTURE.md#planning-data-change-checklist), routes README/agent/package
+guidance to it, and repairs three historical body links. No runtime or wire behavior changes.
+This is bounded refactor completion, not universal conformance, ADR acceptance, or release readiness.
+
+## Remaining work has separate homes
+
+- **Before the next release:** [untouched YAML scalar fidelity](../tasks/6g1dhhk6721x-a-surgical-frontmatter-write-re-folds-multi-line-block-scalars-onto-one-line.md)
+  remains a reproduced, high-priority storage defect. Closure does not fix or de-prioritize it.
+- **Documentation Thread:** [source ownership/agent routing](../tasks/6g9cz5saenme-establish-documentation-ownership-and-agent-routing.md),
+  [architecture restructuring](../tasks/6g6x7e2ef37r-restructure-the-architecture-documentation-into-focused-guides.md),
+  [package contracts](../tasks/6g9cz5sk3b0d-adopt-selective-contract-focused-go-package-documentation.md),
+  [import-map verification](../tasks/6g63hjm7cp6w-test-the-documented-import-graph-instead-of-date-stamping-a-manual-review.md),
+  and the [dependency-policy ADR](../tasks/6gg7e59mm68g-record-the-hexagonal-dependency-policy-and-composition-exceptions-in-an-adr.md)
+  remain open. The checklist is integrated into the existing architecture reference as an
+  immediate router, not a new document layout or completion of those larger tasks.
+- **New enforcement followup:** [direct-I/O/framework import guards](../tasks/6ggxymjbf86r-guard-core-and-domain-against-direct-i-o-and-framework-imports.md)
+  follows the ADR and precedes documentation reconciliation. Existing lint blocks internal edges,
+  not all future effect/framework imports; current core/domain imports comply. This is future
+  regression prevention, not an unresolved runtime bypass or a reason to reopen the migration.
+- **CLI/TUI Threads:** [ID-less recovery instructions](../tasks/6ggfd81jg0qg-make-id-less-thread-planning-recovery-instructions-executable.md)
+  and [Thread-only TUI recovery](../tasks/6ggkdbg0816h-preserve-thread-only-lifecycle-recovery-guidance-in-the-tui.md)
+  retain their existing destinations. Other TUI/test findings stay visible in their source audits.
+
+No remaining task is required to satisfy this Thread's bounded completion signal. Do not add
+unrelated storage, rendering, or documentation rewrites to a completed graph merely because they
+were noticed during the refactor.

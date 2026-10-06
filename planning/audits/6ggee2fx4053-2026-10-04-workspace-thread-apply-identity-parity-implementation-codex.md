@@ -4,7 +4,7 @@ id: 6ggee2fx4053
 bucket: closed
 area: workspace-thread-apply-identity-parity-implementation-codex
 date: "2026-10-04"
-updated_at: "2026-10-04"
+updated_at: "2026-10-05"
 ---
 # Audit: Workspace Thread-apply identity parity implementation — codex — 2026-10-04
 
@@ -349,7 +349,7 @@ Before transfer, the sandbox helper verifies unchanged baseline HEAD, no staging
 
 ## Findings
 
-#### M1. Shared-construction regressions miss direct rediscovery and a mixed initial corpus · **Status:** fixed locally (2026-10-04)
+#### M1. Shared-construction regressions miss direct rediscovery and a mixed initial corpus · **Status:** fixed (PR #279)
 
 **File:** internal/workspacestore/planning_test.go:22 | **Component:** appwiring
 **Effort:** S · **Urgency:** soon
@@ -375,10 +375,10 @@ access data-only, detecting direct calls and reader-value references under
 renamed imports. In an independent no-Git copy, the discarded call fails the
 fitness test, the adopting call fails both the behavioral and fitness tests, and
 an aliased reader reference fails the fitness test. Restored focused race and
-full uncached race tests, lint, build, and docs checks pass. Local and
-uncommitted; no generalized ban on all possible indirect I/O is claimed.
+full uncached race tests, lint, build, and docs checks pass. Merged in PR #279;
+no generalized ban on all possible indirect I/O is claimed.
 
-#### L1. Direct adapter graph omits the new workspacestore domain dependency · **Status:** fixed locally (2026-10-04)
+#### L1. Direct adapter graph omits the new workspacestore domain dependency · **Status:** fixed (PR #279)
 
 **File:** docs/ARCHITECTURE.md:49 | **Component:** documentation
 **Effort:** XS · **Urgency:** eventually
@@ -390,7 +390,7 @@ The direct adapter graph at `docs/ARCHITECTURE.md:49` still lists `workspacestor
 **Resolution:** Accepted. Added domain to the workspacestore direct dependency
 row in docs/ARCHITECTURE.md, matching planning.go and the actual go list import
 inventory. The inward dependency is intentional; no port or production import
-was changed by this documentation fix.
+was changed by this documentation fix. Merged in PR #279.
 
 #### L2. Markerless Thread identity recovery recommends a migration that cannot run · **Status:** tracked by 6ggfd81jg0qg
 

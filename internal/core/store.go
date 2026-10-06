@@ -1,6 +1,11 @@
 // Package core holds the application use cases (the Service) and the ports the
 // core needs. Interfaces are defined here, at the consumer, per the org's
 // "keep interfaces close to where they're used" guidance.
+// Semantic records stay separate from source evidence in [LoadedRecord] and
+// [VersionedRecord]. [NewService] validates paired [SourceSetID] witnesses;
+// optional local capabilities do not follow from semantic reads. Persistence
+// adapters require an explicit [MutationPolicy]. The contributor checklist is
+// docs/ARCHITECTURE.md#planning-data-change-checklist; detailed contracts remain beside their types.
 package core
 
 import (

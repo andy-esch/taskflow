@@ -35,6 +35,19 @@ The current root has a substantial `CLAUDE.md` but no `AGENTS.md`. It duplicates
 - Assuming that every coding agent supports the same tool-specific instruction filename or import syntax.
 - Rewriting architecture guides, package documentation, or CLI reference content owned by sibling tasks.
 
+## Adapter-neutral closeout baseline (2026-10-05)
+
+The completed port migration added [a planning-data checklist](../../docs/ARCHITECTURE.md#planning-data-change-checklist)
+and linked it from README, CLAUDE, the architecture reference, and risk-bearing package comments.
+Reuse that route in the tool-neutral agent entry point instead of copying the full contract into
+another guide. This does not provide the source-of-truth matrix or complete this task. The current
+Thread command guidance was already corrected; treat the obsolete-command example above as
+historical motivation, not a current defect claim.
+
+The checklist is integrated into the architecture reference, not a separate top-level document.
+Preserve that single owner when adding agent routing; any later extraction follows the planned
+documentation ownership and architecture restructuring work.
+
 ## Related
 
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)

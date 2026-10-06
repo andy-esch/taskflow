@@ -6,8 +6,8 @@ description: Restructure project guidance around clear source ownership, scoped 
 goal: Agents and contributors load the minimum authoritative guidance for a change, while code and CI expose documentation drift.
 created: "2026-09-12"
 tags: [documentation, architecture, agents, go, dx]
-tasks: [6g63hjm7cp6w, 6g6x7e2ef37r, 6g9cz5saenme, 6g9cz5sk3b0d, 6g9cz5sv6kck, 6g9cz5t37dc0, 6gg7e59mm68g]
-updated_at: "2026-10-03"
+tasks: [6g63hjm7cp6w, 6g6x7e2ef37r, 6g9cz5saenme, 6g9cz5sk3b0d, 6g9cz5sv6kck, 6g9cz5t37dc0, 6gg7e59mm68g, 6ggxymjbf86r]
+updated_at: "2026-10-05"
 ---
 # Thread: Make documentation layered, executable, and agent-navigable
 
@@ -49,3 +49,14 @@ The [hexagonal dependency-policy ADR](../tasks/6gg7e59mm68g-record-the-hexagonal
 is a separate decision-record slice after the concrete composition boundary settles. It should
 inform the focused architecture guide, not duplicate the executable import inventory or silently
 ratify a new policy without user acceptance.
+
+The adapter-neutral refactor is completed. Its short
+[planning-data checklist](../../docs/ARCHITECTURE.md#planning-data-change-checklist) is a routing baseline for this Thread,
+not a replacement for documentation ownership, architecture restructuring, or package contracts.
+The [direct-I/O/framework import guard followup](../tasks/6ggxymjbf86r-guard-core-and-domain-against-direct-i-o-and-framework-imports.md)
+follows the policy ADR and precedes final reconciliation, so guidance distinguishes executable
+import checks from snapshot/recovery guarantees proven by tests. Current core/domain imports comply;
+the new task prevents future bypasses rather than repairing a present adapter violation.
+
+The checklist is a section of the architecture reference, not a new peer document. A future
+focused-guide extraction should follow this Thread's ownership and layout decisions.

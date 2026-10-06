@@ -88,7 +88,7 @@ are otherwise sound.
 ## Review brief
 
 Perform an independent adversarial implementation review of
-[`preserve-coherent-atlas-summaries-across-transient-per-space-refresh-failures`](planning/tasks/6g63db3sdfrh-preserve-coherent-atlas-summaries-across-transient-per-space-refresh-failures.md)
+[`preserve-coherent-atlas-summaries-across-transient-per-space-refresh-failures`](../tasks/6g63db3sdfrh-preserve-coherent-atlas-summaries-across-transient-per-space-refresh-failures.md)
 on branch `feat/atlas-partial-refresh-recovery`, based on `main` at `fd9dfdad4244`. The implementation
 is the uncommitted working-tree diff in the captured handoff snapshot. Inspect the complete delta
 from that base, excluding the two review audit documents themselves, and judge it against the task,
