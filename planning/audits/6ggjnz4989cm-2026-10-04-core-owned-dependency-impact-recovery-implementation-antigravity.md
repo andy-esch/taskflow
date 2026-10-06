@@ -269,13 +269,12 @@ One medium finding (`M1`) is identified: `TestImpactWireCopiesCoreDecisionsAndDe
 ---
 
 **Resolution:** Independently reproduced the exact shallow task mapper passing
-the original focused and full wire/CLI suites. Expanded the wire regression to
-36 gate/inconsistency transition pairs through dependency and lifecycle
-converters and all four Thread consistency transitions. In an isolated temporary
-copy, the expanded test rejects the reported shallow gate check, a
-changed-gate-only mapper dropping inconsistency, and an After.Inconsistent-only
-Thread mapper; restored tests pass. Production policy is unchanged. Fixed
-locally for PR #282; integration remains pending.
+the original focused and full wire/CLI suites. Expanded the regression to 36
+task gate/inconsistency transition pairs and all four Thread consistency
+transitions; isolated shallow-gate, changed-gate-only, and
+After.Inconsistent-only mutants now fail and restored tests pass. The fix merged
+in PR #282; production policy was unchanged. Audit remains closed, and release
+inclusion is separate.
 
 ### Systemic second pass
 
@@ -436,5 +435,5 @@ guidance. Codex already demonstrated the Thread-only TUI loss, tracked separatel
 by [6ggkdbg0816h](../tasks/6ggkdbg0816h-preserve-thread-only-lifecycle-recovery-guidance-in-the-tui.md).
 
 The report above retains its submission-time verdict and claim/evidence labels.
-M1's managed status/resolution records the local fix for PR #282; closure settles
-this review, not the tracked TUI task or the implementation's merge milestone.
+M1's managed status/resolution records the fix merged in PR #282; closure settles
+this review, not the tracked TUI task or release inclusion.
