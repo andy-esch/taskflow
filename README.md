@@ -53,7 +53,7 @@ regenerate with `just gifs`.
 | **[`cmd/tskflwctl/`](./cmd/tskflwctl/)** | The CLI entrypoint (thin composition root). |
 | **[`internal/`](./internal/)** | `domain` (pure) · `core` (use cases) · `store` (markdown adapter) · `cli` (cobra) · `tui` (Bubble Tea) · `config`/`userconfig` · `spacehealth` · `spacestore`/`workspacestore`. |
 | **[`planning/`](./planning/)** | This repo's own epics, tasks, Threads, and research (self-hosted). |
-| **[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)** | One-screen orientation: the primary/secondary-adapter design. |
+| **[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)** | Package map and detailed architecture reference. |
 
 ## Install
 
@@ -500,6 +500,7 @@ and still offers malformed frontmatter; duplicate canonical IDs are omitted—us
 - `just release-validate` — validate a clean release candidate without changing tracked files
 
 Design rationale lives in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
+For planning-data changes, start with its [change checklist](./docs/ARCHITECTURE.md#planning-data-change-checklist).
 
 ### Interactive TUI (`tskflwctl ui`)
 

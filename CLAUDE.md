@@ -18,8 +18,11 @@ Start with the package map in `docs/ARCHITECTURE.md`: `cli` and `tui` are
 **primary adapters** over `core`; the markdown filesystem is the
 **secondary adapter** (`store`). The binary selects `internal/appwiring`; controllers
 consume explicit `internal/cli/ports` bindings, never construct persistence or launch UI frameworks.
-`just lint` enforces this, including direct Bubble Tea imports and framework-free invocation
-contracts. Startup discovery/preferences are selected only in `appwiring/local_sources.go`;
+For planning-data changes, follow [the architecture checklist](docs/ARCHITECTURE.md#planning-data-change-checklist)
+to find the owning ports, source-evidence contracts, and required regressions.
+`just lint` enforces package direction and controller imports, including direct Bubble Tea
+imports and framework-free invocation contracts. Startup discovery/preferences are selected
+only in `appwiring/local_sources.go`;
 reader-observation tests wrap the real readers and composition, not global test hooks.
 Non-negotiables: one `*cli.App` per command tree, repo-independent services injected up front
 and planning opening deferred until target flags are parsed (no globals), all output through injected

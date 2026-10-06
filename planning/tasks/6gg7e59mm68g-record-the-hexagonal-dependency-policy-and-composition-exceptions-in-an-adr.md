@@ -32,6 +32,10 @@ The composition extraction now provides a concrete baseline rather than a broad 
 - Distinguish an executable dependency policy from a descriptive import graph.
 - Reconcile the guide and `.golangci.yml`; propose an ADR for user acceptance rather than marking
   it accepted automatically or introducing a new architecture framework.
+- Resolve the enforcement floor for direct I/O and external framework imports: today's
+  core/domain rules restrict repository-internal imports, while current production imports comply
+  with the broader pure-layer intent. The [focused guard followup](6ggxymjbf86r-guard-core-and-domain-against-direct-i-o-and-framework-imports.md)
+  follows this decision; harmless pure utilities are not automatically forbidden.
 
 ## Acceptance criteria
 
@@ -46,6 +50,7 @@ The composition extraction now provides a concrete baseline rather than a broad 
 - [Architecture guide restructuring](6g6x7e2ef37r-restructure-the-architecture-documentation-into-focused-guides.md)
 - [Executable import-graph task](6g63hjm7cp6w-test-the-documented-import-graph-instead-of-date-stamping-a-manual-review.md)
 - [Documentation Thread](../threads/6g9czp7g9pt3-make-documentation-layered-executable-and-agent-navigable.md)
+- [Planning-data architecture checklist](../../docs/ARCHITECTURE.md#planning-data-change-checklist)
 
 ## Out of scope
 
