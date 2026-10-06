@@ -36,7 +36,7 @@ func TestRepositoryLockHelperProcess(t *testing.T) {
 	if os.Getenv(lockHelperMode) != "1" {
 		return
 	}
-	unlock, err := NewFS(os.Getenv(lockHelperRoot)).writeLock()
+	unlock, err := testutil.Must(NewFS(os.Getenv(lockHelperRoot), core.UnrestrictedMutations())).writeLock()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(2)
@@ -89,7 +89,7 @@ func TestRepositoryLockReleasesWhenProcessTerminates(t *testing.T) {
 		t.Fatal("killed lock helper exited successfully")
 	}
 	stopped = true
-	unlocked, err := NewFS(root).writeLock()
+	unlocked, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).writeLock()
 	if err != nil {
 		t.Fatalf("repository lock failed after holder exit: %v", err)
 	}
@@ -117,7 +117,7 @@ func TestRepositoryGraphMutationHelperProcess(t *testing.T) {
 	}
 	dependent := os.Getenv(graphMutationHelperTask)
 	prerequisite := os.Getenv(graphMutationHelperRequires)
-	_, err := NewFS(os.Getenv(lockHelperRoot)).MutateTaskGraph(graphMutationNow, false, func(graph *core.TaskGraph) (core.TaskGraphMutationPlan, error) {
+	_, err := testutil.Must(NewFS(os.Getenv(lockHelperRoot), core.UnrestrictedMutations())).MutateTaskGraph(graphMutationNow, false, func(graph *core.TaskGraph) (core.TaskGraphMutationPlan, error) {
 		task, ok := graph.Task(dependent)
 		if !ok {
 			return core.TaskGraphMutationPlan{}, fmt.Errorf("missing task %s", dependent)
@@ -199,7 +199,7 @@ func TestMutateTaskGraphSerializesOppositeEdgesAcrossProcesses(t *testing.T) {
 	if succeeded != 1 || rejected != 1 {
 		t.Fatalf("cross-process outcomes: succeeded=%d rejected=%d", succeeded, rejected)
 	}
-	graph, err := core.LoadTaskGraph(NewFS(root))
+	graph, err := core.LoadTaskGraph(testutil.Must(NewFS(root, core.ReadOnlyMutations())))
 	if err != nil || graph.Health() != core.GraphHealthy {
 		t.Fatalf("final graph health=%v err=%v", graph.Health(), err)
 	}
@@ -215,7 +215,7 @@ func TestMutateTaskGraphSerializesOppositeEdgesAcrossProcesses(t *testing.T) {
 
 func TestGraphMutationLockAcquisitionErrorIsAttributable(t *testing.T) {
 	missing := filepath.Join(t.TempDir(), "missing-planning-root")
-	_, err := NewFS(missing).MutateTaskGraph(graphMutationNow, false, func(*core.TaskGraph) (core.TaskGraphMutationPlan, error) {
+	_, err := testutil.Must(NewFS(missing, core.UnrestrictedMutations())).MutateTaskGraph(graphMutationNow, false, func(*core.TaskGraph) (core.TaskGraphMutationPlan, error) {
 		return core.TaskGraphMutationPlan{}, nil
 	})
 	if err == nil || !strings.Contains(err.Error(), "open repo root for write lock") {

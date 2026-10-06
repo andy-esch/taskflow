@@ -22,7 +22,7 @@ func TestNewPlanningStoreUsesOneObservedCorpusAndDefersIdentityReads(t *testing.
 	fs, err := NewPlanningStore(&observed, func(start string) (*config.Config, error) {
 		starts = append(starts, start)
 		return config.Discover(start)
-	}, func() error { return nil })
+	}, core.GuardedMutations(func() error { return nil }))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -64,7 +64,7 @@ func TestNewPlanningStoreRejectsMissingConstructionInputs(t *testing.T) {
 		{name: "nil discovery", cfg: &config.Config{Root: t.TempDir()}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			fs, err := NewPlanningStore(tc.cfg, tc.discover, nil)
+			fs, err := NewPlanningStore(tc.cfg, tc.discover, core.ReadOnlyMutations())
 			if fs != nil || !errors.Is(err, domain.ErrValidation) {
 				t.Fatalf("incomplete construction = %v, %v", fs, err)
 			}
@@ -84,7 +84,7 @@ func TestNewPlanningStoreRechecksLegacyRootWithoutInventingIdentity(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	initial, err := NewPlanningStore(cfg, config.Discover, func() error { return nil })
+	initial, err := NewPlanningStore(cfg, config.Discover, core.GuardedMutations(func() error { return nil }))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -106,7 +106,7 @@ func TestNewPlanningStoreRechecksLegacyRootWithoutInventingIdentity(t *testing.T
 	fs, err := NewPlanningStore(cfg, func(start string) (*config.Config, error) {
 		starts = append(starts, start)
 		return config.Discover(start)
-	}, func() error { return nil })
+	}, core.GuardedMutations(func() error { return nil }))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ func TestNewPlanningStoreIdentityReaderFailuresNeverUseCachedIdentity(t *testing
 						return tc.fresh, tc.cause
 					}
 					return config.Discover(start)
-				}, func() error { return nil })
+				}, core.GuardedMutations(func() error { return nil }))
 				if err != nil {
 					t.Fatal(err)
 				}

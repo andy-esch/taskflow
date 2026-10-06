@@ -108,7 +108,7 @@ func TestLintResolvedLegacyDependencyIsAdvisoryWithExitZero(t *testing.T) {
 	dependentID := testutil.TaskID("dependent")
 	r.Task("completed", "target.md", "---\nid: "+targetID+"\nstatus: completed\nepic: 01-e\n---\n# target\n")
 	r.Task("completed", "dependent.md", "---\nid: "+dependentID+"\nstatus: completed\nepic: 01-e\nblocked_by: [target]\n---\n# dependent\n")
-	graph, err := core.LoadTaskGraph(store.NewFS(r.Root))
+	graph, err := core.LoadTaskGraph(testutil.Must(store.NewFS(r.Root, core.ReadOnlyMutations())))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestLintReportsMissingAndAmbiguousLegacyReferencesExactlyOnce(t *testing.T)
 	}
 	dependentID := testutil.TaskID("legacy-dependent")
 	r.Task("completed", "legacy-dependent.md", "---\nid: "+dependentID+"\nstatus: completed\nblocked_by: [same, gone]\n---\n# dependent\n")
-	results, problems, err := core.MustNewService(store.NewFS(r.Root)).Lint()
+	results, problems, err := core.MustNewService(testutil.Must(store.NewFS(r.Root, core.ReadOnlyMutations()))).Lint()
 	if err != nil || len(problems) != 0 {
 		t.Fatalf("Lint() error=%v problems=%+v", err, problems)
 	}

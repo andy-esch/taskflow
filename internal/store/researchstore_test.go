@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
@@ -22,7 +23,7 @@ func TestFS_ListResearch(t *testing.T) {
 	root := t.TempDir()
 	writeResearch(t, root, "theming.md", "---\ncreated: 2026-06-23\ndescription: Weighed three libs\ntags: [tui, color]\n---\n# Theming\n\nbody\n")
 
-	docs, problems, err := NewFS(root).ListResearch()
+	docs, problems, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ListResearch()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,7 +41,7 @@ func TestFS_ListResearch(t *testing.T) {
 		t.Errorf("tags wrong: %+v", r.Tags)
 	}
 	// The source envelope, not the semantic value, owns filename identity.
-	read, err := NewFS(root).ReadResearch()
+	read, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ReadResearch()
 	if err != nil || len(read.Records) != 1 || read.Records[0].Source.ID != testutil.TaskID("theming") {
 		t.Errorf("source identity = %+v, err=%v", read, err)
 	}
@@ -51,7 +52,7 @@ func TestFS_ReadResearchSourceIsFilenameNotFrontmatter(t *testing.T) {
 	const declaredID = "6g0000000002"
 	path, content := testutil.ResearchFixture(root, "drifted.md", "---\nid: "+declaredID+"\ncreated: 2026-09-01\n---\n# Drifted\n")
 	testutil.Write(t, path, content)
-	read, err := NewFS(root).ReadResearch()
+	read, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ReadResearch()
 	if err != nil || len(read.Records) != 1 {
 		t.Fatalf("ReadResearch err=%v records=%+v", err, read.Records)
 	}
@@ -60,7 +61,7 @@ func TestFS_ReadResearchSourceIsFilenameNotFrontmatter(t *testing.T) {
 		record.Source.Location != path || !record.Source.LocationIsPath {
 		t.Fatalf("record confused semantic ID and source identity: %+v", record)
 	}
-	shown, err := NewFS(root).ReadResearchDocument(record.Source.ID)
+	shown, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ReadResearchDocument(record.Source.ID)
 	if err != nil || shown.Source != record.Source || shown.Value.Research.ID != declaredID {
 		t.Fatalf("single read lost source identity: %+v, err=%v", shown, err)
 	}
@@ -73,7 +74,7 @@ func TestFS_ListResearch_UnknownFieldsPreserved(t *testing.T) {
 	root := t.TempDir()
 	writeResearch(t, root, "legacy.md", "---\nstatus: reference\ncreated: 2026-01-03\n---\n# Legacy\n")
 
-	docs, problems, err := NewFS(root).ListResearch()
+	docs, problems, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ListResearch()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +92,7 @@ func TestFS_ListResearch_MissingFrontmatterIsLoud(t *testing.T) {
 	root := t.TempDir()
 	writeResearch(t, root, "notes.md", "# Some notes\n\nno frontmatter\n")
 
-	docs, problems, err := NewFS(root).ListResearch()
+	docs, problems, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ListResearch()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +113,7 @@ func TestFS_ListResearch_NonIDLedIsFileProblem(t *testing.T) {
 	testutil.Write(t, filepath.Join(root, domain.ResearchDir, "2026-06-28-legacy-name.md"),
 		"---\ncreated: 2026-06-28\n---\n# Legacy\n")
 
-	docs, problems, err := NewFS(root).ListResearch()
+	docs, problems, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ListResearch()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +127,7 @@ func TestFS_ListResearch_NonIDLedIsFileProblem(t *testing.T) {
 
 func TestFS_CreateResearch(t *testing.T) {
 	root := t.TempDir()
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	r := domain.Research{Slug: "storage-model", ID: "6dvxwxg034xm", Created: "2026-01-15", Tags: []string{"core"}}
 
 	got, err := fs.CreateResearch(r, "# Storage model\n", false)
@@ -163,7 +164,7 @@ func TestFS_CreateResearch(t *testing.T) {
 
 func TestFS_CreateResearch_RefusesClobber(t *testing.T) {
 	root := t.TempDir()
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	r := domain.Research{Slug: "dup", ID: "6dvxwxg034xm", Created: "2026-01-15"}
 	if _, err := fs.CreateResearch(r, "# Dup\n", false); err != nil {
 		t.Fatal(err)
@@ -177,7 +178,7 @@ func TestFS_CreateResearch_RefusesClobber(t *testing.T) {
 func TestFS_GetResearch_FuzzyAndByID(t *testing.T) {
 	root := t.TempDir()
 	writeResearch(t, root, "storage-model-options.md", "---\ncreated: 2026-01-15\n---\n# Storage\n\nprose\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.ReadOnlyMutations()))
 
 	// A unique prefix resolves, as does the exact stable id.
 	for _, key := range []string{"storage-model-options", "storage-model", testutil.TaskID("storage-model-options")} {
@@ -201,12 +202,12 @@ func TestFS_GetResearch_FuzzyAndByID(t *testing.T) {
 func TestFS_WatchPaths_IncludesResearch(t *testing.T) {
 	root := t.TempDir()
 	want := filepath.Join(root, domain.ResearchDir)
-	for _, p := range NewFS(root).WatchPaths() {
+	for _, p := range testutil.Must(NewFS(root, core.ReadOnlyMutations())).WatchPaths() {
 		if p == want {
 			return
 		}
 	}
-	t.Errorf("WatchPaths missing %q: %+v", want, NewFS(root).WatchPaths())
+	t.Errorf("WatchPaths missing %q: %+v", want, testutil.Must(NewFS(root, core.ReadOnlyMutations())).WatchPaths())
 }
 
 // lint's MissingIDMessage promises "`lint --fix` assigns one". That was a dead end for
@@ -216,7 +217,7 @@ func TestFS_FixFrontmatter_BackfillsResearchID(t *testing.T) {
 	root := t.TempDir()
 	stem := testutil.TaskID("no-id") + "-no-id.md"
 	testutil.Write(t, filepath.Join(root, domain.ResearchDir, stem), "---\nschema: 1\ncreated: \"2026-01-03\"\n---\n# No id\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	results, err := fs.FixFrontmatter(false)
 	if err != nil {
@@ -249,7 +250,7 @@ func TestFS_FixFrontmatter_SweepsResearchTempOrphan(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).FixFrontmatter(false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(orphan); !os.IsNotExist(err) {
@@ -263,7 +264,7 @@ func TestFS_FixFrontmatter_LeavesFreshResearchTemp(t *testing.T) {
 	fresh := filepath.Join(root, domain.ResearchDir, ".tskflwctl-inflight.tmp")
 	testutil.Write(t, fresh, "in flight")
 
-	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).FixFrontmatter(false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(fresh); err != nil {

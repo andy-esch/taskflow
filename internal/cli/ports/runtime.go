@@ -36,7 +36,9 @@ type Services struct {
 // ReadRepository/ReadUser are local presentation reads needed before command
 // execution (help chrome) or outside a planning repository (init/version).
 type Bindings struct {
-	Compose           func(authorizeMutation func() error) Services
+	// Compose validates persistence policy without invoking authorizeMutation.
+	// On failure the controller discards the entire bundle, including partial values.
+	Compose           func(authorizeMutation func() error) (Services, error)
 	ReadRepository    func(start string) (core.RepositoryConfiguration, error)
 	ReadUser          func() (core.UserConfiguration, error)
 	IsMissingPlanning func(error) bool

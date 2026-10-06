@@ -16,31 +16,19 @@ import (
 )
 
 type FS struct {
-	mutationAuthorization func() error
+	mutationPolicy core.MutationPolicy
 }
 
-// Option configures the filesystem configuration adapter.
-type Option func(*FS)
-
-// WithMutationAuthorization requires authorize to succeed before either
-// configuration mutation use case, including a dry-run preview.
-func WithMutationAuthorization(authorize func() error) Option {
-	return func(store *FS) { store.mutationAuthorization = authorize }
-}
-
-func New(opts ...Option) *FS {
-	store := &FS{}
-	for _, opt := range opts {
-		opt(store)
+// New validates the explicit policy without invoking its authorizer or doing I/O.
+func New(policy core.MutationPolicy) (*FS, error) {
+	if err := policy.Validate(); err != nil {
+		return nil, err
 	}
-	return store
+	return &FS{mutationPolicy: policy}, nil
 }
 
 func (f *FS) authorizeMutation() error {
-	if f.mutationAuthorization == nil {
-		return nil
-	}
-	return f.mutationAuthorization()
+	return f.mutationPolicy.Authorize()
 }
 
 var _ core.ConfigurationStore = (*FS)(nil)

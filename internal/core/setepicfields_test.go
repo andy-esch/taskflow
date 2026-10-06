@@ -21,7 +21,7 @@ func epicFieldsRepo(t *testing.T) *core.Service {
 	t.Helper()
 	r := testutil.NewRepo(t)
 	r.Epic("01-e.md", "---\nschema: 1\nstatus: active\ndescription: e\npriority: medium\ntags: [seed]\ncreated: \"2026-06-01\"\n---\n# e\n")
-	return core.MustNewService(store.NewFS(r.Root))
+	return core.MustNewService(testutil.Must(store.NewFS(r.Root, core.UnrestrictedMutations())))
 }
 
 // TestSetEpicFields_RoundTrip is the headline guard: a `--set tags=a,b` (a string

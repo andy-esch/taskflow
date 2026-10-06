@@ -226,7 +226,7 @@ func deferApp(root string, p prompt.Prompter, out *bytes.Buffer) *App {
 		Style:  render.NewStyle(false),
 		Gate:   prompt.NewGate(true),
 		Prompt: p,
-		Svc:    core.MustNewService(store.NewFS(root)),
+		Svc:    core.MustNewService(testutil.Must(store.NewFS(root, core.UnrestrictedMutations()))),
 	}
 }
 

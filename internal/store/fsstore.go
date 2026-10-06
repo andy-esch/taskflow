@@ -46,7 +46,7 @@ type FS struct {
 	// selected-read isolation and one-open scans without changing the core port.
 	auditReadFile          func(string) ([]byte, error)
 	planningIdentityReader PlanningIdentityReader
-	mutationAuthorization  func() error
+	mutationPolicy         core.MutationPolicy
 }
 
 // PlanningIdentityReader re-runs configuration discovery at apply time. Root
@@ -74,20 +74,8 @@ func WithPlanningIdentityReader(reader PlanningIdentityReader) FSOption {
 	}
 }
 
-// WithMutationAuthorization installs an adapter-boundary guard. The callback
-// is intentionally framework-neutral: a CLI can enforce command metadata while
-// another primary adapter can supply its own policy or omit the option.
-func WithMutationAuthorization(authorize func() error) FSOption {
-	return func(store *FS) {
-		store.mutationAuthorization = authorize
-	}
-}
-
 func (s *FS) authorizeMutation() error {
-	if s.mutationAuthorization == nil {
-		return nil
-	}
-	return s.mutationAuthorization()
+	return s.mutationPolicy.Authorize()
 }
 
 // Compile-time assertions that FS satisfies the core ports. The use-case Store is
@@ -108,22 +96,27 @@ var (
 	_ core.Layout              = (*FS)(nil)
 )
 
-// NewFS returns a store rooted at a planning directory (the dir holding tasks/).
-func NewFS(root string, opts ...FSOption) *FS {
+// NewFS binds a planning root to an explicit mutation policy without I/O or
+// invoking its authorizer. Missing policies are refused, not treated as writable.
+func NewFS(root string, policy core.MutationPolicy, opts ...FSOption) (*FS, error) {
+	if err := policy.Validate(); err != nil {
+		return nil, err
+	}
 	store := &FS{
-		root:          root,
-		sourceSet:     core.NewSourceSetID(),
-		tasksDir:      filepath.Join(root, domain.TasksDir),
-		epicsDir:      filepath.Join(root, domain.EpicsDir),
-		auditsDir:     filepath.Join(root, domain.AuditsDir),
-		researchDir:   filepath.Join(root, domain.ResearchDir),
-		threadsDir:    filepath.Join(root, domain.ThreadsDir),
-		auditReadFile: os.ReadFile,
+		mutationPolicy: policy,
+		root:           root,
+		sourceSet:      core.NewSourceSetID(),
+		tasksDir:       filepath.Join(root, domain.TasksDir),
+		epicsDir:       filepath.Join(root, domain.EpicsDir),
+		auditsDir:      filepath.Join(root, domain.AuditsDir),
+		researchDir:    filepath.Join(root, domain.ResearchDir),
+		threadsDir:     filepath.Join(root, domain.ThreadsDir),
+		auditReadFile:  os.ReadFile,
 	}
 	for _, opt := range opts {
 		opt(store)
 	}
-	return store
+	return store, nil
 }
 
 // WatchPaths is the set of leaf directories a filesystem watcher must observe to

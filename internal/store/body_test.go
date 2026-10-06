@@ -62,7 +62,7 @@ func TestEditBody_PreservesUnknownKeys(t *testing.T) {
 	seed := "---\nstatus: ready-to-start\ncustom_field: keep-me\ndescription: d\n---\n# B\n\nold\n"
 	writeTask(t, root, "ready-to-start", "u.md", seed)
 	path, _ := testutil.TaskFixture(root, "ready-to-start", "u.md", seed)
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	if _, _, err := fs.EditBody("u", "# B\n\nnew", false, bodyNow, false); err != nil {
 		t.Fatalf("EditBody: %v", err)
 	}
@@ -104,7 +104,7 @@ func TestEditBody_CRLFRoundTrip(t *testing.T) {
 			crlf := strings.ReplaceAll("---\nstatus: ready-to-start\ndescription: old\n---\n# Alpha\n\nbody\n", "\n", "\r\n")
 			writeTask(t, root, "ready-to-start", "alpha.md", crlf)
 			path, _ := testutil.TaskFixture(root, "ready-to-start", "alpha.md", crlf)
-			fs := NewFS(root)
+			fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 			if err := tc.edit(fs); err != nil {
 				t.Fatal(err)
 			}
@@ -140,7 +140,7 @@ func TestAppendSection_Edges(t *testing.T) {
 func TestEditBody_BrokenFrontmatter_Errors(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "bad.md", "---\nstatus: ready-to-start\nno closing fence\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	if _, _, err := fs.EditBody("bad", "x", false, bodyNow, false); err == nil {
 		t.Fatal("editing a file with unterminated frontmatter should error")
 	}
@@ -150,7 +150,7 @@ func TestEditBody_EchoesOnDiskBody(t *testing.T) {
 	root := t.TempDir()
 	crlf := strings.ReplaceAll("---\nstatus: ready-to-start\ndescription: d\n---\n# T\n\nbody\n", "\n", "\r\n")
 	writeTask(t, root, "ready-to-start", "alpha.md", crlf)
-	_, gotBody, err := NewFS(root).EditBody("alpha", "## New", true, bodyNow, false)
+	_, gotBody, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).EditBody("alpha", "## New", true, bodyNow, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -233,7 +233,7 @@ func TestAcceptanceCriterionTransformRetriesWithoutLosingConcurrentBodyWrite(t *
 	}
 	t.Cleanup(func() { testHookBeforeBodyWrite = nil })
 
-	svc := core.MustNewService(NewFS(root), core.WithRetry(1, func(int) {}))
+	svc := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())), core.WithRetry(1, func(int) {}))
 	_, body, changed, err := svc.SetAcceptanceCriterion("criterion-race", 1, true, false)
 	if err != nil {
 		t.Fatal(err)

@@ -27,7 +27,7 @@ func TestCompletionSourceRetainsMalformedRecordsAndIndependentIdentity(t *testin
 			testutil.Write(t, filepath.Join(dir, "README.md"), "not a record\n")
 			testutil.Write(t, filepath.Join(dir, "stray.md"), "not an id-led record\n")
 			for _, state := range []bool{false, true} {
-				got, err := NewFS(root).ReadCompletionCandidates(test.kind, state)
+				got, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ReadCompletionCandidates(test.kind, state)
 				want := []core.CompletionCandidate{{ID: sourceID, Slug: "broken", Reference: sourceID, SlugIsReference: true}}
 				if err != nil || !slices.Equal(got, want) {
 					t.Fatalf("state=%t candidates=%+v err=%v", state, got, err)
@@ -39,7 +39,7 @@ func TestCompletionSourceRetainsMalformedRecordsAndIndependentIdentity(t *testin
 	driftID := testutil.TaskID("completion-drift-source")
 	path := filepath.Join(root, domain.TasksDir, driftID+"-drift.md")
 	testutil.Write(t, path, "---\nid: "+declaredID+"\nstatus: in-progress\n---\n# Drift\n")
-	got, err := NewFS(root).ReadCompletionCandidates(core.EntityTask, true)
+	got, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ReadCompletionCandidates(core.EntityTask, true)
 	if err != nil || len(got) != 2 {
 		t.Fatalf("drift candidates=%+v err=%v", got, err)
 	}
@@ -63,7 +63,7 @@ func TestCompletionSourceSkipsSymlinks(t *testing.T) {
 		t.Skipf("symlinks unsupported here: %v", err)
 	}
 	for _, withState := range []bool{false, true} {
-		got, err := NewFS(root).ReadCompletionCandidates(core.EntityTask, withState)
+		got, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ReadCompletionCandidates(core.EntityTask, withState)
 		if err != nil || len(got) != 0 {
 			t.Fatalf("withState=%t followed symlink: candidates=%+v err=%v", withState, got, err)
 		}
@@ -83,7 +83,7 @@ func TestCompletionSourcePlainQueriesDoNotParseState(t *testing.T) {
 		{core.EntityTask, "in-progress"}, {core.EntityAudit, "closed"},
 	} {
 		for _, withState := range []bool{false, true} {
-			got, err := NewFS(root).ReadCompletionCandidates(test.kind, withState)
+			got, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ReadCompletionCandidates(test.kind, withState)
 			want := ""
 			if withState {
 				want = test.state
@@ -93,11 +93,11 @@ func TestCompletionSourcePlainQueriesDoNotParseState(t *testing.T) {
 			}
 		}
 	}
-	epic, err := NewFS(root).ReadCompletionCandidates(core.EntityEpic, false)
+	epic, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ReadCompletionCandidates(core.EntityEpic, false)
 	if err != nil || !slices.Equal(epic, []core.CompletionCandidate{{ID: "17-project", Slug: "17-project", Reference: "17-project", SlugIsReference: true}}) {
 		t.Fatalf("epic candidates=%+v err=%v", epic, err)
 	}
-	missing, err := NewFS(t.TempDir()).ReadCompletionCandidates(core.EntityTask, false)
+	missing, err := testutil.Must(NewFS(t.TempDir(), core.ReadOnlyMutations())).ReadCompletionCandidates(core.EntityTask, false)
 	if err != nil || len(missing) != 0 {
 		t.Fatalf("missing directory candidates=%+v err=%v", missing, err)
 	}
@@ -128,7 +128,7 @@ func TestCompletionSourceReferencesMatchActualResolver(t *testing.T) {
 				testutil.Write(t, path, "damaged metadata\n")
 				paths[file.id] = path
 			}
-			fs := NewFS(root)
+			fs := testutil.Must(NewFS(root, core.ReadOnlyMutations()))
 			var resolve func(string) (string, error)
 			switch test.kind {
 			case core.EntityTask:
@@ -171,7 +171,7 @@ func TestCompletionSourceEpicCarveoutMatchesResolver(t *testing.T) {
 	for _, stem := range []string{"README", "readme", "ReadMe", "17-project", "legacy", "bad..query"} {
 		testutil.Write(t, filepath.Join(root, domain.EpicsDir, stem+".md"), "damaged metadata\n")
 	}
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.ReadOnlyMutations()))
 	got, err := fs.ReadCompletionCandidates(core.EntityEpic, false)
 	if err != nil || len(got) != 2 {
 		t.Fatalf("epic candidates=%+v err=%v", got, err)

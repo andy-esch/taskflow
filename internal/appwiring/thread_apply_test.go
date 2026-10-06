@@ -40,7 +40,7 @@ func TestPlanningOpenRetainsInitialCorpusWhenMarkerChangesDuringDiscovery(t *tes
 				},
 				user: userconfig.Load,
 			}
-			opened, err := bindingsFor(reads).Compose(func() error { return nil }).OpenPlanning(entry.start)
+			opened, err := testutil.Must(bindingsFor(reads).Compose(func() error { return nil })).OpenPlanning(entry.start)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -306,7 +306,7 @@ func newThreadApplyEntry(t *testing.T, pointer bool, planningSubdir string) thre
 
 func openThreadApplyEntry(t *testing.T, start string, workspace bool, authorize func() error) (*core.Service, string) {
 	t.Helper()
-	services := LocalBindings().Compose(authorize)
+	services := testutil.Must(LocalBindings().Compose(authorize))
 	if workspace {
 		opened, err := services.Workspaces.Open(core.WorkspaceRequest{Start: start})
 		if err != nil {

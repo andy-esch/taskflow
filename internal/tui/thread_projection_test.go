@@ -45,7 +45,7 @@ func threadRepo(t *testing.T) string {
 func threadModel(t *testing.T) (Model, string) {
 	t.Helper()
 	root := threadRepo(t)
-	return New(core.MustNewService(store.NewFS(root))), root
+	return New(core.MustNewService(testutil.Must(store.NewFS(root, core.UnrestrictedMutations())))), root
 }
 
 func threadTab(m Model) *entityTab { return m.tabs[indexOfKind(m.tabs, entityThreads)] }
@@ -235,7 +235,7 @@ func (f tuiThreadPathFake) SourceSetID() core.SourceSetID            { return f.
 
 func TestThreadRouteSurvivesSplitPathlessCapabilities(t *testing.T) {
 	root := threadRepo(t)
-	fs := store.NewFS(root)
+	fs := testutil.Must(store.NewFS(root, core.UnrestrictedMutations()))
 	graphs := &countingGraphSource{sourceSet: fs.SourceSetID(), tasks: []domain.Task{{
 		ID: "6g5rwjqeh6a6", Slug: "split-only", Status: domain.StatusNextUp,
 		Description: "only the graph source has this",

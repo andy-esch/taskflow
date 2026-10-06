@@ -27,7 +27,7 @@ func TestFSLintSourceTranslatesLocalProblemsAtAdapterBoundary(t *testing.T) {
 		testutil.Write(t, path, "---\nid: [unterminated\n---\n")
 	}
 
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.ReadOnlyMutations()))
 	_, taskProblems, taskErr := fs.ReadLintTasks()
 	_, epicProblems, epicErr := fs.ReadLintEpics()
 	auditSnapshot, auditErr := fs.ReadAuditSnapshot("")
@@ -69,7 +69,7 @@ func TestFSAuditSnapshotPreservesSingleAuditResolutionSemantics(t *testing.T) {
 	writeAudit(t, root, "open", "2026-09-20-shared-alpha.md", "---\narea: cli\ndate: 2026-09-20\n---\n\n#### H1. Alpha\n**Status:** open\n")
 	writeAudit(t, root, "closed", "2026-09-21-shared-beta.md", "---\narea: cli\ndate: 2026-09-21\n---\n\n#### M1. Beta\n**Status:** fixed\n")
 	writeAudit(t, root, "open", "2026-09-22-unrelated-corrupt.md", "---\nid: [unterminated\n---\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.ReadOnlyMutations()))
 	reads := map[string]int{}
 	fs.auditReadFile = func(path string) ([]byte, error) {
 		reads[path]++

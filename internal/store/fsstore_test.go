@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
@@ -20,7 +21,7 @@ func TestFS_ListTasksWithBodies(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "a.md", "---\nstatus: ready-to-start\nepic: e1\ntags: [x]\n---\n# A\n\n## Acceptance criteria\n\n- [x] done\n")
 
-	got, problems, err := NewFS(root).ListTasksWithBodies()
+	got, problems, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ListTasksWithBodies()
 	if err != nil || len(problems) != 0 {
 		t.Fatalf("ListTasksWithBodies: %v / %+v", err, problems)
 	}
@@ -40,7 +41,7 @@ func TestFS_TaskReadProjectionsShareLoadedIdentityAndDiagnostics(t *testing.T) {
 		"---\nid: [unterminated\n---\n# Bad\n")
 	testutil.Write(t, goodPath, good)
 	testutil.Write(t, badPath, bad)
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.ReadOnlyMutations()))
 
 	graph, err := fs.ReadTaskGraph()
 	if err != nil || len(graph.GuardedRecords) != 1 || len(graph.Problems) != 1 || graph.Problems[0].SourceVersion == "" {
@@ -75,7 +76,7 @@ func TestFS_ListTasks(t *testing.T) {
 	writeTask(t, root, "in-progress", "beta.md",
 		"---\nstatus: in-progress\ndescription: do beta\n---\n# Beta\n")
 
-	tasks, _, err := NewFS(root).ListTasks()
+	tasks, _, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ListTasks()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +111,7 @@ func TestFS_ListTasks_MissingFrontmatterIsLoud(t *testing.T) {
 	writeTask(t, root, "completed", "no-fence.md", "# Just a heading\n\nnotes\n")
 	writeTask(t, root, "completed", "bad-fence.md", "---\"\nstatus: completed\nepic: 01-x\n---\n# X\n")
 
-	tasks, problems, err := NewFS(root).ListTasks()
+	tasks, problems, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ListTasks()
 	if err != nil {
 		t.Fatal(err)
 	}

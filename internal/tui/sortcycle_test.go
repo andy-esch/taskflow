@@ -35,7 +35,7 @@ func sortRepo(t *testing.T) string {
 
 func sortModel(t *testing.T) Model {
 	t.Helper()
-	m := New(core.MustNewService(store.NewFS(sortRepo(t))))
+	m := New(core.MustNewService(testutil.Must(store.NewFS(sortRepo(t), core.UnrestrictedMutations()))))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
@@ -122,7 +122,7 @@ func TestSortCycle_SortsDoNotCompound(t *testing.T) {
 // disk.
 func TestSortCycle_ReloadRefreshesTheSortBase(t *testing.T) {
 	root := sortRepo(t)
-	m := New(core.MustNewService(store.NewFS(root)))
+	m := New(core.MustNewService(testutil.Must(store.NewFS(root, core.UnrestrictedMutations()))))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())

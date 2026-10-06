@@ -14,6 +14,7 @@ import (
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/store"
+	"github.com/andy-esch/taskflow/internal/testutil"
 	"github.com/andy-esch/taskflow/internal/wire"
 )
 
@@ -198,7 +199,7 @@ func TestThreadPreviewReleaseDocumentsRemainSurgicallyMutable(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			thread, body, err := store.NewFS(root).GetThread("fixture-thread")
+			thread, body, err := testutil.Must(store.NewFS(root, core.ReadOnlyMutations())).GetThread("fixture-thread")
 			if err != nil || thread.ID != "6fjangd7kvh4" || thread.Status != domain.ThreadStatusUnstarted {
 				t.Fatalf("read historical Thread: %+v body=%q err=%v", thread, body, err)
 			}
@@ -264,7 +265,7 @@ func TestThreadPreviewReleaseDocumentsRemainSurgicallyMutable(t *testing.T) {
 				}
 				prior = index
 			}
-			mutated, mutatedBody, err := store.NewFS(root).GetThread("6fjangd7kvh4")
+			mutated, mutatedBody, err := testutil.Must(store.NewFS(root, core.ReadOnlyMutations())).GetThread("6fjangd7kvh4")
 			if err != nil || mutated.ID != thread.ID || mutatedBody != body ||
 				!slices.Equal(mutated.Tasks, []string{"6fjangd7kvh0", "6fjangd7kvh1", "6fjangd7kvh2"}) {
 				t.Fatalf("mutated Thread = %+v body=%q err=%v", mutated, mutatedBody, err)

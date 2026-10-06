@@ -9,33 +9,29 @@ import (
 )
 
 type FS struct {
-	mutationAuthorization func() error
+	mutationPolicy core.MutationPolicy
 }
 
-type Option func(*FS)
-
-// WithMutationAuthorization carries a primary adapter's mutation policy into
-// every planning store opened through this workspace boundary.
-func WithMutationAuthorization(authorize func() error) Option {
-	return func(store *FS) { store.mutationAuthorization = authorize }
-}
-
-func New(opts ...Option) *FS {
-	workspaceStore := &FS{}
-	for _, opt := range opts {
-		opt(workspaceStore)
+// New validates the policy carried into every later-opened planning store.
+// It performs no discovery or invocation authorization.
+func New(policy core.MutationPolicy) (*FS, error) {
+	if err := policy.Validate(); err != nil {
+		return nil, err
 	}
-	return workspaceStore
+	return &FS{mutationPolicy: policy}, nil
 }
 
 var _ core.WorkspaceStore = (*FS)(nil)
 
 func (f *FS) OpenWorkspace(start string) (core.WorkspaceSource, error) {
+	if err := f.mutationPolicy.Validate(); err != nil {
+		return core.WorkspaceSource{}, err
+	}
 	cfg, err := config.Discover(start)
 	if err != nil {
 		return core.WorkspaceSource{}, err
 	}
-	fs, err := NewPlanningStore(cfg, config.Discover, f.mutationAuthorization)
+	fs, err := NewPlanningStore(cfg, config.Discover, f.mutationPolicy)
 	if err != nil {
 		return core.WorkspaceSource{}, err
 	}

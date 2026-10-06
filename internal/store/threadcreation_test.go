@@ -24,7 +24,7 @@ func TestThreadCreationPersistsCanonicalDocumentAndReadsItBack(t *testing.T) {
 	writeGraphMutationTask(t, root, "thread-member-a", domain.StatusReadyToStart, nil, "")
 	writeGraphMutationTask(t, root, "thread-member-b", domain.StatusNextUp, nil, "")
 	threadID := testutil.TaskID("created-thread")
-	svc := core.MustNewService(NewFS(root),
+	svc := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())),
 		core.WithIDGen(func() string { return threadID }),
 		core.WithClock(func() time.Time { return threadCreationNow }),
 	)
@@ -57,11 +57,11 @@ func TestThreadCreationPersistsCanonicalDocumentAndReadsItBack(t *testing.T) {
 			t.Errorf("created Thread missing %q:\n%s", want, text)
 		}
 	}
-	reloaded, body, err := NewFS(root).GetThread(threadID)
+	reloaded, body, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).GetThread(threadID)
 	if err != nil || !slices.Equal(reloaded.Tasks, []string{aID, bID}) || !strings.Contains(body, "Dogfood Thread planning") {
 		t.Fatalf("reloaded=%+v body=%q err=%v", reloaded, body, err)
 	}
-	if got, err := NewFS(root).ResolveThreadPath("thread-foundation"); err != nil || got != receipt.Local.CommittedPath {
+	if got, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).ResolveThreadPath("thread-foundation"); err != nil || got != receipt.Local.CommittedPath {
 		t.Fatalf("path=%q err=%v", got, err)
 	}
 }
@@ -69,7 +69,7 @@ func TestThreadCreationPersistsCanonicalDocumentAndReadsItBack(t *testing.T) {
 func TestThreadCreationDryRunValidatesWithoutWriting(t *testing.T) {
 	root := t.TempDir()
 	threadID := testutil.TaskID("dry-thread")
-	svc := core.MustNewService(NewFS(root), core.WithIDGen(func() string { return threadID }))
+	svc := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())), core.WithIDGen(func() string { return threadID }))
 	receipt, err := svc.NewThread(core.NewThreadParams{
 		Title: "Dry Thread", Description: "Preview a Thread", Goal: "Write nothing", DryRun: true,
 	})
@@ -105,7 +105,7 @@ func TestThreadCreationRejectsRawTaskRaceByWholeSnapshotCAS(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	result, err := NewFS(root).MutateThreadCreation(threadCreationNow, false, func(core.ThreadCreationSnapshot) (core.ThreadCreationPlan, error) {
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateThreadCreation(threadCreationNow, false, func(core.ThreadCreationSnapshot) (core.ThreadCreationPlan, error) {
 		return core.ThreadCreationPlan{Thread: thread, Body: "# Race\n"}, nil
 	})
 	if !errors.Is(err, domain.ErrConflict) || result.Committed {
@@ -128,7 +128,7 @@ func TestThreadCreationRejectsRawThreadRaceByWholeSnapshotCAS(t *testing.T) {
 			"schema: 1\nid: "+concurrentID+"\nstatus: unstarted\ndescription: Concurrent Thread\n"+
 			"goal: Change the guarded snapshot\ncreated: \"2026-08-29\"\ntasks: []\n---\n# Peer\n")
 	}
-	result, err := NewFS(root).MutateThreadCreation(threadCreationNow, false, func(core.ThreadCreationSnapshot) (core.ThreadCreationPlan, error) {
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateThreadCreation(threadCreationNow, false, func(core.ThreadCreationSnapshot) (core.ThreadCreationPlan, error) {
 		return core.ThreadCreationPlan{Thread: domain.Thread{
 			ID: targetID, Slug: "target", Status: domain.ThreadStatusUnstarted,
 			Description: "Race test", Goal: "Reject stale Thread state", Created: "2026-08-29",
@@ -143,7 +143,7 @@ func TestThreadCreationRejectsRawThreadRaceByWholeSnapshotCAS(t *testing.T) {
 }
 
 func TestThreadCreationPlannerCannotReenterStore(t *testing.T) {
-	fs := NewFS(t.TempDir())
+	fs := testutil.Must(NewFS(t.TempDir(), core.UnrestrictedMutations()))
 	_, err := fs.MutateThreadCreation(threadCreationNow, true, func(core.ThreadCreationSnapshot) (core.ThreadCreationPlan, error) {
 		_, nestedErr := fs.ReadThreads()
 		return core.ThreadCreationPlan{}, nestedErr
@@ -155,7 +155,7 @@ func TestThreadCreationPlannerCannotReenterStore(t *testing.T) {
 
 func TestTaskAndThreadCreationSerializeCrossKindIdentity(t *testing.T) {
 	root := t.TempDir()
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	epic, err := fs.CreateEpic("identity", domain.Epic{
 		Status: domain.EpicStatusActive, Description: "Identity tests", Priority: "medium", Created: "2026-08-29",
 	}, "# Identity\n", false)
@@ -164,7 +164,7 @@ func TestTaskAndThreadCreationSerializeCrossKindIdentity(t *testing.T) {
 	}
 	sharedID := testutil.TaskID("shared-cross-kind-id")
 	newService := func() *core.Service {
-		return core.MustNewService(NewFS(root),
+		return core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())),
 			core.WithIDGen(func() string { return sharedID }),
 			core.WithClock(func() time.Time { return threadCreationNow }),
 			core.WithRetry(0, func(int) {}),
@@ -209,8 +209,8 @@ func TestTaskAndThreadCreationSerializeCrossKindIdentity(t *testing.T) {
 	if successes != 1 || conflicts != 1 {
 		t.Fatalf("successes=%d conflicts=%d errors=(%v, %v)", successes, conflicts, errA, errB)
 	}
-	tasks, _, taskErr := NewFS(root).ListTasks()
-	threadRead, threadErr := NewFS(root).ReadThreads()
+	tasks, _, taskErr := testutil.Must(NewFS(root, core.UnrestrictedMutations())).ListTasks()
+	threadRead, threadErr := testutil.Must(NewFS(root, core.UnrestrictedMutations())).ReadThreads()
 	if taskErr != nil || threadErr != nil || len(tasks)+len(threadRead.Records) != 1 {
 		t.Fatalf("tasks=%d Threads=%d taskErr=%v threadErr=%v", len(tasks), len(threadRead.Records), taskErr, threadErr)
 	}
@@ -237,7 +237,7 @@ func TestThreadCreationWaitsForLifecycleMutationAndReadsFreshSnapshot(t *testing
 	}
 	lifecycleDone := make(chan lifecycleOutcome, 1)
 	go func() {
-		result, err := NewFS(root).MutateTaskLifecycle(threadCreationNow, false, func(*core.TaskGraph) (core.TaskLifecyclePlan, error) {
+		result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateTaskLifecycle(threadCreationNow, false, func(*core.TaskGraph) (core.TaskLifecyclePlan, error) {
 			return core.TaskLifecyclePlan{TaskID: memberID, To: domain.StatusInProgress}, nil
 		})
 		lifecycleDone <- lifecycleOutcome{result: result, err: err}
@@ -251,7 +251,7 @@ func TestThreadCreationWaitsForLifecycleMutationAndReadsFreshSnapshot(t *testing
 	threadDone := make(chan threadOutcome, 1)
 	threadID := testutil.TaskID("serialized-thread")
 	go func() {
-		result, err := NewFS(root).MutateThreadCreation(threadCreationNow, false, func(snapshot core.ThreadCreationSnapshot) (core.ThreadCreationPlan, error) {
+		result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateThreadCreation(threadCreationNow, false, func(snapshot core.ThreadCreationSnapshot) (core.ThreadCreationPlan, error) {
 			member, ok := snapshot.Graph.Task(memberID)
 			if !ok || member.Status != domain.StatusInProgress {
 				return core.ThreadCreationPlan{}, errors.New("thread planner did not observe committed lifecycle state")
@@ -291,7 +291,7 @@ func TestThreadCreationAttributesReleaseFailureAfterCommit(t *testing.T) {
 	t.Cleanup(func() { testHookRepositoryUnlockError = original })
 	testHookRepositoryUnlockError = func() error { return errors.New("injected release failure") }
 
-	result, err := NewFS(root).MutateThreadCreation(threadCreationNow, false, func(core.ThreadCreationSnapshot) (core.ThreadCreationPlan, error) {
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateThreadCreation(threadCreationNow, false, func(core.ThreadCreationSnapshot) (core.ThreadCreationPlan, error) {
 		return core.ThreadCreationPlan{Thread: domain.Thread{
 			ID: threadID, Slug: "release-failure", Status: domain.ThreadStatusUnstarted,
 			Description: "Recovery test", Goal: "Retain committed truth", Created: "2026-08-29",
@@ -301,7 +301,7 @@ func TestThreadCreationAttributesReleaseFailureAfterCommit(t *testing.T) {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
 	testHookRepositoryUnlockError = nil
-	thread, _, readErr := NewFS(root).GetThread(threadID)
+	thread, _, readErr := testutil.Must(NewFS(root, core.UnrestrictedMutations())).GetThread(threadID)
 	if readErr != nil || thread.ID != threadID {
 		t.Fatalf("committed Thread was not readable: Thread=%+v err=%v", thread, readErr)
 	}
@@ -315,7 +315,7 @@ func TestFixSweepIncludesThreadAtomicWriteOrphans(t *testing.T) {
 	if err := os.Chtimes(orphan, old, old); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := NewFS(root).FixFrontmatter(false); err != nil {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).FixFrontmatter(false); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := os.Stat(orphan); !os.IsNotExist(err) {
@@ -331,14 +331,14 @@ func TestFixRepairsOrdinaryThreadFrontmatterWithoutChangingMembership(t *testing
 	testutil.Write(t, path, "---\nstatus: unstarted\ndescription: Phase 1: ship it\n"+
 		"goal: Repair ordinary fields\ncreated: \"2026-08-29\"\ntags: one,two\ntasks: ["+memberID+"]\n---\n# Fixable\n")
 
-	results, err := NewFS(root).FixFrontmatter(false)
+	results, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).FixFrontmatter(false)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(results) != 1 || results[0].Skipped {
 		t.Fatalf("results = %+v", results)
 	}
-	thread, _, err := NewFS(root).GetThread(threadID)
+	thread, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).GetThread(threadID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -356,7 +356,7 @@ func TestFixDoesNotNormalizeThreadMembershipSyntax(t *testing.T) {
 		"goal: Preserve guarded intent\ncreated: \"2026-08-29\"\ntasks: " + memberID + "\n---\n# Unsafe\n"
 	testutil.Write(t, path, original)
 
-	results, err := NewFS(root).FixFrontmatter(false)
+	results, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).FixFrontmatter(false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -385,7 +385,7 @@ func TestFixRefusesCrossKindCollisionWhileCanonicalizingID(t *testing.T) {
 			testutil.Write(t, filepath.Join(root, tc.otherDir, goodID+"-owner.md"), "---\nid: "+goodID+"\n---\n")
 			testutil.Write(t, filepath.Join(root, tc.badDir, badID+"-candidate.md"), "---\nid: "+badID+"\n---\n")
 
-			results, err := NewFS(root).FixFrontmatter(false)
+			results, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).FixFrontmatter(false)
 			if err != nil {
 				t.Fatal(err)
 			}

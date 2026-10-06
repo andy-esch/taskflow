@@ -14,7 +14,7 @@ import (
 
 // New scaffolds stamp the reserved schema-version key, written first.
 func TestCreate_StampsSchemaVersion(t *testing.T) {
-	fs := NewFS(t.TempDir())
+	fs := testutil.Must(NewFS(t.TempDir(), core.UnrestrictedMutations()))
 	taskC, err := fs.CreateTask(domain.Task{ID: "0abcdef23456", Slug: "t", Status: domain.StatusReadyToStart, Epic: "e1", Tags: []string{"x"}, Created: "2026-01-01"}, "# T\n", false)
 	if err != nil {
 		t.Fatal(err)
@@ -49,7 +49,7 @@ func TestSchemaVersion_ParsesAndSurvivesEdits(t *testing.T) {
 	seed := "---\nschema: 1\nid: " + testutil.TaskID("keep") + "\nstatus: ready-to-start\ndescription: d\ntier: 2\ntags: [seed]\n---\n# T\n\nbody\n"
 	writeTask(t, root, "ready-to-start", "keep.md", seed)
 	path := filepath.Join(root, domain.TasksDir, testutil.TaskID("keep")+"-keep.md")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	if _, _, err := fs.GetTask("keep"); err != nil {
 		t.Fatalf("a file with schema:1 should load: %v", err)
@@ -77,7 +77,7 @@ func TestSchemaVersion_ParsesAndSurvivesEdits(t *testing.T) {
 func TestSchemaVersion_SurvivesBodyEdit(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "keep.md", "---\nschema: 1\nstatus: ready-to-start\ndescription: d\n---\n# T\n\nbody\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	path := filepath.Join(root, domain.TasksDir, testutil.TaskID("keep")+"-keep.md")
 
 	if _, _, err := fs.EditBody("keep", "## Notes\n- x", true, bodyNow, false); err != nil { // append

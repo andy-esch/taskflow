@@ -31,7 +31,7 @@ func TestLocalCompositionSelectsOneObservedDirectOrPointerCorpus(t *testing.T) {
 	testutil.Write(t, filepath.Join(decoy, domain.TasksDir, decoyID+"-decoy.md"),
 		"---\nid: "+decoyID+"\nstatus: ready-to-start\ndescription: decoy\ntags: [test]\n---\n")
 	t.Chdir(decoy) // a wrong-root store must observe distinguishable real records
-	services := LocalBindings().Compose(func() error { return nil })
+	services := testutil.Must(LocalBindings().Compose(func() error { return nil }))
 	for _, entry := range []string{planning, pointer} {
 		opened, err := services.OpenPlanning(entry)
 		cfg, cfgErr := config.Discover(entry)
@@ -71,7 +71,7 @@ func TestLocalBindingReadsAreDeferredUntilTheirHooks(t *testing.T) {
 			return userconfig.Load()
 		},
 	})
-	services := bindings.Compose(func() error { return nil })
+	services := testutil.Must(bindings.Compose(func() error { return nil }))
 	if len(starts) != 0 || userReads != 0 {
 		t.Fatalf("real adapter composition read startup data: starts=%v userReads=%d", starts, userReads)
 	}
@@ -104,7 +104,7 @@ func TestLocalCompositionPropagatesAuthorizationToEveryPersistenceFamily(t *test
 	testutil.Write(t, path, before)
 	sentinel := errors.New("composition authorizer refused")
 	calls := 0
-	services := LocalBindings().Compose(func() error { calls++; return sentinel })
+	services := testutil.Must(LocalBindings().Compose(func() error { calls++; return sentinel }))
 	opened, err := services.OpenPlanning(repo)
 	if err != nil {
 		t.Fatal(err)
@@ -158,7 +158,7 @@ func TestOpenedPlanningRechecksIdentityBeforeThreadApply(t *testing.T) {
 	}
 	taskID := testutil.TaskID("member")
 	testutil.Write(t, filepath.Join(repo, domain.TasksDir, taskID+"-member.md"), "---\nid: "+taskID+"\nstatus: ready-to-start\n---\n")
-	services := LocalBindings().Compose(func() error { return nil })
+	services := testutil.Must(LocalBindings().Compose(func() error { return nil }))
 	opened, err := services.OpenPlanning(repo)
 	if err != nil {
 		t.Fatal(err)

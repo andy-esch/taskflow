@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
@@ -26,7 +27,7 @@ func researchEditRepo(t *testing.T) (*FS, string) {
 	t.Helper()
 	root := t.TempDir()
 	path := researchFixture(t, root, "doc.md", researchEditSeed(t))
-	return NewFS(root), path
+	return testutil.Must(NewFS(root, core.UnrestrictedMutations())), path
 }
 
 func TestEditResearch_ValidEdit_Writes(t *testing.T) {

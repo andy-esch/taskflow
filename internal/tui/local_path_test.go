@@ -38,7 +38,7 @@ func TestTaskLocalActionDoesNotInferPathFromSourceLocation(t *testing.T) {
 			repo := testutil.NewRepo(t)
 			taskID := testutil.TaskID("pathless-tui-task")
 			repo.Task("ready-to-start", "pathless-tui-task.md", "---\nstatus: ready-to-start\n---\n# Pathless\n")
-			fs := store.NewFS(repo.Root)
+			fs := testutil.Must(store.NewFS(repo.Root, core.UnrestrictedMutations()))
 			source.ID = taskID
 			remote := &countingGraphSource{sourceSet: fs.SourceSetID(), records: []core.LoadedRecord[domain.Task]{{
 				Value:  domain.Task{ID: taskID, Slug: "pathless-tui-task", Status: domain.StatusReadyToStart},

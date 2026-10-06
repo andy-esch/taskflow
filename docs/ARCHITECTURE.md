@@ -104,6 +104,17 @@ authorizer plus a fresh identity reader. Thread apply re-discovers from the orig
 apply writes fail closed; existing guarded preflight and durable-prefix recovery checks remain.
 This local wiring does not widen the core workspace ports.
 
+Every persistence constructor requires an explicit `core.MutationPolicy` and returns an error
+for its zero value or a nil guarded callback. `GuardedMutations` invokes the primary adapter's
+callback at **each** mutation (including previews), never at construction; `ReadOnlyMutations`
+allows reads but refuses all mutation APIs before effects or user callbacks. Atlas summary
+stores are explicitly read-only even when their registry adapter can write. Workspace opening
+carries the original policy into each later-opened store. `UnrestrictedMutations` is a deliberate
+choice for trusted callers/writable fixtures, not a production default; it does not bypass locks,
+CAS, or domain rules. Direct zero-value adapters also fail closed. This is a composition guard,
+not a security boundary against arbitrary code. See the
+[policy task](../planning/tasks/6gg7e59cyxxh-require-an-explicit-mutation-authorization-policy-at-persistence-composition.md).
+
 The shared constructor's fitness test permits config types but no direct config API access;
 reader counters alone cannot observe a bypassing `config.Discover` call. A real-opener regression
 repoints a direct/pointer marker between the first observation and construction: metadata, task
@@ -542,9 +553,9 @@ will give these decisions a durable authority without duplicating the current ma
   `safety` annotation (`read-only` or `mutating`). Persistent pre-run binds that
   capability before discovery, and the filesystem/config/space/workspace
   secondary adapters receive a framework-neutral authorization callback that rejects a mutation path
-  reached by a read-only command. `appwiring` always installs it. Adapter constructors
-  still permit omission outside that composition; [explicit-policy hardening](../planning/tasks/6gg7e59cyxxh-require-an-explicit-mutation-authorization-policy-at-persistence-composition.md)
-  tracks that separate compatibility decision. Neither core nor the adapters depend on Cobra.
+  reached by a read-only command. `appwiring` always selects an explicit guarded policy;
+  persistence constructors reject omission/nil guards and summary stores are read-only,
+  as described under explicit composition above. Neither core nor the adapters depend on Cobra.
   `schema --json` publishes
   the same complete runnable surface; coverage tests include hidden, deprecated, and
   framework-generated commands. Safety describes whether a command *can* mutate, not

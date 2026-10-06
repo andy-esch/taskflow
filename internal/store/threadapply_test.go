@@ -18,9 +18,9 @@ import (
 var threadApplyStoreNow = time.Date(2026, time.August, 30, 15, 0, 0, 0, time.UTC)
 
 func threadApplyStore(root string, repoID *string) *FS {
-	return NewFS(root, WithPlanningIdentityReader(func() (string, string, error) {
+	return testutil.Must(NewFS(root, core.UnrestrictedMutations(), WithPlanningIdentityReader(func() (string, string, error) {
 		return root, *repoID, nil
-	}))
+	})))
 }
 
 func storeThreadApplyPlan(threadID string, members []string, dependencies ...core.ThreadApplyDependency) core.ThreadApplyPlan {
@@ -71,7 +71,7 @@ func TestThreadApplyPersistsDependenciesThenThreadAndConverges(t *testing.T) {
 			t.Fatalf("operation was not applied: %+v", operation)
 		}
 	}
-	graph, err := core.LoadTaskGraph(NewFS(root))
+	graph, err := core.LoadTaskGraph(testutil.Must(NewFS(root, core.ReadOnlyMutations())))
 	if err != nil || graph.Health() != core.GraphHealthy {
 		t.Fatalf("graph health=%v err=%v", graph.Health(), err)
 	}
@@ -80,13 +80,13 @@ func TestThreadApplyPersistsDependenciesThenThreadAndConverges(t *testing.T) {
 	if !slices.Contains(first.DependsOn, gateID) || !slices.Contains(second.DependsOn, firstID) {
 		t.Fatalf("dependencies not persisted: first=%v second=%v", first.DependsOn, second.DependsOn)
 	}
-	thread, body, err := NewFS(root).GetThread(threadID)
+	thread, body, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).GetThread(threadID)
 	if err != nil || !slices.Equal(thread.Tasks, plan.Thread.Tasks) || body != plan.Thread.Body {
 		t.Fatalf("thread=%+v body=%q err=%v", thread, body, err)
 	}
-	firstPath, _ := NewFS(root).resolvePath(firstID)
-	secondPath, _ := NewFS(root).resolvePath(secondID)
-	threadPath, err := NewFS(root).ResolveThreadPath(threadID)
+	firstPath, _ := testutil.Must(NewFS(root, core.ReadOnlyMutations())).resolvePath(firstID)
+	secondPath, _ := testutil.Must(NewFS(root, core.ReadOnlyMutations())).resolvePath(secondID)
+	threadPath, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ResolveThreadPath(threadID)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,7 +154,7 @@ func TestThreadApplyInterruptedPrefixRetriesToCompletion(t *testing.T) {
 	if _, statErr := os.Stat(filepath.Join(root, domain.ThreadsDir, threadID+"-bulk-delivery.md")); !os.IsNotExist(statErr) {
 		t.Fatalf("Thread landed before dependencies completed: %v", statErr)
 	}
-	graph, loadErr := core.LoadTaskGraph(NewFS(root))
+	graph, loadErr := core.LoadTaskGraph(testutil.Must(NewFS(root, core.ReadOnlyMutations())))
 	if loadErr != nil || graph.Health() != core.GraphHealthy {
 		t.Fatalf("interrupted graph health=%s err=%v", graph.Health(), loadErr)
 	}
@@ -163,7 +163,7 @@ func TestThreadApplyInterruptedPrefixRetriesToCompletion(t *testing.T) {
 	if err != nil || !resumed.Complete || !resumed.Committed {
 		t.Fatalf("resumed=%+v err=%v", resumed, err)
 	}
-	if _, _, err := NewFS(root).GetThread(threadID); err != nil {
+	if _, _, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).GetThread(threadID); err != nil {
 		t.Fatalf("resumed Thread: %v", err)
 	}
 }
@@ -213,7 +213,7 @@ func TestThreadApplyEveryDurablePrefixRetriesToCompletion(t *testing.T) {
 			if interrupted.Complete != wantComplete {
 				t.Fatalf("complete=%v, want %v; operations=%+v", interrupted.Complete, wantComplete, interrupted.Operations)
 			}
-			graph, loadErr := core.LoadTaskGraph(NewFS(root))
+			graph, loadErr := core.LoadTaskGraph(testutil.Must(NewFS(root, core.ReadOnlyMutations())))
 			if loadErr != nil || graph.Health() != core.GraphHealthy {
 				t.Fatalf("prefix graph health=%s err=%v", graph.Health(), loadErr)
 			}
@@ -223,7 +223,7 @@ func TestThreadApplyEveryDurablePrefixRetriesToCompletion(t *testing.T) {
 			if err != nil || !resumed.Complete {
 				t.Fatalf("resumed=%+v err=%v", resumed, err)
 			}
-			if _, _, err := NewFS(root).GetThread(threadID); err != nil {
+			if _, _, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).GetThread(threadID); err != nil {
 				t.Fatalf("resumed Thread: %v", err)
 			}
 		})
@@ -261,9 +261,9 @@ func TestThreadApplyIdentityAndDryRunFailClosed(t *testing.T) {
 		t.Fatalf("missing identity error=%v", err)
 	}
 	repoID = "planning"
-	wrongRoot := NewFS(root, WithPlanningIdentityReader(func() (string, string, error) {
+	wrongRoot := testutil.Must(NewFS(root, core.UnrestrictedMutations(), WithPlanningIdentityReader(func() (string, string, error) {
 		return t.TempDir(), repoID, nil
-	}))
+	})))
 	if _, err := applyStoredThreadPlan(wrongRoot, plan, false); !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "guarded root") {
 		t.Fatalf("wrong root error=%v", err)
 	}
@@ -314,7 +314,7 @@ func TestThreadApplyWholeSourceCASRejectsRawTaskEditBeforeFirstWrite(t *testing.
 	if !errors.Is(err, domain.ErrConflict) || result.Committed {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
-	graph, loadErr := core.LoadTaskGraph(NewFS(root))
+	graph, loadErr := core.LoadTaskGraph(testutil.Must(NewFS(root, core.ReadOnlyMutations())))
 	if loadErr != nil {
 		t.Fatal(loadErr)
 	}
@@ -343,7 +343,7 @@ func TestThreadApplyWholeSourceCASRejectsRawThreadEditBeforeFirstWrite(t *testin
 	if !errors.Is(err, domain.ErrConflict) || result.Committed {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
-	if _, _, err := NewFS(root).GetThread(plan.Thread.ID); !errors.Is(err, domain.ErrNotFound) {
+	if _, _, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).GetThread(plan.Thread.ID); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("planned Thread landed despite whole-source Thread CAS conflict: %v", err)
 	}
 }
@@ -367,7 +367,7 @@ func TestThreadApplyFailureAfterFinalCreateReportsCompleteCommit(t *testing.T) {
 	if err == nil || !result.Complete || !result.Committed {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
-	if _, _, readErr := NewFS(root).GetThread(threadID); readErr != nil {
+	if _, _, readErr := testutil.Must(NewFS(root, core.ReadOnlyMutations())).GetThread(threadID); readErr != nil {
 		t.Fatalf("final Thread was not durable: %v", readErr)
 	}
 }
@@ -488,7 +488,7 @@ func TestThreadApplySerializesWithDirectDependencyMutation(t *testing.T) {
 
 	directDone := make(chan error, 1)
 	go func() {
-		_, err := NewFS(root).MutateTaskGraph(threadApplyStoreNow, false, addDependencyPlan(cID, bID))
+		_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateTaskGraph(threadApplyStoreNow, false, addDependencyPlan(cID, bID))
 		directDone <- err
 	}()
 	select {
@@ -504,7 +504,7 @@ func TestThreadApplySerializesWithDirectDependencyMutation(t *testing.T) {
 	if err := <-directDone; err != nil {
 		t.Fatal(err)
 	}
-	graph, err := core.LoadTaskGraph(NewFS(root))
+	graph, err := core.LoadTaskGraph(testutil.Must(NewFS(root, core.UnrestrictedMutations())))
 	if err != nil || graph.Health() != core.GraphHealthy {
 		t.Fatalf("graph health=%s err=%v", graph.Health(), err)
 	}
@@ -541,7 +541,7 @@ func TestThreadApplyRawEditAfterDurablePrefixIsReportedAndResumable(t *testing.T
 			return
 		}
 		testHookBeforeThreadApplyWrite = nil
-		path, err := NewFS(root).resolvePath(id)
+		path, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).resolvePath(id)
 		if err != nil {
 			t.Fatal(err)
 		}

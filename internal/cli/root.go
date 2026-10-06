@@ -51,6 +51,9 @@ type App struct {
 	User         *core.UserConfiguration
 	bindings     ports.Bindings
 	openPlanning func(string) (ports.Planning, error)
+	// compositionErr prevents operational commands from using a partial bundle.
+	// Metadata-only commands remain usable to diagnose an invalid composition.
+	compositionErr error
 	// userCfgErr is deferred, not printed at load time: the warning needs the Style
 	// (built at the end of setStyle) AND must be suppressed on the completion path,
 	// which only the command's own hook knows about. warnPresentation emits it.
@@ -271,10 +274,13 @@ func newRootCmd(in io.Reader, out, errOut io.Writer, bindings ports.Bindings) (*
 		return app.Svc, nil
 	}
 	if bindings.Compose != nil {
-		services := bindings.Compose(app.authorizeMutation)
-		app.ConfigSvc, app.SpaceSvc = services.Configuration, services.Spaces
-		app.SpaceOverviewSvc, app.WorkspaceSvc = services.Overview, services.Workspaces
-		app.openPlanning = services.OpenPlanning
+		services, err := bindings.Compose(app.authorizeMutation)
+		app.compositionErr = err
+		if err == nil {
+			app.ConfigSvc, app.SpaceSvc = services.Configuration, services.Spaces
+			app.SpaceOverviewSvc, app.WorkspaceSvc = services.Overview, services.Workspaces
+			app.openPlanning = services.OpenPlanning
+		}
 	}
 
 	root := &cobra.Command{

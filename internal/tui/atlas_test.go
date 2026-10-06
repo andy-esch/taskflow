@@ -98,14 +98,14 @@ func atlasTestModel(t *testing.T) (Model, *atlasTestAdapter, string, string) {
 			{ID: "beta", Path: "~/git/beta", Checkout: beta, Root: beta, PlanningID: "planning-beta", Role: core.SpaceRoleDirect, State: core.SpaceStateOK},
 		},
 		trees: map[string]*store.FS{
-			alpha: store.NewFS(alpha), beta: store.NewFS(beta),
+			alpha: testutil.Must(store.NewFS(alpha, core.UnrestrictedMutations())), beta: testutil.Must(store.NewFS(beta, core.UnrestrictedMutations())),
 		},
 		openErrs:    make(map[string]error),
 		summaryErrs: make(map[string]error),
 	}
 	// The pointer entry resolves to alpha's planning store while retaining its own
 	// selected checkout address.
-	adapter.trees[alpha+"-impl"] = store.NewFS(alpha)
+	adapter.trees[alpha+"-impl"] = testutil.Must(store.NewFS(alpha, core.UnrestrictedMutations()))
 	registry := core.NewSpaceRegistryService(adapter)
 	// The atlas-landing shape: `ui` outside any planning repo, with alpha seeded behind
 	// the atlas as the space `esc` falls back into.

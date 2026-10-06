@@ -36,7 +36,7 @@ func newTestChromeTheme(args []string) design.Theme {
 func TestCommandTreeConstructionDoesNotReadInvocationData(t *testing.T) {
 	reads, compositions := 0, 0
 	bindings := ports.Bindings{
-		Compose: func(authorize func() error) ports.Services {
+		Compose: func(authorize func() error) (ports.Services, error) {
 			compositions++
 			if err := authorize(); err == nil {
 				t.Fatal("new command tree authorized a mutation before binding safety")
@@ -44,7 +44,7 @@ func TestCommandTreeConstructionDoesNotReadInvocationData(t *testing.T) {
 			return ports.Services{OpenPlanning: func(string) (ports.Planning, error) {
 				reads++
 				return ports.Planning{}, errors.New("must not open during construction")
-			}}
+			}}, nil
 		},
 		ReadUser: func() (core.UserConfiguration, error) {
 			reads++
@@ -89,7 +89,7 @@ func TestInjectedPlanningOpenerRunsAfterCompletionFlagsAndSafety(t *testing.T) {
 	svc := core.MustNewService(nil, core.WithCompletionSource(fake))
 	var stdout, stderr bytes.Buffer
 	var starts []string
-	bindings := ports.Bindings{Compose: func(authorize func() error) ports.Services {
+	bindings := ports.Bindings{Compose: func(authorize func() error) (ports.Services, error) {
 		return ports.Services{OpenPlanning: func(start string) (ports.Planning, error) {
 			starts = append(starts, start)
 			if err := authorize(); err == nil || !strings.Contains(err.Error(), "read-only command") {
@@ -99,7 +99,7 @@ func TestInjectedPlanningOpenerRunsAfterCompletionFlagsAndSafety(t *testing.T) {
 				Repository: core.RepositoryConfiguration{PlanningRoot: "opaque:corpus", ThemeName: "neon"},
 				Service:    svc,
 			}, nil
-		}}
+		}}, nil
 	}}
 	root, app := newRootCmd(strings.NewReader(""), &stdout, &stderr, bindings)
 	root.SetArgs([]string{"__complete", "-C", "opaque:entry", "task", "show", "por"})
@@ -113,13 +113,13 @@ func TestInjectedPlanningOpenerRunsAfterCompletionFlagsAndSafety(t *testing.T) {
 
 func TestMissingNamedServicesFailWithoutPersistenceFallback(t *testing.T) {
 	t.Chdir(setupRepo(t))
-	bindings := ports.Bindings{Compose: func(func() error) ports.Services {
+	bindings := ports.Bindings{Compose: func(func() error) (ports.Services, error) {
 		return ports.Services{OpenPlanning: func(string) (ports.Planning, error) {
 			return ports.Planning{
 				Repository: core.RepositoryConfiguration{PlanningRoot: "opaque:corpus"},
 				Service:    core.MustNewService(nil),
 			}, nil
-		}}
+		}}, nil
 	}}
 	for _, args := range [][]string{
 		{"config"}, {"config", "show"}, {"config", "migrate"}, {"config", "doctor"},
@@ -144,14 +144,14 @@ func TestFailedPlanningOpenerDoesNotPublishPartialInvocation(t *testing.T) {
 	sentinel := errors.New("explicit target failed")
 	for _, failed := range []bool{false, true} {
 		t.Run(map[bool]string{false: "incomplete", true: "failed"}[failed], func(t *testing.T) {
-			bindings := ports.Bindings{Compose: func(func() error) ports.Services {
+			bindings := ports.Bindings{Compose: func(func() error) (ports.Services, error) {
 				return ports.Services{OpenPlanning: func(string) (ports.Planning, error) {
 					partial := ports.Planning{Repository: core.RepositoryConfiguration{PlanningRoot: "partial"}}
 					if failed {
 						return partial, sentinel
 					}
 					return partial, nil
-				}}
+				}}, nil
 			}}
 			_, app := newRootCmd(strings.NewReader(""), io.Discard, io.Discard, bindings)
 			err := app.resolveFrom("opaque:entry")
@@ -175,11 +175,11 @@ func TestFailedPlanningOpenerCommandsDoNotFallbackToPopulatedCWD(t *testing.T) {
 	for _, complete := range []bool{false, true} {
 		t.Run(map[bool]string{false: "show", true: "completion"}[complete], func(t *testing.T) {
 			calls := 0
-			bindings := ports.Bindings{Compose: func(func() error) ports.Services {
+			bindings := ports.Bindings{Compose: func(func() error) (ports.Services, error) {
 				return ports.Services{OpenPlanning: func(string) (ports.Planning, error) {
 					calls++
 					return ports.Planning{}, sentinel
-				}}
+				}}, nil
 			}}
 			var stdout, stderr bytes.Buffer
 			root, app := newRootCmd(strings.NewReader(""), &stdout, &stderr, bindings)

@@ -46,7 +46,7 @@ func TestMutateTaskLifecycleEnforcesEligibilityAndPersistsForcedExplanation(t *t
 	targetID := testutil.TaskID("target")
 	writeGraphMutationTask(t, root, "prerequisite", domain.StatusNextUp, nil, "")
 	targetPath := writeGraphMutationTask(t, root, "target", domain.StatusReadyToStart, []string{prerequisiteID}, "")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	_, err := fs.MutateTaskLifecycle(lifecycleMutationNow, false,
 		lifecyclePlan("target", domain.StatusInProgress, core.TaskLifecycleOverrideNone))
@@ -84,7 +84,7 @@ func TestMutateTaskLifecycleDryRunReturnsWouldBeStateWithoutWriting(t *testing.T
 	path := writeGraphMutationTask(t, root, "candidate", domain.StatusReadyToStart, nil, "")
 	before, _ := os.ReadFile(path)
 
-	result, err := NewFS(root).MutateTaskLifecycle(lifecycleMutationNow, true,
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateTaskLifecycle(lifecycleMutationNow, true,
 		lifecyclePlan("candidate", domain.StatusInProgress, core.TaskLifecycleOverrideNone))
 	if err != nil {
 		t.Fatal(err)
@@ -105,7 +105,7 @@ func TestMutateTaskLifecycleCreateAndStartIsOneGuardedOperation(t *testing.T) {
 		Description: "created and started", Effort: "1h", Tier: 1, Priority: "high",
 		Autonomy: 2, Tags: []string{"graph"}, Created: "2026-08-28",
 	}
-	result, err := NewFS(root).MutateTaskLifecycle(lifecycleMutationNow, false,
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateTaskLifecycle(lifecycleMutationNow, false,
 		func(*core.TaskGraph) (core.TaskLifecyclePlan, error) {
 			return core.TaskLifecyclePlan{To: domain.StatusInProgress, Create: &core.TaskLifecycleCreation{
 				Task: task, Body: "# Created\n",
@@ -120,7 +120,7 @@ func TestMutateTaskLifecycleCreateAndStartIsOneGuardedOperation(t *testing.T) {
 	if result.Local.PlannedPath == "" || result.Local.CommittedPath != result.Local.PlannedPath {
 		t.Fatalf("create-and-start local outcome = %+v", result.Local)
 	}
-	reloaded, _, err := NewFS(root).GetTask(taskID)
+	reloaded, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).GetTask(taskID)
 	if err != nil || reloaded.Status != domain.StatusInProgress || reloaded.StartedAt != "2026-08-28" {
 		t.Fatalf("reloaded create-and-start = %+v err=%v", reloaded, err)
 	}
@@ -132,7 +132,7 @@ func TestMutateTaskLifecycleCreateAndStartDryRunKeepsOnlyPlannedPath(t *testing.
 		ID: testutil.TaskID("preview-created"), Slug: "preview-created", Status: domain.StatusReadyToStart,
 		Description: "preview", Tags: []string{"graph"}, Created: "2026-08-28",
 	}
-	result, err := NewFS(root).MutateTaskLifecycle(lifecycleMutationNow, true,
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateTaskLifecycle(lifecycleMutationNow, true,
 		func(*core.TaskGraph) (core.TaskLifecyclePlan, error) {
 			return core.TaskLifecyclePlan{To: domain.StatusInProgress, Create: &core.TaskLifecycleCreation{Task: task, Body: "# Preview\n"}}, nil
 		})
@@ -162,7 +162,7 @@ func TestMutateTaskLifecycleRejectsRawPrerequisiteRaceByWholeGraphCAS(t *testing
 	}
 	t.Cleanup(func() { testHookBeforeLifecycleVerify = nil })
 
-	_, err := NewFS(root).MutateTaskLifecycle(lifecycleMutationNow, false,
+	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateTaskLifecycle(lifecycleMutationNow, false,
 		lifecyclePlan("target", domain.StatusInProgress, core.TaskLifecycleOverrideNone))
 	if !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "graph changed") {
 		t.Fatalf("raw prerequisite race = %v", err)
@@ -209,7 +209,7 @@ func TestMutateTaskLifecycleRejectsRawDependencyRacesDefaultAndForced(t *testing
 			}
 			t.Cleanup(func() { testHookBeforeLifecycleVerify = nil })
 
-			_, err := NewFS(root).MutateTaskLifecycle(lifecycleMutationNow, false,
+			_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateTaskLifecycle(lifecycleMutationNow, false,
 				lifecyclePlan("target", domain.StatusInProgress, tc.override))
 			if !errors.Is(err, domain.ErrConflict) {
 				t.Fatalf("dependency race = %v", err)
@@ -241,7 +241,7 @@ func TestMutateTaskLifecycleRejectsTargetRaceAtImmediateCAS(t *testing.T) {
 	}
 	t.Cleanup(func() { testHookBeforeLifecycleWrite = nil })
 
-	_, err := NewFS(root).MutateTaskLifecycle(lifecycleMutationNow, false,
+	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateTaskLifecycle(lifecycleMutationNow, false,
 		lifecyclePlan("target", domain.StatusInProgress, core.TaskLifecycleOverrideNone))
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("target race = %v", err)
@@ -286,7 +286,7 @@ func TestCooperatingDependencyMutationsSerializeBeforeStartAuthorization(t *test
 			}
 
 			dependencyDone := make(chan error, 1)
-			dependencyService := core.MustNewService(NewFS(root), core.WithRetry(0, func(int) {}))
+			dependencyService := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())), core.WithRetry(0, func(int) {}))
 			go func() {
 				var err error
 				if tc.operation == core.DependencyAdd {
@@ -303,7 +303,7 @@ func TestCooperatingDependencyMutationsSerializeBeforeStartAuthorization(t *test
 				err     error
 			}
 			startDone := make(chan lifecycleOutcome, 1)
-			startService := core.MustNewService(NewFS(root), core.WithRetry(0, func(int) {}))
+			startService := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())), core.WithRetry(0, func(int) {}))
 			go func() {
 				receipt, err := startService.Move("target", domain.StatusInProgress, false, tc.override)
 				startDone <- lifecycleOutcome{receipt: receipt, err: err}
@@ -355,7 +355,7 @@ func TestCooperatingPrerequisiteReopenSerializesBeforeStartAuthorization(t *test
 
 			reopenDone := make(chan error, 1)
 			go func() {
-				_, err := core.MustNewService(NewFS(root), core.WithRetry(0, func(int) {})).Move(
+				_, err := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())), core.WithRetry(0, func(int) {})).Move(
 					"prerequisite", domain.StatusReadyToStart, false, core.TaskLifecycleOverrideNone)
 				reopenDone <- err
 			}()
@@ -367,7 +367,7 @@ func TestCooperatingPrerequisiteReopenSerializesBeforeStartAuthorization(t *test
 			}
 			startDone := make(chan lifecycleOutcome, 1)
 			go func() {
-				receipt, err := core.MustNewService(NewFS(root), core.WithRetry(0, func(int) {})).Move(
+				receipt, err := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())), core.WithRetry(0, func(int) {})).Move(
 					"target", domain.StatusInProgress, false, override)
 				startDone <- lifecycleOutcome{receipt: receipt, err: err}
 			}()
@@ -397,7 +397,7 @@ func TestCooperatingPrerequisiteReopenSerializesBeforeStartAuthorization(t *test
 func TestTaskLifecyclePlannerCannotReenterStore(t *testing.T) {
 	root := t.TempDir()
 	writeGraphMutationTask(t, root, "candidate", domain.StatusReadyToStart, nil, "")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	_, err := fs.MutateTaskLifecycle(lifecycleMutationNow, false, func(*core.TaskGraph) (core.TaskLifecyclePlan, error) {
 		_, _, err := fs.GetTask("candidate")
 		return core.TaskLifecyclePlan{}, err
@@ -416,7 +416,7 @@ func TestTaskLifecyclePlannerCannotReenterStore(t *testing.T) {
 func TestMutateTaskLifecycleAttributesReleaseFailureAfterCommit(t *testing.T) {
 	root := t.TempDir()
 	targetPath := writeGraphMutationTask(t, root, "target", domain.StatusReadyToStart, nil, "")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	original := testHookRepositoryUnlockError
 	t.Cleanup(func() { testHookRepositoryUnlockError = original })
 	testHookRepositoryUnlockError = func() error { return errors.New("injected unlock failure") }
@@ -442,7 +442,7 @@ func TestMutateTaskLifecycleAttributesReleaseFailureAfterCommit(t *testing.T) {
 func TestMutateTaskLifecycleFailsClosedOnBrokenGraphEvenWhenForced(t *testing.T) {
 	root := t.TempDir()
 	writeGraphMutationTask(t, root, "target", domain.StatusReadyToStart, []string{testutil.TaskID("missing")}, "")
-	_, err := NewFS(root).MutateTaskLifecycle(lifecycleMutationNow, false,
+	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateTaskLifecycle(lifecycleMutationNow, false,
 		lifecyclePlan("target", domain.StatusInProgress, core.TaskLifecycleOverrideDependencyGate))
 	if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), "repository task graph is broken") {
 		t.Fatalf("forced start on broken graph = %v", err)

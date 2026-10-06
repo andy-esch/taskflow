@@ -16,7 +16,7 @@ func TestResolveThreadPathRemainsParseFreeForMalformedDocuments(t *testing.T) {
 	threadID := testutil.TaskID("malformed-thread")
 	path := filepath.Join(root, domain.ThreadsDir, threadID+"-malformed-thread.md")
 	testutil.Write(t, path, "---\nid: [unterminated\n---\n# Repair me\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.ReadOnlyMutations()))
 
 	for _, ref := range []string{threadID, "malformed-thread"} {
 		got, err := fs.ResolveThreadPath(ref)
@@ -31,7 +31,7 @@ func TestResolveThreadPathRemainsParseFreeForMalformedDocuments(t *testing.T) {
 
 func TestEntityPathsRemainParseFreeForMalformedDocuments(t *testing.T) {
 	root := t.TempDir()
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.ReadOnlyMutations()))
 	broken := "---\nid: [unterminated\n---\n# Repair me\n"
 	for _, tc := range []struct {
 		name, path, ref string
@@ -69,7 +69,7 @@ func TestResolveThreadPathPreservesFilenameIdentityAndAmbiguityRules(t *testing.
 	second := filepath.Join(root, domain.ThreadsDir, secondID+"-repair-beta.md")
 	testutil.Write(t, first, "---\nid: "+frontmatterID+"\nstatus: unstarted\n---\n# Drifted\n")
 	testutil.Write(t, second, "not valid Thread frontmatter\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.ReadOnlyMutations()))
 
 	got, err := fs.ResolveThreadPath(firstID)
 	if err != nil || got != first {
@@ -94,7 +94,7 @@ func TestResolveThreadPathPreservesSymlinkedPlanningRoot(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got, err := NewFS(linkedRoot).ResolveThreadPath("symlink-thread")
+	got, err := testutil.Must(NewFS(linkedRoot, core.ReadOnlyMutations())).ResolveThreadPath("symlink-thread")
 	want := filepath.Join(linkedRoot, domain.ThreadsDir, threadID+"-symlink-thread.md")
 	if err != nil || got != want {
 		t.Fatalf("symlink path = %q, %v; want %q", got, err, want)
@@ -109,7 +109,7 @@ func TestReadThreadsRecoversFilesystemProblemIdentityAtAdapterBoundary(t *testin
 	testutil.Write(t, identifiedPath, "---\nid: [unterminated\n---\n")
 	testutil.Write(t, unidentifiedPath, "---\nid: [unterminated\n---\n")
 
-	read, err := NewFS(root).ReadThreads()
+	read, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ReadThreads()
 	if err != nil {
 		t.Fatal(err)
 	}

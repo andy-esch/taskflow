@@ -11,9 +11,9 @@ import (
 func TestFilesystemSourceSetIsInstanceOwnedNotDerivedFromRootOrRecordID(t *testing.T) {
 	firstRepo := testutil.NewRepo(t).Task("ready-to-start", "same.md", "---\ndescription: first corpus\n---\n# same\n")
 	secondRepo := testutil.NewRepo(t).Task("ready-to-start", "same.md", "---\ndescription: second corpus\n---\n# same\n")
-	first := NewFS(firstRepo.Root)
-	second := NewFS(secondRepo.Root)
-	sameRootNewInstance := NewFS(firstRepo.Root)
+	first := testutil.Must(NewFS(firstRepo.Root, core.ReadOnlyMutations()))
+	second := testutil.Must(NewFS(secondRepo.Root, core.ReadOnlyMutations()))
+	sameRootNewInstance := testutil.Must(NewFS(firstRepo.Root, core.ReadOnlyMutations()))
 	if first.SourceSetID().IsZero() || first.SourceSetID() == second.SourceSetID() ||
 		first.SourceSetID() == sameRootNewInstance.SourceSetID() {
 		t.Fatal("filesystem source-set ID must be unique per adapter instance, not inferred from root")
@@ -64,11 +64,11 @@ func TestFilesystemSourceSetIsInstanceOwnedNotDerivedFromRootOrRecordID(t *testi
 			t.Fatalf("same-root entity path without matching source set = %v, %v", svc, err)
 		}
 	}
-	bound := NewFS(firstRepo.Root, WithSourceSetID(first.SourceSetID()))
+	bound := testutil.Must(NewFS(firstRepo.Root, core.ReadOnlyMutations(), WithSourceSetID(first.SourceSetID())))
 	if svc, err := core.NewService(first, core.WithThreadPathSource(bound)); err != nil || svc == nil {
 		t.Fatalf("explicitly bound same-corpus pairing = %v, %v", svc, err)
 	}
-	if svc, err := core.NewService(NewFS(firstRepo.Root, WithSourceSetID(core.SourceSetID{}))); svc != nil ||
+	if svc, err := core.NewService(testutil.Must(NewFS(firstRepo.Root, core.ReadOnlyMutations(), WithSourceSetID(core.SourceSetID{})))); svc != nil ||
 		!errors.Is(err, core.ErrIncompatibleCapabilities) {
 		t.Fatalf("empty explicitly supplied token = %v, %v", svc, err)
 	}

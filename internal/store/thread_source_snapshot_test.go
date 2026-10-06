@@ -20,7 +20,7 @@ func TestReadThreadsVersionsExactUnreadableSourceBytes(t *testing.T) {
 	firstContent := "---\nid: [unterminated\n---\n# First body\n"
 	secondContent := "---\nid: [unterminated\n---\n# Different body\n"
 	testutil.Write(t, path, firstContent)
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.ReadOnlyMutations()))
 
 	first, err := fs.ReadThreads()
 	if err != nil || len(first.Records) != 0 || len(first.Problems) != 1 {
@@ -70,7 +70,7 @@ func TestReadThreadsKeepsReadableRevisionOutsideSemanticValue(t *testing.T) {
 	path := filepath.Join(root, domain.ThreadsDir, id+"-readable-thread-version.md")
 	content := "---\nschema: 1\nid: " + id + "\nstatus: unstarted\ndescription: Keep revision evidence private\ngoal: Prove the adapter boundary\ncreated: \"2026-09-28\"\ntasks: []\n---\n# Thread\n"
 	testutil.Write(t, path, content)
-	read, err := NewFS(root).ReadThreads()
+	read, err := testutil.Must(NewFS(root, core.ReadOnlyMutations())).ReadThreads()
 	if err != nil || len(read.Records) != 1 || len(read.Problems) != 0 {
 		t.Fatalf("read=%+v err=%v", read, err)
 	}

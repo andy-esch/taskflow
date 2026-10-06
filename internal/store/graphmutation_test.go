@@ -60,7 +60,7 @@ func TestMutateTaskGraphOwnsSemanticReadValidateWriteBoundary(t *testing.T) {
 	writeGraphMutationTask(t, root, "alpha", domain.StatusCompleted, nil, "")
 	bPath := writeGraphMutationTask(t, root, "beta", domain.StatusReadyToStart, nil, "custom_key: keep-me # preserve this comment\n")
 	writeGraphMutationTask(t, root, "charlie", domain.StatusCompleted, nil, "")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	result, err := fs.MutateTaskGraph(graphMutationNow, false, func(graph *core.TaskGraph) (core.TaskGraphMutationPlan, error) {
 		if graph.Health() != core.GraphHealthy || len(graph.TaskIDs()) != 3 {
@@ -105,7 +105,7 @@ func TestMutateTaskGraphDryRunValidatesWithoutWriting(t *testing.T) {
 	bPath := writeGraphMutationTask(t, root, "beta", domain.StatusReadyToStart, nil, "")
 	before, _ := os.ReadFile(bPath)
 
-	result, err := NewFS(root).MutateTaskGraph(graphMutationNow, true, addDependencyPlan(bID, aID))
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateTaskGraph(graphMutationNow, true, addDependencyPlan(bID, aID))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -121,7 +121,7 @@ func TestMutateTaskGraphDryRunValidatesWithoutWriting(t *testing.T) {
 func TestMaterializeTaskGraphPlanReportsTaskAbsentFromSnapshotAsNotFound(t *testing.T) {
 	root := t.TempDir()
 	writeGraphMutationTask(t, root, "alpha", domain.StatusReadyToStart, nil, "")
-	graph, err := core.LoadTaskGraph(NewFS(root))
+	graph, err := core.LoadTaskGraph(testutil.Must(NewFS(root, core.ReadOnlyMutations())))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -131,7 +131,7 @@ func TestMaterializeTaskGraphPlanReportsTaskAbsentFromSnapshotAsNotFound(t *test
 	// its empty snapshot path as a concurrent path change.
 	newcomerID := testutil.TaskID("newcomer")
 	writeGraphMutationTask(t, root, "newcomer", domain.StatusReadyToStart, nil, "")
-	_, err = NewFS(root).materializeTaskGraphPlan(graph, core.TaskGraphMutationPlan{
+	_, err = testutil.Must(NewFS(root, core.ReadOnlyMutations())).materializeTaskGraphPlan(graph, core.TaskGraphMutationPlan{
 		TaskWrites: []core.TaskDependencyWrite{{TaskID: newcomerID}},
 	}, graphMutationNow)
 	if !errors.Is(err, domain.ErrNotFound) || errors.Is(err, domain.ErrConflict) {
@@ -155,7 +155,7 @@ func TestMutateTaskGraphConcurrentOppositeEdgesCannotCommitCycle(t *testing.T) {
 		go func() {
 			ready.Done()
 			<-start
-			_, err := NewFS(root).MutateTaskGraph(graphMutationNow, false, planner)
+			_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateTaskGraph(graphMutationNow, false, planner)
 			errs <- err
 		}()
 	}
@@ -181,7 +181,7 @@ func TestMutateTaskGraphConcurrentOppositeEdgesCannotCommitCycle(t *testing.T) {
 	if succeeded != 1 || rejected != 1 {
 		t.Fatalf("succeeded=%d rejected=%d", succeeded, rejected)
 	}
-	graph, err := core.LoadTaskGraph(NewFS(root))
+	graph, err := core.LoadTaskGraph(testutil.Must(NewFS(root, core.UnrestrictedMutations())))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -203,7 +203,7 @@ func TestMutateTaskGraphAllowsOneGuardedLegacyMigrationToHealthy(t *testing.T) {
 	aID, bID := testutil.TaskID("alpha"), testutil.TaskID("beta")
 	writeGraphMutationTask(t, root, "alpha", domain.StatusCompleted, nil, "")
 	writeGraphMutationTask(t, root, "beta", domain.StatusReadyToStart, nil, "blocked_by: [alpha]\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	_, err := fs.MutateTaskGraph(graphMutationNow, false, func(graph *core.TaskGraph) (core.TaskGraphMutationPlan, error) {
 		if graph.Health() != core.GraphDegraded {
@@ -231,7 +231,7 @@ func TestMutateTaskGraphBrokenSnapshotFailsBeforePlanner(t *testing.T) {
 	writeGraphMutationTask(t, root, "alpha", domain.StatusReadyToStart, []string{bID}, "")
 	writeGraphMutationTask(t, root, "beta", domain.StatusReadyToStart, []string{aID}, "")
 	called := false
-	_, err := NewFS(root).MutateTaskGraph(graphMutationNow, false, func(*core.TaskGraph) (core.TaskGraphMutationPlan, error) {
+	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateTaskGraph(graphMutationNow, false, func(*core.TaskGraph) (core.TaskGraphMutationPlan, error) {
 		called = true
 		return core.TaskGraphMutationPlan{}, nil
 	})
@@ -247,7 +247,7 @@ func TestUnreadableTaskSourceRevisionDefeatsStaleGraphPrewriteCAS(t *testing.T) 
 	root := t.TempDir()
 	path, firstContent := testutil.TaskFixture(root, "next-up", "unreadable.md", "# no frontmatter\n")
 	testutil.Write(t, path, firstContent)
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.ReadOnlyMutations()))
 
 	firstRead, err := fs.ReadTaskGraph()
 	if err != nil {
@@ -300,7 +300,7 @@ func TestMutateTaskGraphRejectsPlannerStoreCallsAndNestedMutationWithoutHanging(
 	root := t.TempDir()
 	aID := testutil.TaskID("alpha")
 	writeGraphMutationTask(t, root, "alpha", domain.StatusReadyToStart, nil, "")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	done := make(chan error, 1)
 	go func() {
 		_, err := fs.MutateTaskGraph(graphMutationNow, false, func(*core.TaskGraph) (core.TaskGraphMutationPlan, error) {
@@ -315,7 +315,7 @@ func TestMutateTaskGraphRejectsPlannerStoreCallsAndNestedMutationWithoutHanging(
 			}); !errors.Is(err, domain.ErrConflict) {
 				return core.TaskGraphMutationPlan{}, fmt.Errorf("nested graph mutation error = %v", err)
 			}
-			second := NewFS(root)
+			second := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 			if _, _, err := second.GetTask(aID); !errors.Is(err, domain.ErrConflict) {
 				return core.TaskGraphMutationPlan{}, fmt.Errorf("second-store nested read error = %v", err)
 			}
@@ -349,7 +349,7 @@ func TestMutateTaskGraphRejectsConcurrentStoreAccessAtRepositoryScope(t *testing
 	root := t.TempDir()
 	aID := testutil.TaskID("alpha")
 	writeGraphMutationTask(t, root, "alpha", domain.StatusReadyToStart, nil, "")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	started := make(chan struct{})
 	release := make(chan struct{})
 	done := make(chan error, 1)
@@ -362,7 +362,7 @@ func TestMutateTaskGraphRejectsConcurrentStoreAccessAtRepositoryScope(t *testing
 		done <- err
 	}()
 	<-started
-	_, _, err := NewFS(root).GetTask(aID)
+	_, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).GetTask(aID)
 	if !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "concurrent caller") {
 		t.Fatalf("concurrent Store access error = %v", err)
 	}
@@ -376,7 +376,7 @@ func TestMutateTaskGraphPlannerPanicReleasesGuard(t *testing.T) {
 	root := t.TempDir()
 	aID := testutil.TaskID("alpha")
 	writeGraphMutationTask(t, root, "alpha", domain.StatusReadyToStart, nil, "")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	func() {
 		defer func() {
 			if recover() == nil {
@@ -395,7 +395,7 @@ func TestMutateTaskGraphPlannerPanicReleasesGuard(t *testing.T) {
 func TestMutateTaskGraphAttributesReleaseFailureAfterUnlocking(t *testing.T) {
 	root := t.TempDir()
 	writeGraphMutationTask(t, root, "alpha", domain.StatusReadyToStart, nil, "")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	original := testHookRepositoryUnlockError
 	defer func() { testHookRepositoryUnlockError = original }()
 	testHookRepositoryUnlockError = func() error { return errors.New("injected unlock failure") }
@@ -418,7 +418,7 @@ func TestMutateTaskGraphCASRejectsRawEditBeforeApply(t *testing.T) {
 	aID, bID := testutil.TaskID("alpha"), testutil.TaskID("beta")
 	aPath := writeGraphMutationTask(t, root, "alpha", domain.StatusCompleted, nil, "")
 	bPath := writeGraphMutationTask(t, root, "beta", domain.StatusReadyToStart, nil, "")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	original := testHookBeforeGraphVerify
 	defer func() { testHookBeforeGraphVerify = original }()
 	testHookBeforeGraphVerify = func() {
@@ -445,7 +445,7 @@ func TestMutateTaskGraphReturnsDurablePrefixAndRerunConverges(t *testing.T) {
 	writeGraphMutationTask(t, root, "alpha", domain.StatusCompleted, nil, "")
 	writeGraphMutationTask(t, root, "beta", domain.StatusReadyToStart, nil, "")
 	writeGraphMutationTask(t, root, "charlie", domain.StatusReadyToStart, nil, "")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	planner := func(*core.TaskGraph) (core.TaskGraphMutationPlan, error) {
 		return core.TaskGraphMutationPlan{TaskWrites: []core.TaskDependencyWrite{
 			{TaskID: bID, DependsOn: []string{aID}},
@@ -488,7 +488,7 @@ func TestMutateTaskGraphPerFileCASPreservesRawEditAfterDurablePrefix(t *testing.
 	writeGraphMutationTask(t, root, "alpha", domain.StatusCompleted, nil, "")
 	writeGraphMutationTask(t, root, "beta", domain.StatusReadyToStart, nil, "")
 	cPath := writeGraphMutationTask(t, root, "charlie", domain.StatusReadyToStart, nil, "")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	original := testHookBeforeGraphWrite
 	defer func() { testHookBeforeGraphWrite = original }()
 	testHookBeforeGraphWrite = func(taskID string) {
@@ -528,7 +528,7 @@ func TestMutateTaskGraphRejectsBrokenIntermediatePrefixBeforeWriting(t *testing.
 	firstBefore, _ := os.ReadFile(firstPath)
 	secondBefore, _ := os.ReadFile(secondPath)
 
-	_, err := NewFS(root).MutateTaskGraph(graphMutationNow, false, func(*core.TaskGraph) (core.TaskGraphMutationPlan, error) {
+	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateTaskGraph(graphMutationNow, false, func(*core.TaskGraph) (core.TaskGraphMutationPlan, error) {
 		// Final state reverses the edge and is acyclic. Task-ID ordering would add
 		// the reverse edge before removing the old one, however, so a crash after
 		// the first replacement would leave a cycle.
@@ -553,7 +553,7 @@ func TestMutateTaskGraphPreservesPrefixSafePlannerOrder(t *testing.T) {
 	aPath := writeGraphMutationTask(t, root, "alpha", domain.StatusReadyToStart, nil, "")
 	bPath := writeGraphMutationTask(t, root, "beta", domain.StatusReadyToStart, []string{aID}, "")
 
-	result, err := NewFS(root).MutateTaskGraph(graphMutationNow, false, func(*core.TaskGraph) (core.TaskGraphMutationPlan, error) {
+	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MutateTaskGraph(graphMutationNow, false, func(*core.TaskGraph) (core.TaskGraphMutationPlan, error) {
 		// Remove the old edge before adding its reverse. Stable-ID sorting is unsafe
 		// here; the planner-provided sequence is part of the recovery contract.
 		return core.TaskGraphMutationPlan{TaskWrites: []core.TaskDependencyWrite{
@@ -579,7 +579,7 @@ func TestMutateTaskGraphStampsUpdatedAtOnlyForSemanticChanges(t *testing.T) {
 	aID, bID := testutil.TaskID("alpha"), testutil.TaskID("beta")
 	writeGraphMutationTask(t, root, "alpha", domain.StatusCompleted, nil, "")
 	bPath := writeGraphMutationTask(t, root, "beta", domain.StatusReadyToStart, nil, "updated_at: \"2026-01-01\"\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	first, err := fs.MutateTaskGraph(graphMutationNow, false, addDependencyPlan(bID, aID))
 	if err != nil || !slices.Equal(first.AppliedTaskIDs, []string{bID}) {

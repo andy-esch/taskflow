@@ -21,7 +21,7 @@ import (
 // custom repo root (loadedDash is the seedRepo variant).
 func loadedDashAt(t *testing.T, root string, w, h int) Model {
 	t.Helper()
-	m := New(core.MustNewService(store.NewFS(root)))
+	m := New(core.MustNewService(testutil.Must(store.NewFS(root, core.UnrestrictedMutations()))))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: w, Height: h})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
@@ -399,7 +399,7 @@ func TestDashboardAcuteFindingRefusesAuditIDDuplicatedOutsideOpenBucket(t *testi
 	id := testutil.TaskID("2026-06-27-arch")
 	testutil.Write(t, filepath.Join(root, domain.AuditsDir, id+"-hidden-copy.md"),
 		"---\nid: "+testutil.TaskID("other-audit-declaration")+"\nbucket: closed\narea: arch\ndate: 2026-09-28\n---\n# Hidden copy\n")
-	summary, err := core.MustNewService(store.NewFS(root)).Summary()
+	summary, err := core.MustNewService(testutil.Must(store.NewFS(root, core.UnrestrictedMutations()))).Summary()
 	if err != nil || len(summary.Findings.Acute) != 1 {
 		t.Fatalf("summary acute=%+v err=%v", summary.Findings.Acute, err)
 	}

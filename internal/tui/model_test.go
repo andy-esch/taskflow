@@ -81,7 +81,7 @@ func drainBatch(t *testing.T, m Model, cmd tea.Cmd) Model {
 func newModel(t *testing.T) Model {
 	t.Helper()
 	root := seedRepo(t)
-	return New(core.MustNewService(store.NewFS(root)))
+	return New(core.MustNewService(testutil.Must(store.NewFS(root, core.UnrestrictedMutations()))))
 }
 
 // loaded returns a model sized, initialized, and dropped onto the tasks tab. The
@@ -525,7 +525,7 @@ func seedManyTasks(t *testing.T, n int) string {
 // and hard-clamps the body so the chrome always survives.)
 func TestModel_ChromeVisibleWhenListPaginates(t *testing.T) {
 	root := seedManyTasks(t, 20)
-	m := New(core.MustNewService(store.NewFS(root)))
+	m := New(core.MustNewService(testutil.Must(store.NewFS(root, core.UnrestrictedMutations()))))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 14})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
@@ -569,7 +569,7 @@ func TestModel_EmptyTabShowsNothingSelected(t *testing.T) {
 	// A repo with tasks but no audits dir → the audits tab loads empty.
 	r := testutil.NewRepo(t)
 	r.Task("ready-to-start", "only.md", "---\nstatus: ready-to-start\ndescription: x\n---\n# only\n")
-	m := New(core.MustNewService(store.NewFS(r.Root)))
+	m := New(core.MustNewService(testutil.Must(store.NewFS(r.Root, core.UnrestrictedMutations()))))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 24})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
@@ -669,7 +669,7 @@ func TestModel_LongTitleKeepsDetailBorder(t *testing.T) {
 	r := testutil.NewRepo(t)
 	slug := "an-extremely-long-task-slug-well-past-the-detail-pane-inner-width"
 	r.Task("in-progress", slug+".md", "---\nstatus: in-progress\ndescription: x\n---\n# body\n")
-	m := New(core.MustNewService(store.NewFS(r.Root)))
+	m := New(core.MustNewService(testutil.Must(store.NewFS(r.Root, core.UnrestrictedMutations()))))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 90, Height: 24}) // narrowest two-pane
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
@@ -1073,7 +1073,7 @@ func auditModel(t *testing.T) Model {
 	r.Audit("open", "2026-06-01-open-a.md", "---\narea: store\ndate: 2026-06-01\n---\n# Open A\n")
 	r.Audit("closed", "2026-05-01-closed-a.md", "---\narea: cli\ndate: 2026-05-01\n---\n# Closed A\n")
 	r.Audit("deferred", "2026-04-01-deferred-a.md", "---\narea: tui\ndate: 2026-04-01\n---\n# Deferred A\n")
-	m := New(core.MustNewService(store.NewFS(r.Root)))
+	m := New(core.MustNewService(testutil.Must(store.NewFS(r.Root, core.UnrestrictedMutations()))))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())

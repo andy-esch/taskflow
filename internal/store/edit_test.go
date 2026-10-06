@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
@@ -19,7 +20,7 @@ func editRepo(t *testing.T) (*FS, string) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "edit-me.md", editSeed)
 	path, _ := testutil.TaskFixture(root, "ready-to-start", "edit-me.md", editSeed)
-	return NewFS(root), path
+	return testutil.Must(NewFS(root, core.UnrestrictedMutations())), path
 }
 
 func readFile(t *testing.T, path string) string {
@@ -187,7 +188,7 @@ func TestEditTask_ConcurrentEditDuringEdit_Conflict(t *testing.T) {
 func TestEditTask_BrokenFileUnchanged_ErrValidation(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "broken.md", "---\nstatus: ready-to-start\ntier: not-an-int\n---\n# x\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	_, changed, err := fs.EditTask("broken", bodyNow, func(cur string, _ error) (string, error) {
 		return cur, nil // opened to inspect, saved unchanged
 	})
@@ -247,7 +248,7 @@ func TestEditRejectsAnInvalidIDWithoutStutteringOrWriting(t *testing.T) {
 	testutil.Write(t, path, "---\nschema: 1\nid: 6fbj870001t6\nstatus: ready-to-start\nepic: 01-e\ndescription: d\n---\n# Probe\n")
 
 	attempts := 0
-	_, changed, err := NewFS(r.Root).EditTask("probe", time.Now(), func(current string, prevErr error) (string, error) {
+	_, changed, err := testutil.Must(NewFS(r.Root, core.UnrestrictedMutations())).EditTask("probe", time.Now(), func(current string, prevErr error) (string, error) {
 		attempts++
 		if attempts == 1 {
 			return strings.Replace(current, "id: 6fbj870001t6", "id: 6fbj87000lt6", 1), nil

@@ -31,7 +31,7 @@ func TestFS_Move(t *testing.T) {
 	path := writeTaskAt(t, root, "ready-to-start", "alpha.md", "---\nstatus: ready-to-start\nepic: 01-x\ndescription: alpha\ntags: [test]\n---\n# Alpha\n")
 
 	now := time.Date(2026, 6, 7, 0, 0, 0, 0, time.UTC)
-	task, err := moveTaskForTest(NewFS(root), "alpha", domain.StatusInProgress, now, false, core.TaskLifecycleOverrideNone)
+	task, err := moveTaskForTest(testutil.Must(NewFS(root, core.UnrestrictedMutations())), "alpha", domain.StatusInProgress, now, false, core.TaskLifecycleOverrideNone)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -54,7 +54,7 @@ func TestFS_Move(t *testing.T) {
 func TestFS_Move_Idempotent(t *testing.T) {
 	root := t.TempDir()
 	writeTaskAt(t, root, "in-progress", "beta.md", "---\nstatus: in-progress\n---\n# B\n")
-	task, err := moveTaskForTest(NewFS(root), "beta", domain.StatusInProgress, time.Now(), false, core.TaskLifecycleOverrideNone)
+	task, err := moveTaskForTest(testutil.Must(NewFS(root, core.UnrestrictedMutations())), "beta", domain.StatusInProgress, time.Now(), false, core.TaskLifecycleOverrideNone)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -72,7 +72,7 @@ func TestFS_Move_Idempotent(t *testing.T) {
 func TestFS_Move_RevisitAt(t *testing.T) {
 	root := t.TempDir()
 	now := time.Date(2026, 6, 26, 0, 0, 0, 0, time.UTC)
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	deferred := func(name string) string {
 		return writeTaskAt(t, root, "deferred", name,
 			"---\nstatus: deferred\nrevisit_at: \"2026-09-01\"\ndeferred_at: \"2026-06-01\"\ntags: [test]\n---\n# X\n")
@@ -130,7 +130,7 @@ func TestFS_Defer(t *testing.T) {
 	root := t.TempDir()
 	path := writeTaskAt(t, root, "ready-to-start", "alpha.md", "---\nstatus: ready-to-start\nepic: 01-x\n---\n# Alpha\n")
 	now := time.Date(2026, 6, 7, 0, 0, 0, 0, time.UTC)
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	read := func() string {
 		b, err := os.ReadFile(path)
 		if err != nil {
@@ -174,7 +174,7 @@ func TestFS_Defer_BareNoDate(t *testing.T) {
 	path := writeTaskAt(t, root, "ready-to-start", "beta.md", "---\nstatus: ready-to-start\n---\n# Beta\n")
 	now := time.Date(2026, 6, 7, 0, 0, 0, 0, time.UTC)
 
-	task, err := deferTaskForTest(NewFS(root), "beta", "", now, false)
+	task, err := deferTaskForTest(testutil.Must(NewFS(root, core.UnrestrictedMutations())), "beta", "", now, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,7 +195,7 @@ func TestFS_Defer_BareNoDate(t *testing.T) {
 }
 
 func TestFS_Move_NotFound(t *testing.T) {
-	_, err := moveTaskForTest(NewFS(t.TempDir()), "nope", domain.StatusCompleted, time.Now(), false, core.TaskLifecycleOverrideNone)
+	_, err := moveTaskForTest(testutil.Must(NewFS(t.TempDir(), core.UnrestrictedMutations())), "nope", domain.StatusCompleted, time.Now(), false, core.TaskLifecycleOverrideNone)
 	if !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
@@ -209,7 +209,7 @@ func TestFS_Resolve_Ambiguous(t *testing.T) {
 	idB := testutil.TaskID("dup-b")
 	testutil.Write(t, filepath.Join(root, "tasks", idA+"-dup.md"), "---\nid: "+idA+"\nstatus: ready-to-start\n---\n")
 	testutil.Write(t, filepath.Join(root, "tasks", idB+"-dup.md"), "---\nid: "+idB+"\nstatus: in-progress\n---\n")
-	_, err := moveTaskForTest(NewFS(root), "dup", domain.StatusCompleted, time.Now(), false, core.TaskLifecycleOverrideNone)
+	_, err := moveTaskForTest(testutil.Must(NewFS(root, core.UnrestrictedMutations())), "dup", domain.StatusCompleted, time.Now(), false, core.TaskLifecycleOverrideNone)
 	if !errors.Is(err, domain.ErrAmbiguous) {
 		t.Errorf("want ErrAmbiguous, got %v", err)
 	}
@@ -236,7 +236,7 @@ func TestMove_CompleteGatesOnUnexplainedCriteria(t *testing.T) {
 	t.Run("a bare unticked box refuses", func(t *testing.T) {
 		root := t.TempDir()
 		writeTask(t, root, "in-progress", "6fjangd7kvh3-gated.md", body("6fjangd7kvh3-gated", "- [x] done\n- [ ] silently unticked\n"))
-		_, err := moveTaskForTest(NewFS(root), "gated", domain.StatusCompleted, now, false, core.TaskLifecycleOverrideNone)
+		_, err := moveTaskForTest(testutil.Must(NewFS(root, core.UnrestrictedMutations())), "gated", domain.StatusCompleted, now, false, core.TaskLifecycleOverrideNone)
 		if !errors.Is(err, domain.ErrValidation) {
 			t.Fatalf("want ErrValidation, got %v", err)
 		}
@@ -245,7 +245,7 @@ func TestMove_CompleteGatesOnUnexplainedCriteria(t *testing.T) {
 		}
 		// …and the refusal must be identical under --dry-run, so a preview cannot pass
 		// where the real write would fail.
-		if _, err := moveTaskForTest(NewFS(root), "gated", domain.StatusCompleted, now, true, core.TaskLifecycleOverrideNone); !errors.Is(err, domain.ErrValidation) {
+		if _, err := moveTaskForTest(testutil.Must(NewFS(root, core.UnrestrictedMutations())), "gated", domain.StatusCompleted, now, true, core.TaskLifecycleOverrideNone); !errors.Is(err, domain.ErrValidation) {
 			t.Errorf("dry-run must fail identically, got %v", err)
 		}
 	})
@@ -254,7 +254,7 @@ func TestMove_CompleteGatesOnUnexplainedCriteria(t *testing.T) {
 		root := t.TempDir()
 		writeTask(t, root, "in-progress", "6fjangd7kvh3-decided.md",
 			body("6fjangd7kvh3-decided", "- [x] done\n- [ ] parked · **deferred:** waiting on the ADR\n- [ ] moot · **n/a:** dropped\n"))
-		if _, err := moveTaskForTest(NewFS(root), "decided", domain.StatusCompleted, now, false, core.TaskLifecycleOverrideNone); err != nil {
+		if _, err := moveTaskForTest(testutil.Must(NewFS(root, core.UnrestrictedMutations())), "decided", domain.StatusCompleted, now, false, core.TaskLifecycleOverrideNone); err != nil {
 			t.Fatalf("decided criteria must not block completion: %v", err)
 		}
 	})
@@ -262,7 +262,7 @@ func TestMove_CompleteGatesOnUnexplainedCriteria(t *testing.T) {
 	t.Run("force completes anyway", func(t *testing.T) {
 		root := t.TempDir()
 		writeTask(t, root, "in-progress", "6fjangd7kvh3-forced.md", body("6fjangd7kvh3-forced", "- [ ] silently unticked\n"))
-		if _, err := moveTaskForTest(NewFS(root), "forced", domain.StatusCompleted, now, false, core.TaskLifecycleOverrideAcceptanceCriteria); err != nil {
+		if _, err := moveTaskForTest(testutil.Must(NewFS(root, core.UnrestrictedMutations())), "forced", domain.StatusCompleted, now, false, core.TaskLifecycleOverrideAcceptanceCriteria); err != nil {
 			t.Fatalf("--force must bypass the gate: %v", err)
 		}
 	})
@@ -270,7 +270,7 @@ func TestMove_CompleteGatesOnUnexplainedCriteria(t *testing.T) {
 	t.Run("only completion is gated", func(t *testing.T) {
 		root := t.TempDir()
 		writeTask(t, root, "in-progress", "6fjangd7kvh3-parked.md", body("6fjangd7kvh3-parked", "- [ ] silently unticked\n"))
-		if _, err := moveTaskForTest(NewFS(root), "parked", domain.StatusDeferred, now, false, core.TaskLifecycleOverrideNone); err != nil {
+		if _, err := moveTaskForTest(testutil.Must(NewFS(root, core.UnrestrictedMutations())), "parked", domain.StatusDeferred, now, false, core.TaskLifecycleOverrideNone); err != nil {
 			t.Fatalf("deferring is not completing and must not be gated: %v", err)
 		}
 	})

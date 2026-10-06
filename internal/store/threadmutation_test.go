@@ -17,7 +17,7 @@ import (
 var threadMutationStoreNow = time.Date(2026, time.August, 30, 12, 0, 0, 0, time.UTC)
 
 func newThreadMutationService(root, threadID string) *core.Service {
-	return core.MustNewService(NewFS(root),
+	return core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())),
 		core.WithIDGen(func() string { return threadID }),
 		core.WithClock(func() time.Time { return threadMutationStoreNow }),
 		core.WithRetry(0, func(int) {}),
@@ -166,7 +166,7 @@ func TestThreadMutationPlannerCannotReenterStore(t *testing.T) {
 	memberID := testutil.TaskID("thread-reentry-member")
 	writeGraphMutationTask(t, root, "thread-reentry-member", domain.StatusNextUp, nil, "")
 	created, _ := createThreadForMutation(t, root, "thread-reentry")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	_, err := fs.MutateThread(threadMutationStoreNow, true, func(core.ThreadMutationSnapshot) (core.ThreadMutationPlan, error) {
 		_, nestedErr := fs.ReadThreads()
 		return core.ThreadMutationPlan{ThreadID: created.Thread.ID, Operation: core.ThreadMutationAddMembers, TaskIDs: []string{memberID}}, nestedErr
@@ -219,7 +219,7 @@ func TestTaskLifecycleRefusesInvalidThreadEvidenceBeforeWriting(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	_, err := core.MustNewService(NewFS(root), core.WithRetry(0, func(int) {})).Move(
+	_, err := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())), core.WithRetry(0, func(int) {})).Move(
 		taskID, domain.StatusReadyToStart, false, core.TaskLifecycleOverrideNone,
 	)
 	if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), missingID) {
@@ -237,7 +237,7 @@ func TestThreadMutationAttributesReleaseFailureAfterCommit(t *testing.T) {
 	writeGraphMutationTask(t, root, "thread-mutation-release-member", domain.StatusNextUp, nil, "")
 	created, _ := createThreadForMutation(t, root, "thread-mutation-release")
 	retries := 0
-	svc := core.MustNewService(NewFS(root),
+	svc := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())),
 		core.WithClock(func() time.Time { return threadMutationStoreNow }),
 		core.WithRetry(3, func(int) { retries++ }),
 	)
@@ -254,7 +254,7 @@ func TestThreadMutationAttributesReleaseFailureAfterCommit(t *testing.T) {
 		t.Fatalf("receipt=%+v err=%v retries=%d", receipt, err, retries)
 	}
 	testHookRepositoryUnlockError = nil
-	thread, _, readErr := NewFS(root).GetThread(created.Thread.ID)
+	thread, _, readErr := testutil.Must(NewFS(root, core.UnrestrictedMutations())).GetThread(created.Thread.ID)
 	if readErr != nil || !slices.Equal(thread.Tasks, []string{memberID}) {
 		t.Fatalf("durable Thread=%+v err=%v", thread, readErr)
 	}
@@ -279,7 +279,7 @@ func TestThreadMembershipWaitsForDependencyMutationAndUsesFreshGraph(t *testing.
 
 	dependencyDone := make(chan error, 1)
 	go func() {
-		_, err := core.MustNewService(NewFS(root), core.WithRetry(0, func(int) {})).AddTaskDependencies(
+		_, err := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())), core.WithRetry(0, func(int) {})).AddTaskDependencies(
 			memberID, []string{prerequisiteID}, false,
 		)
 		dependencyDone <- err
@@ -332,7 +332,7 @@ func TestThreadCompleteWaitsForTaskLifecycleAndRefusesFreshUndrainedState(t *tes
 
 	lifecycleDone := make(chan error, 1)
 	go func() {
-		_, err := core.MustNewService(NewFS(root), core.WithRetry(0, func(int) {})).Move(
+		_, err := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())), core.WithRetry(0, func(int) {})).Move(
 			memberID, domain.StatusNextUp, false, core.TaskLifecycleOverrideNone,
 		)
 		lifecycleDone <- err
@@ -358,7 +358,7 @@ func TestThreadCompleteWaitsForTaskLifecycleAndRefusesFreshUndrainedState(t *tes
 	if err := <-completeDone; !errors.As(err, &policy) || !strings.Contains(policy.Reason, "soundly completed") {
 		t.Fatalf("fresh completion refusal = %v", err)
 	}
-	thread, _, err := NewFS(root).GetThread(created.Thread.ID)
+	thread, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).GetThread(created.Thread.ID)
 	if err != nil || thread.Status != domain.ThreadStatusInProgress {
 		t.Fatalf("Thread after refusal = %+v err=%v", thread, err)
 	}
@@ -392,7 +392,7 @@ func TestTaskLifecycleWaitsForThreadMembershipAndReportsFreshImpact(t *testing.T
 	}
 	lifecycleDone := make(chan lifecycleOutcome, 1)
 	go func() {
-		receipt, err := core.MustNewService(NewFS(root), core.WithRetry(0, func(int) {})).Move(
+		receipt, err := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())), core.WithRetry(0, func(int) {})).Move(
 			memberID, domain.StatusNextUp, false, core.TaskLifecycleOverrideNone,
 		)
 		lifecycleDone <- lifecycleOutcome{receipt: receipt, err: err}
@@ -432,7 +432,7 @@ func TestThreadMutationRejectsRawRepositoryRaces(t *testing.T) {
 		if _, err := svc.AddThreadMembers(created.Thread.ID, []string{memberID}, false); !errors.Is(err, domain.ErrConflict) {
 			t.Fatalf("raw graph race = %v", err)
 		}
-		thread, _, _ := NewFS(root).GetThread(created.Thread.ID)
+		thread, _, _ := testutil.Must(NewFS(root, core.UnrestrictedMutations())).GetThread(created.Thread.ID)
 		if len(thread.Tasks) != 0 {
 			t.Fatalf("stale membership committed: %+v", thread)
 		}
@@ -501,7 +501,7 @@ func TestTaskLifecycleRejectsRawThreadRaceByWholeSnapshotCAS(t *testing.T) {
 		}
 	}
 
-	_, err := core.MustNewService(NewFS(root), core.WithRetry(0, func(int) {})).Move(
+	_, err := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())), core.WithRetry(0, func(int) {})).Move(
 		memberID, domain.StatusReadyToStart, false, core.TaskLifecycleOverrideNone,
 	)
 	if !errors.Is(err, domain.ErrConflict) {

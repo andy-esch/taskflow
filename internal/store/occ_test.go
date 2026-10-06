@@ -23,7 +23,7 @@ func TestSetFields_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "c.md",
 		"---\nid: 6fjangd7kvc1\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: d\n---\n# c\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	p := filepath.Join(root, "tasks", testutil.TaskID("c")+"-c.md")
 
 	orig := testHookBeforeSetFieldsWrite
@@ -69,7 +69,7 @@ func TestVerifyUnchanged_SlugEqualsAnotherID(t *testing.T) {
 
 	// A write to Task A runs verifyUnchanged, which re-resolves A's id (== collide). The
 	// exact-id resolve returns A alone, so the write lands — no spurious conflict/lockout.
-	if _, err := NewFS(root).SetFields("alpha", map[string]any{"priority": "low"}, false); err != nil {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("alpha", map[string]any{"priority": "low"}, false); err != nil {
 		t.Fatalf("a sibling whose slug equals A's id must not lock A out of writes: %v", err)
 	}
 }
@@ -80,7 +80,7 @@ func TestMove_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "m.md",
 		"---\nid: "+testutil.TaskID("m")+"\nstatus: ready-to-start\nepic: e1\ndescription: m\ntags: [test]\n---\n# m\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	p := filepath.Join(root, "tasks", testutil.TaskID("m")+"-m.md")
 
 	orig := testHookBeforeLifecycleVerify
@@ -110,7 +110,7 @@ func TestMoveAudit_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	root := t.TempDir()
 	writeAudit(t, root, "open", "2026-01-02-x.md",
 		"---\nid: 6fjjt6s9ttx1\nbucket: open\narea: x\ndate: 2026-01-02\n---\n#### H1. t  · **Status:** fixed\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	p := filepath.Join(root, "audits", testutil.TaskID("2026-01-02-x")+"-2026-01-02-x.md")
 
 	orig := testHookBeforeMoveAuditWrite
@@ -140,7 +140,7 @@ func TestSetEpicFields_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	if err := os.WriteFile(p, []byte("---\nstatus: active\npriority: high\ndescription: e\n---\n# E\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	orig := testHookBeforeEpicWrite
 	defer func() { testHookBeforeEpicWrite = orig }()
@@ -162,7 +162,7 @@ func TestEditBody_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "b.md",
 		"---\nid: 6fjangd7kvb1\nstatus: ready-to-start\nepic: e1\n---\n# b\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	p := filepath.Join(root, "tasks", testutil.TaskID("b")+"-b.md")
 
 	orig := testHookBeforeBodyWrite
@@ -185,7 +185,7 @@ func TestEditTask_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "e.md",
 		"---\nid: 6fjangd7kve1\nstatus: ready-to-start\nepic: e1\n---\n# e\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	p := filepath.Join(root, "tasks", testutil.TaskID("e")+"-e.md")
 
 	edit := func(current string, prevErr error) (string, error) {
@@ -209,7 +209,7 @@ func TestSetFields_FuzzyQueryDoesNotSpuriouslyConflict(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "billing-system.md",
 		"---\nid: 6fjangd7kvf1\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: d\n---\n# b\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	orig := testHookBeforeSetFieldsWrite
 	defer func() { testHookBeforeSetFieldsWrite = orig }()
@@ -238,7 +238,7 @@ func TestMoveEpic_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	if err := os.WriteFile(p, []byte("---\nstatus: active\npriority: high\ndescription: e\n---\n# E\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	orig := testHookBeforeEpicWrite
 	defer func() { testHookBeforeEpicWrite = orig }()
@@ -259,7 +259,7 @@ func TestAppendAuditBody_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	root := t.TempDir()
 	writeAudit(t, root, "open", "2026-01-02-ab.md",
 		"---\nid: 6fjjt6s9ttab\nbucket: open\narea: x\ndate: 2026-01-02\n---\n#### H1. t  · **Status:** open\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	p := filepath.Join(root, "audits", testutil.TaskID("2026-01-02-ab")+"-2026-01-02-ab.md")
 
 	orig := testHookBeforeBodyWrite
@@ -283,7 +283,7 @@ func TestSetFields_DryRunSkipsWriteCriticalSection(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "d.md",
 		"---\nid: 6fjangd7kvd1\nstatus: ready-to-start\nepic: e1\ntier: 2\npriority: high\neffort: 1h\ncreated: 2026-01-01\ntags: [a]\ndescription: d\n---\n# d\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	fired := false
 	orig := testHookBeforeSetFieldsWrite
@@ -308,7 +308,7 @@ func TestConcurrentAppends_NoLostUpdates(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "race.md",
 		"---\nid: 6fjangd7kvrc\nstatus: ready-to-start\nepic: e1\n---\n# body\n")
-	fs := NewFS(root)
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 
 	const N = 8
 	var wg sync.WaitGroup

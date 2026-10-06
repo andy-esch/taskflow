@@ -185,7 +185,7 @@ func TestResearchItem_UpdatedFallsBackToCreated(t *testing.T) {
 // to be forgotten.
 func TestResearchTab_ReloadsOnFilesystemEvent(t *testing.T) {
 	root := seedRepo(t)
-	m := New(core.MustNewService(store.NewFS(root)))
+	m := New(core.MustNewService(testutil.Must(store.NewFS(root, core.UnrestrictedMutations()))))
 	tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
 	m = tm.(Model)
 	tm, _ = m.Update(m.Init()())
