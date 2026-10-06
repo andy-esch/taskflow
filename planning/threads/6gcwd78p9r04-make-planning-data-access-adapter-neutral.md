@@ -34,8 +34,8 @@ filename identities, or guarded revisions. CLI repair, body-link checking, and c
 merged in PR #275. Concrete composition isolation and executable controller enforcement merged
 in PR #277; workspace identity parity merged in PR #279. Cross-kind collision lint merged in
 PR #280 and core-owned impact/recovery semantics merged in PR #282. Explicit persistence
-authorization merged in PR #283. The only remaining task is the
-final guarded-contract regression pass.
+authorization merged in PR #283. The final guarded-contract regression pass is reviewed and
+completed locally in [PR #284](https://github.com/andy-esch/taskflow/pull/284), awaiting merge.
 
 This Thread closes those seams in evidence-driven stages:
 
@@ -116,8 +116,8 @@ This Thread has a finish line, not a mandate to absorb every architecture audit.
 above and the existing collision-lint task are members of this graph. Composition and workspace
 parity, collision lint, and core recovery semantics are completed in PRs #277, #279, #280,
 and #282; explicit persistence authorization merged in PR #283.
-**18 of 19 members are completed**; the final guarded-contract regression pass is in progress
-and remains the sole closeout task. Older loaded-record TUI reviews are
+**19 of 19 members are completed locally**; the final guarded-contract regression pass in
+PR #284 awaits merge before guarded Thread completion. Older loaded-record TUI reviews are
 closed because their recorded findings were fixed (or absent), not because a new review was
 performed today.
 
@@ -132,11 +132,11 @@ has refreshed assumptions, not a pre-approved refactor.
 ## Pre-closeout check (2026-10-05)
 
 The [final contract task](../tasks/6ggdkzv2tnta-pin-guarded-planning-mutation-boundary-contracts.md)
-records the executed boundary matrix and isolated guard-removal evidence. All 18 completed
+records the executed boundary matrix and isolated guard-removal evidence. At review handoff, all 18 completed
 members have checked acceptance criteria; the three external gates are soundly completed.
-The live graph and projection are healthy, with only the final task in flight and no blocked
-member. Owner validation found no unresolved safety blocker in the port migration; independent
-review of this final pass is still required before task completion and Thread closure.
+The graph and projection were healthy, with only the final task in flight and no blocked
+member. Owner validation found no unresolved safety blocker in the port migration; the final
+review reconciliation below records the subsequent completion checkpoint.
 
 Known followups are not hidden by that bounded verdict:
 
@@ -149,10 +149,17 @@ Known followups are not hidden by that bounded verdict:
   It is not fixed by this migration and should be addressed before the next release.
 - The dependency-policy ADR still requires acceptance in the documentation Thread.
 
-This is an owner pre-closeout check, not a new release claim or a retrospective independent
-review of every historical slice. The Thread remains in progress until final review is settled.
+This is a bounded pre-closeout check, not a new release claim or a retrospective independent
+review of every historical slice. The Thread remains in progress until PR #284 merges.
 
 Codex's final review is now reconciled and closed with no new findings: independently executed
 mutation, real-store recovery, oracle, composition, and bookkeeping checks corroborate the bounded
-verdict. Antigravity remains pending. No implementation change or Thread lifecycle transition
-was made while its review snapshot is active.
+verdict. Antigravity is reconciled and closed as qualified corroboration: its inaccurate inventory
+and gate claims were corrected, and missing raw logs/transfer attestation are explicit limitations.
+It is not counted as a fully verified independent clean review. No implementation change was
+made while its review snapshot was active.
+
+The final task is now completed locally; fresh projection reports 19/19 done, no in-flight or
+frontier members, and healthy graph/projection. Once PR #284 merges, this Thread is ready for
+guarded completion. Closing the Thread does not close or de-prioritize the tracked YAML storage
+safety followup, nor imply release readiness.

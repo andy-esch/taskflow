@@ -28,7 +28,7 @@ updated_at: "2026-10-05"
 **Resolution:** <how it was resolved — written by `audit finding --note`, not by hand>
 ```
 
-#### M1. `thread compose`/`apply` refuse malformed and stale plans, and 24 of 37 refusals have no test · **Status:** fixed (locally; pending independent review and merge)
+#### M1. `thread compose`/`apply` refuse malformed and stale plans, and 24 of 37 refusals have no test · **Status:** fixed (reviewed; pending merge) (PR #284)
 
 **File:** internal/core/thread_apply.go:214 | **Component:** core/thread-apply
 **Effort:** S · **Urgency:** soon
@@ -109,14 +109,13 @@ audit if it recurs.
 
 **Recommendation:** Extend the two existing rejection tables: add the ten structural manifest rows to TestComposeThreadApplyPlanRejectsMisleadingOrInvalidManifest, and a tampered status plus a deleted prerequisite and dependent to TestPrepareThreadApplyRejectsUnsafeOrEditedCreationIdentity — asserting errors.Is(err, domain.ErrValidation) alongside the substring.
 
-**Resolution:** Reachable compose/prepare guards now have sentinel and
-diagnostic assertions with valid baselines. Eleven real service/store
-edited-plan or stale-corpus cases prove preview and refusal preserve repository
-entries/bytes/modes and the full typed plan receipt. Compiler-valid compose,
-endpoint, body-evidence, and lifecycle probes fail for the intended reason;
-redundant endpoint/lifecycle checks are explicitly diagnostic protection.
+**Resolution:** Reachable compose/prepare refusals assert sentinel, diagnostic,
+preserved intent, and no effects through real service/store preview and write
+modes. Intended guard-removal probes fail. Codex review is reconciled;
+Antigravity reporting limits are recorded. Implemented in 6ggdkzv2tnta; PR #284
+awaits merge.
 
-#### M2. Thread creation's committed-conflict no-retry guard is untested while its mutation twin is covered · **Status:** fixed (locally; pending independent review and merge)
+#### M2. Thread creation's committed-conflict no-retry guard is untested while its mutation twin is covered · **Status:** fixed (reviewed; pending merge) (PR #284)
 
 **File:** internal/core/service_thread.go:93 | **Component:** core/thread-mutations
 **Effort:** XS · **Urgency:** soon
@@ -190,13 +189,12 @@ loop of the four, and the only one whose guard is properly pinned at the core le
 
 **Recommendation:** Add the creation-side twin of store.TestThreadMutationAttributesReleaseFailureAfterCommit: drive svc.NewThread through core.MustNewService with WithRetry and a conflict-wrapping testHookRepositoryUnlockError, asserting ThreadCreationMutationFailure, receipt.Committed, and retries == 0.
 
-**Resolution:** Generic and conflict-wrapping post-commit cleanup failures now
-run through a portable fake and real service/store, preserving committed
-identity/local receipt with one mint and no retry. Removing only the committed
-guard kills both conflict rows; generic controls stay green. Restored tests
-pass.
+**Resolution:** Generic and conflict-wrapping committed cleanup failures retain
+original identity and typed receipts with one mint and no retry through portable
+and real-store service tests. Committed-guard removal kills conflict rows while
+generic controls pass. Implemented in 6ggdkzv2tnta; PR #284 awaits merge.
 
-#### M3. `theme` can silently fall back to ambient presentation on a bad `--space`, untested · **Status:** fixed (locally; pending independent review and merge)
+#### M3. `theme` can silently fall back to ambient presentation on a bad `--space`, untested · **Status:** fixed (reviewed; pending merge) (PR #284)
 
 **File:** internal/cli/theme.go:41 | **Component:** cli/space-selection
 **Effort:** XS · **Urgency:** soon
@@ -271,10 +269,10 @@ architecture audit.
 
 **Recommendation:** Add the two-line theme case beside the existing template case in TestGlobalSpace_UnknownListsKnownLabels, asserting exit 10 on --space missing.
 
-**Resolution:** Explicit unknown-space tests cover theme list and noninteractive
-preview alongside template list, requiring ErrNotFound, exit 10, and no ambient
-output. Removing only the theme refusal guard returns ambient success and kills
-both theme rows. Restored tests pass.
+**Resolution:** Unknown explicit-space selection refuses for template list,
+theme list, and deterministic preview with ErrNotFound, exit 10, and no ambient
+output. Removing the theme guard kills both theme rows. Implemented in
+6ggdkzv2tnta; PR #284 awaits merge.
 
 #### L1. The exit-taxonomy smoke test's filesystem probe is vacuous as root and aborts the rest of the test · **Status:** open
 
@@ -619,9 +617,9 @@ cannot close as fully triaged while those findings remain unresolved.
 <!-- candidate-tasks:v1 · ○ open · ● in-progress · ✔ fixed · → tracked · ◌ deferred · ◌ superseded · ✘ wontfix -->
 <!-- Add or replace one row with `tskflwctl audit finding <audit> <code> --candidate "<one line>"`; an empty value removes it. -->
 
-- ✔ M1 · fixed — Malformed/stale Thread apply boundary contracts | implemented locally in 6ggdkzv2tnta | pending independent review and merge
-- ✔ M2 · fixed — Committed Thread creation conflict recovery | implemented locally in 6ggdkzv2tnta | pending independent review and merge
-- ✔ M3 · fixed — Explicit-space theme refusal | implemented locally in 6ggdkzv2tnta | pending independent review and merge
+- ✔ M1 · fixed — Malformed/stale Thread apply boundary contracts | implemented by 6ggdkzv2tnta in PR #284 | reviewed; pending merge
+- ✔ M2 · fixed — Committed Thread creation conflict recovery | implemented by 6ggdkzv2tnta in PR #284 | reviewed; pending merge
+- ✔ M3 · fixed — Explicit-space theme refusal | implemented by 6ggdkzv2tnta in PR #284 | reviewed; pending merge
 - ○ L1 · open — `tskflwctl task new "Make the exit-taxonomy filesystem probe honest under root" --epic 21-code-quality-architecture-hardening --tags tests,ci --tier 3 --priority low --description "chmod 0o500 does not bite uid 0, so the smoke test fails in root containers and aborts before its remaining assertions."`
 - ○ L2 · open — `tskflwctl task new "Stop pinning built-in template catalog size in the kind-filter test" --epic 22-selectable-template-library --tags tests,cli --tier 4 --priority low --description "A third audit template would redden TestTemplateList_KindFilter; assert the per-row invariant and a floor instead of an exact count."`
 - ○ L3 · open — `tskflwctl task new "Resolve the duplicated thread-validation messages between core and domain" --epic 21-code-quality-architecture-hardening --tags threads,tests,simplification --tier 4 --priority low --description "NewThread re-checks four rules domain.ValidateThreadDocument already enforces, and the two copies have diverged in case."`

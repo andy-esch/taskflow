@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6ggdkzv2tnta
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Pin malformed-plan refusal, committed Thread creation recovery, and explicit-space selection before boundary closeout.
 effort: 4-8 hours
@@ -14,6 +14,7 @@ updated_at: "2026-10-05"
 audit_sources: [2026-10-02-test-rigour]
 depends_on: [6gcqz5aefjjf, 6gg7e594gcms, 6gg7e59cyxxh, 6ggdkztshmzz]
 started_at: "2026-10-05"
+completed_at: "2026-10-05"
 ---
 # Pin guarded planning mutation boundary contracts
 
@@ -91,6 +92,7 @@ already accepts malformed plans or retries committed Thread creation.
 - [Core-owned impact/recovery semantics](6ggdkztshmzz-make-dependency-impact-and-recovery-semantics-core-owned.md)
 - Final independent review briefs: [Codex](../audits/6ggxdjh7vpcr-2026-10-05-guarded-planning-boundary-closeout-codex.md)
   and [Antigravity](../audits/6ggxdjhhafdv-2026-10-05-guarded-planning-boundary-closeout-antigravity.md).
+- Implementation and review bookkeeping: [PR #284](https://github.com/andy-esch/taskflow/pull/284).
 
 ## Implementation and owner closeout check (2026-10-05)
 
@@ -151,7 +153,7 @@ planning lint, and audit lint passed. Machine schema remains 1.81; no wire behav
 All 18 completed member tasks have checked ACs, all three external gates are soundly complete,
 and the graph/projection are healthy with this task as the only in-flight member.
 
-Owner verdict: ready for independent final review, with no demonstrated unresolved safety
+Owner verdict at the review handoff: ready for independent final review, with no demonstrated unresolved safety
 blocker in this migration. The four prerequisites are merged (#279, #280, #282, #283); this
 test slice is still local, not merged or released. Keep the task/Thread in progress until
 review is reconciled. The source test-rigour audit's unrelated L1-L3 remain open.
@@ -174,6 +176,19 @@ the retained logs, restoration/transfer evidence, and identical five-file implem
 snapshot; the focused race suite passed again. The Codex audit is reconciled and closed.
 
 No implementation change or new task was needed. Reviewer-only probes remain independent
-evidence, not represented as permanent tests. Antigravity remains pending; its audit and the
-implementation snapshot are untouched, and this task/Thread remain in progress until that
-pass is reconciled. The existing YAML safety followup remains high priority and unfixed.
+evidence, not represented as permanent tests. The implementation snapshot stayed untouched
+while Antigravity reviewed it. The existing YAML safety followup remains high priority and unfixed.
+
+### Final reconciliation and completion
+
+Antigravity asserted no new production defect. Owner triage corrected its nonexistent service
+symbol, fictional gate names, broad purity/command claims, and local-only links. Its independent
+baseline, source hashes, restored five-file implementation snapshot, and delivered audit copy
+were verified; raw probe logs and transfer-result attestation were not retained. The audit is
+closed as qualified corroboration, not credited as an evidence-complete independent clean review.
+Codex's accepted review and the owner executed checks remain the closeout basis.
+
+No implementation change was required. This task is complete locally in PR #284, not merged
+or released. The Thread now has 19/19 completed members and healthy graph/projection; keep the
+Thread itself in progress until this PR merges, then use guarded Thread completion. Existing
+followups remain in their stated homes and are not represented as fixes.
