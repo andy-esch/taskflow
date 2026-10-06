@@ -140,9 +140,9 @@ The pre-existing markerless recovery instruction remains in
 [its CLI-contract followup](6ggfd81jg0qg-make-id-less-thread-planning-recovery-instructions-executable.md),
 with the second executed reproduction added as evidence. No duplicate or new Thread blocker.
 Full normal/race tests, lint, build, generated CLI/schema-comment comparisons, and planning/audit
-lint pass after the added tests. The task is completed locally, not yet merged or released.
-The final guarded-contract task remains the next Thread member, outside this slice; bookkeeping
-for merged PR #282 stays bundled with this work.
+lint pass after the added tests. The task merged in PR #283; release inclusion remains a
+separate milestone. The final guarded-contract task is now in progress as the sole remaining
+Thread member, outside this slice.
 
 ## Acceptance criteria
 

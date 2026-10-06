@@ -29,12 +29,12 @@ The loaded-record and optional-local-capability design is complete. Ordinary tas
 research, and finding reads now preserve portable source identity and diagnostics, and split
 planning-data capabilities must agree on one source-set witness at construction. Local mutation
 receipts and ordinary-create recovery no longer depend on domain paths. TUI identity/refresh and
-readable occurrence locations have shipped, and semantic entity values no longer carry local paths,
+readable occurrence locations have merged, and semantic entity values no longer carry local paths,
 filename identities, or guarded revisions. CLI repair, body-link checking, and completion have
 merged in PR #275. Concrete composition isolation and executable controller enforcement merged
 in PR #277; workspace identity parity merged in PR #279. Cross-kind collision lint merged in
 PR #280 and core-owned impact/recovery semantics merged in PR #282. Explicit persistence
-authorization is completed and reviewed locally, pending merge. The only remaining task is the
+authorization merged in PR #283. The only remaining task is the
 final guarded-contract regression pass.
 
 This Thread closes those seams in evidence-driven stages:
@@ -68,7 +68,7 @@ This Thread closes those seams in evidence-driven stages:
      coverage plus an executable direct-discovery guard. The pre-existing
      markerless recovery hint is tracked separately, not added as a refactor closure blocker.
    - [Explicit persistence authorization](../tasks/6gg7e59cyxxh-require-an-explicit-mutation-authorization-policy-at-persistence-composition.md),
-     **Completed locally, not yet merged:** required policy arguments and deliberate unrestricted
+     **Completed, merged in PR #283:** required policy arguments and deliberate unrestricted
      fixture mode were user-approved before implementation. All adapters fail closed on omission;
      Atlas readers are read-only and late opening preserves guards. Both independent reviews are
      reconciled and closed; their useful populated-record/full-bundle probes are now permanent
@@ -115,8 +115,8 @@ identity, an optional source location, or an explicit local capability is the ho
 This Thread has a finish line, not a mandate to absorb every architecture audit. The two new tasks
 above and the existing collision-lint task are members of this graph. Composition and workspace
 parity, collision lint, and core recovery semantics are completed in PRs #277, #279, #280,
-and #282; explicit persistence authorization is completed and reviewed locally, pending merge.
-**18 of 19 members are completed**; the final guarded-contract regression pass is now eligible
+and #282; explicit persistence authorization merged in PR #283.
+**18 of 19 members are completed**; the final guarded-contract regression pass is in progress
 and remains the sole closeout task. Older loaded-record TUI reviews are
 closed because their recorded findings were fixed (or absent), not because a new review was
 performed today.
@@ -128,3 +128,31 @@ framework remain in their existing homes. TUI broken-gate versus unreadable-mark
 outside this Thread; the related audit findings remain open. The
 [`cli.App` breadth decision](../tasks/6g63hjme8czk-decide-whether-cli.apps-breadth-has-a-real-trigger-yet.md)
 has refreshed assumptions, not a pre-approved refactor.
+
+## Pre-closeout check (2026-10-05)
+
+The [final contract task](../tasks/6ggdkzv2tnta-pin-guarded-planning-mutation-boundary-contracts.md)
+records the executed boundary matrix and isolated guard-removal evidence. All 18 completed
+members have checked acceptance criteria; the three external gates are soundly completed.
+The live graph and projection are healthy, with only the final task in flight and no blocked
+member. Owner validation found no unresolved safety blocker in the port migration; independent
+review of this final pass is still required before task completion and Thread closure.
+
+Known followups are not hidden by that bounded verdict:
+
+- [ID-less recovery instructions](../tasks/6ggfd81jg0qg-make-id-less-thread-planning-recovery-instructions-executable.md)
+  remain in the CLI-contract Thread.
+- [Thread-only TUI recovery](../tasks/6ggkdbg0816h-preserve-thread-only-lifecycle-recovery-guidance-in-the-tui.md)
+  remains in the TUI refinement Thread.
+- [Untouched YAML scalar fidelity](../tasks/6g1dhhk6721x-a-surgical-frontmatter-write-re-folds-multi-line-block-scalars-onto-one-line.md)
+  is an independently reproduced, pre-existing storage defect, now high priority in epic 21.
+  It is not fixed by this migration and should be addressed before the next release.
+- The dependency-policy ADR still requires acceptance in the documentation Thread.
+
+This is an owner pre-closeout check, not a new release claim or a retrospective independent
+review of every historical slice. The Thread remains in progress until final review is settled.
+
+Codex's final review is now reconciled and closed with no new findings: independently executed
+mutation, real-store recovery, oracle, composition, and bookkeeping checks corroborate the bounded
+verdict. Antigravity remains pending. No implementation change or Thread lifecycle transition
+was made while its review snapshot is active.
