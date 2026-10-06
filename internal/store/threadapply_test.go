@@ -3,8 +3,10 @@ package store
 import (
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"slices"
 	"strings"
 	"testing"
@@ -42,6 +44,124 @@ func applyStoredThreadPlan(fs *FS, plan core.ThreadApplyPlan, dryRun bool) (core
 	return fs.MutateThreadApply(threadApplyStoreNow, dryRun, func(core.ThreadApplySnapshot) (core.ThreadApplyPlan, error) {
 		return plan, nil
 	})
+}
+
+func TestThreadApplyMalformedAndStalePlansDoNotPersist(t *testing.T) {
+	gateID := testutil.TaskID("refusal-gate")
+	memberID := testutil.TaskID("refusal-member")
+	threadID := testutil.TaskID("refusal-thread")
+	for _, tc := range []struct {
+		name, diagnostic string
+		conflict         bool
+	}{
+		{"schema", "unsupported Thread apply-plan schema", false},
+		{"status", "planned Thread must be unstarted", false},
+		{"slug", "canonical filename slug", false},
+		{"date", "must equal composed_at", false},
+		{"edge slug", "requires exact stable task ids", false},
+		{"self edge", "cannot depend on itself", false},
+		{"duplicate edge", "duplicate planned dependency", false},
+		{"missing prerequisite", "planned prerequisite " + gateID + " does not exist", false},
+		{"missing dependent", "planned dependent " + memberID + " does not exist", false},
+		{"changed identity", "apply plan belongs to planning repository", true},
+		{"changed body", "different body", true},
+	} {
+		for _, dryRun := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s/preview=%t", tc.name, dryRun), func(t *testing.T) {
+				root := t.TempDir()
+				repoID := "planning"
+				gatePath := writeGraphMutationTask(t, root, "refusal-gate", domain.StatusCompleted, nil, "")
+				memberPath := writeGraphMutationTask(t, root, "refusal-member", domain.StatusNextUp, nil, "")
+				fs := threadApplyStore(root, &repoID)
+				svc := testutil.Must(core.NewService(fs, core.WithClock(func() time.Time { return threadApplyStoreNow }),
+					core.WithIDGen(func() string { return threadID }), core.WithRetry(0, func(int) {})))
+				nonmember := false
+				manifest := core.ThreadComposeManifest{
+					Thread: core.ThreadComposeInput{Title: "Refusal delivery", Description: "Retain recoverable intent", Goal: "Refuse without effects"},
+					Nodes: []core.ThreadComposeNode{
+						{Key: "gate", TaskID: gateID, Member: &nonmember},
+						{Key: "member", TaskID: memberID},
+					},
+					Dependencies: []core.ThreadComposeDependency{{From: "gate", To: "member"}},
+				}
+				before := testutil.SnapshotTree(t, root)
+				plan, err := svc.ComposeThreadApply(repoID, manifest)
+				if err != nil {
+					t.Fatal(err)
+				}
+				baseline, err := svc.ApplyThreadPlan(plan, true)
+				if err != nil || !baseline.DryRun || baseline.Committed || !baseline.Changed {
+					t.Fatalf("valid preview=%+v err=%v", baseline, err)
+				}
+				if !maps.Equal(before, testutil.SnapshotTree(t, root)) {
+					t.Fatal("valid compose/preview changed repository entries, bytes, or modes")
+				}
+
+				// Alter one valid boundary at a time; capture intentional fixture edits
+				// before measuring effects of the attempted apply.
+				switch tc.name {
+				case "schema":
+					plan.Schema++
+				case "status":
+					plan.Thread.Status = domain.ThreadStatusInProgress
+				case "slug":
+					plan.Thread.Slug = "../../outside"
+				case "date":
+					plan.Thread.Created = "2026-08-29"
+				case "edge slug":
+					plan.Dependencies[0].From = "refusal-gate"
+				case "self edge":
+					plan.Dependencies[0].From = memberID
+				case "duplicate edge":
+					plan.Dependencies = append(plan.Dependencies, plan.Dependencies[0])
+				case "missing prerequisite":
+					if err := os.Remove(gatePath); err != nil {
+						t.Fatal(err)
+					}
+				case "missing dependent":
+					if err := os.Remove(memberPath); err != nil {
+						t.Fatal(err)
+					}
+				case "changed identity":
+					repoID = "replacement"
+				case "changed body":
+					if _, err := svc.ApplyThreadPlan(plan, false); err != nil {
+						t.Fatal(err)
+					}
+					path, err := fs.ResolveThreadPath(threadID)
+					if err != nil {
+						t.Fatal(err)
+					}
+					content, err := os.ReadFile(path)
+					if err != nil {
+						t.Fatal(err)
+					}
+					if err := os.WriteFile(path, append(content, []byte("\nHuman recovery note.\n")...), 0o644); err != nil {
+						t.Fatal(err)
+					}
+				default:
+					t.Fatal("missing fixture edit")
+				}
+				before = testutil.SnapshotTree(t, root)
+				receipt, err := svc.ApplyThreadPlan(plan, dryRun)
+				want := domain.ErrValidation
+				if tc.conflict {
+					want = domain.ErrConflict
+				}
+				var failure *core.ThreadApplyFailure
+				if !errors.Is(err, want) || !strings.Contains(err.Error(), tc.diagnostic) || !errors.As(err, &failure) {
+					t.Fatalf("receipt=%+v err=%v; want typed %v containing %q", receipt, err, want, tc.diagnostic)
+				}
+				if receipt.Committed || receipt.Complete || receipt.Changed || receipt.DryRun != dryRun ||
+					!reflect.DeepEqual(receipt.Plan, plan) || !reflect.DeepEqual(failure.Receipt, receipt) {
+					t.Fatalf("refusal lost the plan or reported effects: %+v", receipt)
+				}
+				if !maps.Equal(before, testutil.SnapshotTree(t, root)) {
+					t.Fatal("refused apply changed repository entries, bytes, or modes")
+				}
+			})
+		}
+	}
 }
 
 func TestThreadApplyPersistsDependenciesThenThreadAndConverges(t *testing.T) {

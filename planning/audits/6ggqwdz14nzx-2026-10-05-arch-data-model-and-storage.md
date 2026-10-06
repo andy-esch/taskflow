@@ -38,7 +38,7 @@ ADR-0007 (§4) · Files read: `internal/store/frontmatter.go`, `internal/store/c
 `internal/core/service.go`, `internal/core/thread_creation.go`, `internal/tools/{flatmigrate,researchmigrate,wikimigrate}/main.go`
 · Sources cited: 4
 
-#### H1. A surgical frontmatter write silently appends one newline per write to a folded block scalar's decoded value · **Status:** open
+#### H1. A surgical frontmatter write silently appends one newline per write to a folded block scalar's decoded value · **Status:** tracked by 6g1dhhk6721x
 
 **File:** internal/store/frontmatter.go:273 | **Component:** store/frontmatter (surgical write path)
 **Effort:** S · **Urgency:** soon
@@ -79,6 +79,12 @@ Two scoping facts, stated so the severity is not overread:
 **Follow-up:** whether to carry a vendored patch or a version pin for yaml/go-yaml#337 while it is open is a dependency-policy call, not part of this fix; the choke-point guard is correct regardless of what upstream does.
 
 **Recommendation:** At updateFrontmatter/assembleFile, re-emit only the nodes an update names (or fail closed on a folded scalar), pinned by a decoded-value round-trip fixture covering >, >-, | and a more-indented body.
+
+**Resolution:** Independently reproduced during boundary closeout: five
+updateFrontmatter tier writes changed a more-indented folded scalar from 41 to
+46 decoded bytes. Existing task now covers decoded-value fidelity, is high
+priority/tier 2, and remains ready in epic 21 outside the adapter-neutral
+migration. Not fixed; prioritize before the next release.
 
 ## Executive summary
 
@@ -427,4 +433,4 @@ Again tracked, not re-reported.
 <!-- candidate-tasks:v1 · ○ open · ● in-progress · ✔ fixed · → tracked · ◌ deferred · ◌ superseded · ✘ wontfix -->
 <!-- Add or replace one row with `tskflwctl audit finding <audit> <code> --candidate "<one line>"`; an empty value removes it. -->
 
-- ○ H1 · open — Fold into planning/tasks/6g1dhhk6721x-a-surgical-frontmatter-write-re-folds-multi-line-block-scalars-onto-one-line.md — its AC-1 already covers this; the accretion case is new evidence against its tier-4 triage
+- → H1 · tracked — Preserve untouched YAML scalar values and wrapping | tracked by 6g1dhhk6721x | high priority; decoded-value corruption reproduced

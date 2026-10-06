@@ -3,12 +3,14 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/config"
+	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/spacehealth"
 	"github.com/andy-esch/taskflow/internal/testutil"
 	"github.com/andy-esch/taskflow/internal/userconfig"
@@ -152,9 +154,13 @@ func TestGlobalSpace_UnknownListsKnownLabels(t *testing.T) {
 
 	// Commands with best-effort repo discovery may only fall back when selection was
 	// ambient. An explicit bad address remains fatal.
-	_, _, err = runSelection(t, "--space", "missing", "template", "list")
-	if err == nil || ExitCode(err) != 10 {
-		t.Fatalf("template swallowed explicit bad space: %v", err)
+	for _, args := range [][]string{{"template", "list"}, {"theme", "list"}, {"theme", "preview", "--variant", "dark"}} {
+		t.Run(strings.Join(args, "/"), func(t *testing.T) {
+			stdout, _, err := runSelection(t, append([]string{"--space", "missing"}, args...)...)
+			if !errors.Is(err, domain.ErrNotFound) || ExitCode(err) != 10 || stdout != "" || !strings.Contains(err.Error(), `unknown space "missing"`) {
+				t.Fatalf("explicit bad space fell back: stdout=%q err=%v", stdout, err)
+			}
+		})
 	}
 }
 

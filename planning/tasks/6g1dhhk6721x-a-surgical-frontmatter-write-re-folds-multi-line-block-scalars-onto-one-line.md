@@ -3,10 +3,10 @@ schema: 1
 id: 6g1dhhk6721x
 status: ready-to-start
 epic: 21-code-quality-architecture-hardening
-description: updateFrontmatter preserves keys/comments/order but not a multi-line block scalar's wrapping, so any frontmatter write reflows unrelated values.
-effort: Unknown
-tier: 4
-priority: low
+description: Preserve untouched YAML block scalars during frontmatter edits; more-indented folded values currently accumulate decoded newlines.
+effort: 4-8 hours
+tier: 2
+priority: high
 autonomy_level: 3
 tags: [store, frontmatter]
 created: "2026-08-18"
@@ -15,13 +15,15 @@ audited: "2026-09-27"
 audit_sources: [2026-09-27-weekly-task-sweep, 2026-10-05-arch-data-model-and-storage]
 ---
 
-# A surgical frontmatter write re-folds multi-line block scalars onto one line
+# Preserve untouched YAML block scalar values and formatting
 
 ## Objective
 
-`updateFrontmatter` preserves unknown keys, comments, and key order — but it does NOT
-preserve the LINE WRAPPING of a multi-line YAML block scalar. Editing any field in a file
-that has one silently reflows that unrelated value onto a single long line.
+`updateFrontmatter` must preserve untouched scalar values, not just keys, comments, and
+order. Uniformly indented folded scalars currently reflow; more-indented folded scalars
+can silently accumulate decoded newlines. Fix both at the shared write boundary, with
+decoded-value fidelity as the first safety invariant and wrapping preservation as the
+git-native presentation invariant.
 
 ## Reproduction
 
@@ -35,7 +37,7 @@ Observed while backfilling research descriptions. A single
     -  and ADR-0002 (Projects).
     +  Synthesize ADR best practices, cross-tool Project/initiative product research, and the two repos' house style into generic ADR + Project templates tskflwctl will scaffold, plus a cross-linking scheme. The decision record behind ADR-0001 (ADRs) and ADR-0002 (Projects).
 
-**No data is lost** — a `>-` folded scalar joins its lines with spaces, so the value is
+**This uniformly indented example loses no data** — a `>-` folded scalar joins its lines with spaces, so the value is
 byte-identical (verified by round-tripping both versions through the YAML parser and
 comparing). The cost is a noisy, misleading diff: a commit that claims to change one
 field also rewrites an unrelated multi-line value, and the file gets less readable.
@@ -56,6 +58,9 @@ frontmatter.
 - [ ] If exact preservation isn't achievable through the current yaml.Node round-trip,
       the fallback is to leave a node untouched when its value is unchanged, rather than
       re-emitting it.
+- [ ] Repeated unrelated writes preserve decoded values of >, >-, and | scalars
+  with blank and more-indented lines; regression assertions distinguish value
+  corruption from formatting churn.
 
 ## Out of scope
 
@@ -120,10 +125,26 @@ scalar — `6fe4my001bdk-adrs-and-projects-format-design.md`, the doc in `## Rep
 `## Scope`'s observation that *"nothing the tool itself WRITES uses a block scalar today"*
 still holds, so the corpus is not accumulating exposure. The widened call-site count raises
 the *conditional* probability of hitting this; the shrinking corpus lowers the *base* rate.
-Net priority judgment is deliberately left to a human.
+That assessment was superseded by the decoded-value corruption reproduced below; this
+is now high-priority tier 2 work, not formatting-only polish.
 
 ## Progress Log
 
 - 2026-09-27: automated weekly sweep — reproduced the refold on HEAD in an isolated tree; found the blast radius has grown from 3 `set` verbs to 13 call sites including every lifecycle verb and `task edit`, confirmed via `task start` on a probe file; noted the chomping indicator is already preserved and that only one corpus file still carries a block scalar.
 
 Reinforced by audit 2026-10-05-arch-data-model-and-storage: H1. That finding is a PARTIAL overlap, not a duplicate — it measures a case this task's `## Reproduction` does not cover. For a `>` folded scalar whose body carries more-indented lines, each surgical write appends one newline to the *decoded* value (41 → 46 bytes over five `task set` calls, read back through `go.yaml.in/yaml/v3`), so the "**No data is lost**" premise above holds only for the uniformly-indented `>-` case it reproduces. Anchored to the open upstream defect yaml/go-yaml#337. AC-1 as already written ("byte-identical, including its wrap width and its chomping indicator") would cover both halves; the audit's note is about the severity assessment, not the scope. Propose-only — no field on this task was changed beyond this annotation and `audit_sources`.
+
+### Boundary closeout triage (2026-10-05)
+
+Independently reproduced in a disposable clone through the actual `updateFrontmatter`
+and YAML reader: five unrelated `tier` writes changed a more-indented `>` rationale
+from 41 to 46 decoded bytes. This is an existing shared storage defect, not an
+adapter-neutral boundary regression. H1 is tracked here; the task remains ready to
+start in epic 21, outside the adapter-neutral Thread. Prefer this as a near-term
+safety followup before the next release, without reopening the completed port migration.
+No claim is made that the live planning corpus contains an affected value.
+
+Require decoded-value equality across repeated unrelated writes for `>`, `>-`, and `|`,
+including blank and more-indented lines, alongside byte/wrapping checks. If faithful
+editing is infeasible, explicitly evaluate a fail-closed diagnostic rather than
+silently corrupting intent; do not rely on a raw-string diff alone.
