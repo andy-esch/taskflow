@@ -163,7 +163,7 @@ both independent reports together.
 
 ## Executive Verdict: Ready
 
-The deterministic Thread graph view implementation for task [`6g3q4rv1w9e2`](../tasks/6g3q4rv1w9e2-generate-deterministic-thread-graph-views.md) on branch `feat/deterministic-thread-graph-views` (merge base `1b9fd9b`) is complete, robust, and fully verified against [ADR-0006](../adrs/0006-adopt-threads-as-task-d4gs.md) and [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
+The deterministic Thread graph view implementation for task [`6g3q4rv1w9e2`](../tasks/6g3q4rv1w9e2-generate-deterministic-thread-graph-views.md) on branch `feat/deterministic-thread-graph-views` (merge base `1b9fd9b`) is complete, robust, and fully verified against [ADR-0006](../adrs/0006-adopt-threads-as-task-dags.md) and [`docs/ARCHITECTURE.md`](../../docs/ARCHITECTURE.md).
 
 1. **Neutral Core Projection Contract:** `core.ThreadGraphProjection` cleanly models bounded nodes (members + direct external gates), prerequisite-to-dependent edges, member-only topological waves, and an explicit `TopologyComplete` verdict without leaking renderer, framework, filesystem, or third-party graph types into `core` or `wire`.
 2. **Pure, Independent Output Adapters (`internal/graphfmt`):** Mermaid and DOT generation is housed in a standalone package with synthetic node identifiers (`n0`, `n1`, ...), strict numeric/HTML escaping, and semantic role class/attribute mapping. Directives (`%%{init...}%%`), HTML/script injection, and control characters are completely neutralized. Generated diagrams are generated at runtime and never persisted to Thread markdown files.
