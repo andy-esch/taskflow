@@ -150,7 +150,7 @@ func updateFrontmatter(content []byte, updates map[string]any) ([]byte, error) {
 		setMapNode(mapping, k, node)
 	}
 
-	return assembleFile(mapping, body, detectLineEnding(content))
+	return assembleEditedFile(fm, mapping, body, detectLineEnding(content))
 }
 
 // updateDependencySourceEdits removes exact graph-owned YAML occurrences while
@@ -253,7 +253,7 @@ func updateDependencySourceEdits(content []byte, edits []core.TaskGraphSourceEdi
 		return append([]byte(nil), content...), false, nil
 	}
 	setMapNode(mapping, "updated_at", &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!str", Value: updatedAt})
-	out, err := assembleFile(mapping, body, detectLineEnding(content))
+	out, err := assembleEditedFile(fm, mapping, body, detectLineEnding(content))
 	return out, true, err
 }
 
@@ -329,7 +329,7 @@ func replaceBodyWith(content []byte, newBody string, mutate func(mapping *yaml.N
 	if eol != "\n" {
 		body = strings.ReplaceAll(newBody, "\n", eol)
 	}
-	return assembleFile(mapping, []byte(body), eol)
+	return assembleEditedFile(fm, mapping, []byte(body), eol)
 }
 
 // documentMapping returns the top-level mapping node, creating an empty one if
