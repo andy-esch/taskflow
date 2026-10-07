@@ -76,12 +76,16 @@ checklist. Start from a previous strong brief and preserve these required sectio
 
 The most productive repeatable probes should also be tailored into the brief:
 
-- mutate the exact invariant each newly added regression test claims to protect and require that
-  test—not merely some unrelated test—to fail;
+- mutate the critical invariants selected in the brief and require the intended regression
+  test—not merely some unrelated test—to fail; count compile errors as invalid probes, not kills;
 - populate new optional wire/schema branches with non-default values in semantic validators;
 - execute every suggested repair command against each diagnostic class that recommends it; and
 - use coordinated mutations across an interface and its immediate caller so compilation by accident
   is not mistaken for a pinned architectural contract.
+
+Set the evidence floor by the review's risk and primary lenses rather than requiring exhaustive
+mutation of every new test. Give paired reviewers complementary primary responsibilities with a
+bounded cross-check; keep one shared intended contract and explicit ownership of seam failures.
 
 Every named symbol, field, lock path, test, fixture, and shipped capability must also be verified in
 the sandbox with a path/line or command result. Keep implemented evidence separate from requirements
