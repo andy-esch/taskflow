@@ -13,6 +13,7 @@ created: "2026-10-04"
 depends_on: [6g1xp8qymz1m]
 updated_at: "2026-10-06"
 started_at: "2026-10-06"
+audit_sources: [planning/audits/6gh1frgyz2fh-2026-10-06-adapter-hygiene.md]
 ---
 # Prevent silently ignored target selectors during init
 
@@ -91,3 +92,12 @@ registered --space, and environment selection. Quote/expansion-like path content
 literal; only the selected scaffold changes, not caller or registry. Full race suite,
 lint, build, generated comparisons, and planning lint pass. Codex findings are settled;
 Antigravity remains pending and this task stays in-progress until final review closeout.
+
+## Additional baseline audit evidence (2026-10-06)
+
+Reinforced by audit 2026-10-06-adapter-hygiene: H1. Both selector variants this task records as not yet reproduced now reproduce deterministically — `-C` plus `--space` bypasses the mutual-exclusion guard in `startDir()`, and an unknown `--space` is swallowed; each scaffolds the caller's cwd at exit 0. The finding also notes that `git -C` resolves later relative path options against the `-C` target, which is a ready precedent for the open "support `-C` or reject it" decision: `init --path` would resolve relative to `-C` rather than the process cwd.
+
+This is pre-implementation corroboration. The implemented policy above honors -C
+while rejecting combined explicit selectors, rather than adopting git's combined
+-C/relative-path convention. H1 is already tracked by this task; it is not a new
+unresolved implementation finding.

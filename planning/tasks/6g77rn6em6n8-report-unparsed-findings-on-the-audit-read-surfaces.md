@@ -100,3 +100,12 @@ examples. Full race suite, lint, build, generated comparisons, and planning lint
 The unchanged compact audit info warning gap joins TUI/lifecycle consumers in the
 existing 6gh82rm9sf3b followup, rather than claiming every audit consumer is migrated.
 Codex findings are settled; Antigravity is pending and this task remains in-progress.
+
+## Additional baseline audit evidence (2026-10-06)
+
+Cross-referenced by audit 2026-10-06-adapter-hygiene: M1 (partial overlap — that finding stays open). M1 supplies the mechanism behind this task's symptom and a verified reproduction: the store's `parseAuditWithFindings` already computes `NearMisses` on every audit read, but `core.AuditWithBody` carries only `{Audit, Body}`, so `ShowAudit` discards them and both `cli/audit.go:490` and `tui/detail.go:1720` re-run the narrow `domain.ParseFindings` instead. Reproduced in a throwaway repo: with a `#### M-2.` heading in the body, `audit lint` reports "its work is invisible" while `audit show` says nothing on either surface, and `audit show --json` publishes no structured findings at all. M1 goes beyond this task in also proposing the de-duplication of the parse, which is why it is not marked tracked here.
+
+This is pre-implementation evidence. The aggregate CLI warning is addressed here;
+structured finding output and duplicate adapter parsing are not claimed fixed.
+The broader M1 finding remains open, and remaining consumer warnings are sequenced
+in 6gh82rm9sf3b rather than silently widening this task.
