@@ -85,7 +85,7 @@ func runStreams(t *testing.T, root string, args ...string) (string, string, int)
 
 func TestSmoke_PublishedExitTaxonomyMatchesProcessBehavior(t *testing.T) {
 	root := t.TempDir()
-	if out, code := run(t, root, "init", "--path", root, "--no-register"); code != 0 {
+	if out, code := run(t, root, "init", "--no-register"); code != 0 {
 		t.Fatalf("init: exit %d\n%s", code, out)
 	}
 	if out, code := run(t, root, "epic", "new", "Exit Taxonomy", "--description", "test process exits"); code != 0 {
@@ -100,7 +100,7 @@ func TestSmoke_PublishedExitTaxonomyMatchesProcessBehavior(t *testing.T) {
 
 	firstSpace, secondSpace := t.TempDir(), t.TempDir()
 	for _, space := range []string{firstSpace, secondSpace} {
-		if out, code := run(t, space, "init", "--path", space, "--no-register"); code != 0 {
+		if out, code := run(t, space, "init", "--no-register"); code != 0 {
 			t.Fatalf("space init: exit %d\n%s", code, out)
 		}
 	}
@@ -200,7 +200,7 @@ func TestSmoke_LifecycleAndExitCodes(t *testing.T) {
 	root := t.TempDir()
 
 	// init scaffolds the tree.
-	if out, code := run(t, root, "init", "--path", root); code != 0 {
+	if out, code := run(t, root, "init"); code != 0 {
 		t.Fatalf("init: exit %d\n%s", code, out)
 	}
 	if out, code := run(t, root, "epic", "new", "Smoke Epic", "--description", "smoke"); code != 0 {

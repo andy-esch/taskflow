@@ -34,10 +34,14 @@ func newInitCmd(app *App) *cobra.Command {
 			"legacy content is preserved and reported.\n" +
 			"Bare init against an existing configuration reports its topology without\n" +
 			"changing it; use\n" +
-			"`tskflwctl config migrate` for safe configuration upgrades.",
+			"`tskflwctl config migrate` for safe configuration upgrades.\n" +
+			"Select the directory with --path or -C, or an existing registered entry\n" +
+			"point with --space (also TSKFLW_SPACE). Explicit --path or -C overrides\n" +
+			"TSKFLW_SPACE; conflicting explicit selectors are rejected before writes.",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "mutating"},
 		Example: "  tskflwctl init\n" +
+			"  tskflwctl -C ../new-planning init --no-register\n" +
 			"  tskflwctl init --taskflow-root planning\n" +
 			"  tskflwctl init --planning-repo ../desirelines-planning\n" +
 			"  tskflwctl init --no-register",
@@ -49,13 +53,13 @@ func newInitCmd(app *App) *cobra.Command {
 		// falls back to the full scaffold (today's non-interactive behavior).
 		PersistentPreRunE: app.styleOnlyPreRun,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			abs, err := app.initDirectory(cmd, path)
+			if err != nil {
+				return err
+			}
 			// init writes through the topology package before a repository-backed
 			// service exists, so enforce the same command capability at this boundary.
 			if err := app.authorizeMutation(); err != nil {
-				return err
-			}
-			abs, err := filepath.Abs(path)
-			if err != nil {
 				return err
 			}
 			// A bare init against an existing config is an identity read, never a hidden
@@ -88,11 +92,11 @@ func newInitCmd(app *App) *cobra.Command {
 			return runInitScaffold(app, abs, chosenRoot, tracks, register)
 		},
 	}
-	cmd.Flags().StringVar(&path, "path", ".", "directory to initialize")
+	cmd.Flags().StringVar(&path, "path", ".", "directory to initialize (overrides TSKFLW_SPACE; conflicts with -C and --space)")
 	cmd.Flags().StringVar(&taskflowRoot, "taskflow-root", "",
 		"scaffold the planning tree in this subdirectory instead of the repo root (sets taskflow_root; e.g. planning)")
 	cmd.Flags().StringVar(&planningRepo, "planning-repo", "",
-		"point this repo at an external planning repo (relative to --path, or absolute): writes a pointer config, no tree")
+		"point this repo at an external planning repo (relative to the selected init directory, or absolute): writes a pointer config, no tree")
 	cmd.Flags().StringSliceVar(&tracks, "track", nil,
 		"record an impl repo this planning repo tracks (repeatable; scaffold mode only)")
 	cmd.Flags().BoolVar(&noLinkBack, "no-link-back", false,
@@ -100,6 +104,30 @@ func newInitCmd(app *App) *cobra.Command {
 	cmd.Flags().BoolVar(&noRegister, "no-register", false,
 		"don't add a freshly initialized repo to this machine's space registry (also TSKFLW_NO_REGISTER)")
 	return cmd
+}
+
+// initDirectory shares ordinary entry-point selection without requiring planning
+// discovery for a fresh -C/--path directory. Registry selections still validate
+// their exact entry point; they never fall back to cwd or rebind a stale identity.
+func (a *App) initDirectory(cmd *cobra.Command, path string) (string, error) {
+	pathSet := cmd.Flags().Changed("path")
+	chdirSet := cmd.Flags().Changed("chdir")
+	spaceSet := cmd.Flags().Changed("space")
+	if pathSet && (chdirSet || spaceSet) {
+		return "", fmt.Errorf("%w: --path, -C, and --space are alternative init targets; pass only one", domain.ErrValidation)
+	}
+	if (pathSet && strings.TrimSpace(path) == "") || (chdirSet && strings.TrimSpace(a.Chdir) == "") ||
+		(spaceSet && strings.TrimSpace(a.Space) == "") {
+		return "", fmt.Errorf("%w: an explicit init target must not be empty", domain.ErrValidation)
+	}
+	if !pathSet {
+		var err error
+		path, err = a.startDir()
+		if err != nil {
+			return "", err
+		}
+	}
+	return filepath.Abs(path)
 }
 
 func initTopologyFlagsChanged(cmd *cobra.Command, tracks []string) bool {
