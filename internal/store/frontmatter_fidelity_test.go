@@ -3,6 +3,7 @@ package store
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"reflect"
 	"strings"
@@ -141,6 +142,110 @@ func TestBlockScalarExplicitReplacement(t *testing.T) {
 	}
 	if !bytes.Contains(out, []byte("other: |-\n  untouched\n")) {
 		t.Fatalf("untouched entry changed:\n%s", out)
+	}
+}
+
+func TestBlockScalarParagraphCommentsAllowSurgicalWrites(t *testing.T) {
+	for _, eol := range []string{"\n", "\r\n"} {
+		for _, indent := range []string{"", "  "} {
+			for _, blanks := range []int{0, 1, 2, 3, 5} {
+				t.Run(fmt.Sprintf("eol=%q/indent=%d/blanks=%d", eol, len(indent), blanks), func(t *testing.T) {
+					scalar := indent + "notes: |+\n" + indent + "  keep\n\n\n"
+					comment := indent + "# paragraph 1\n" + strings.Repeat(indent+"\n", blanks) + indent + "# paragraph 2\n"
+					original := []byte(strings.ReplaceAll("---\n"+scalar+comment+indent+"tier: 2\n"+
+						indent+"depends_on: [6fbj870001t6, 6fbj870001t6]\n---\nbody\n", "\n", eol))
+					wantNotes := fidelityValues(t, original)["notes"]
+					for _, operation := range []string{"unrelated field", "commented field", "body", "dependency", "remove commented field"} {
+						var out []byte
+						var err error
+						switch operation {
+						case "unrelated field":
+							out, err = updateFrontmatter(original, map[string]any{"updated_at": "2026-10-07"})
+						case "commented field":
+							out, err = updateFrontmatter(original, map[string]any{"tier": 3})
+						case "body":
+							out, err = replaceBodyStamped(original, "new body\n", "2026-10-07")
+						case "dependency":
+							out, _, err = updateDependencySourceEdits(original, []core.TaskGraphSourceEdit{{
+								Field: core.TaskDependencyDependsOn, Action: core.TaskGraphSourceDedupe, Value: "6fbj870001t6",
+							}}, "2026-10-07")
+						case "remove commented field":
+							out, err = updateFrontmatter(original, map[string]any{"tier": domain.UnsetField{}})
+						}
+						if err != nil {
+							t.Fatalf("%s: valid comment paragraphs froze a write: %v", operation, err)
+						}
+						if !bytes.Contains(out, []byte(strings.ReplaceAll(scalar, "\n", eol))) || fidelityValues(t, out)["notes"] != wantNotes {
+							t.Fatalf("%s: comment backtracking consumed keep-chomp scalar bytes/value:\n%s", operation, out)
+						}
+						if operation != "commented field" && operation != "remove commented field" && !bytes.Contains(out, []byte(strings.ReplaceAll(comment, "\n", eol))) {
+							t.Fatalf("%s: untouched comment paragraph spacing changed:\n%s", operation, out)
+						}
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestBlockScalarParagraphCommentsAllowFieldWrites(t *testing.T) {
+	for _, eol := range []string{"\n", "\r\n"} {
+		t.Run(fmt.Sprintf("eol=%q", eol), func(t *testing.T) {
+			root := t.TempDir()
+			scalar := strings.ReplaceAll("notes: |+\n  keep\n\n\n", "\n", eol)
+			path, content := testutil.TaskFixture(root, "not-started", "paragraph-comments.md",
+				strings.ReplaceAll("---\nschema: 1\nepic: 01-x\ntags: [probe]\nnotes: |+\n  keep\n\n\n"+
+					"# paragraph 1\n\n\n\n# paragraph 2\ntier: 2\n---\nbody\n", "\n", eol))
+			before := []byte(content)
+			testutil.Write(t, path, content)
+			fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
+			if _, err := fs.SetFields("paragraph-comments", map[string]any{"tier": 3}, false); err != nil {
+				t.Fatal(err)
+			}
+			after, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			assertFidelity(t, after, scalar, fidelityValues(t, before))
+			if fidelityValues(t, after)["tier"] != 3 {
+				t.Fatalf("field write did not apply:\n%s", after)
+			}
+			for _, comment := range []string{"# paragraph 1", "# paragraph 2"} {
+				if bytes.Count(after, []byte(comment)) != 1 {
+					t.Fatalf("comment %q lost or duplicated:\n%s", comment, after)
+				}
+			}
+		})
+	}
+}
+
+func TestBlockScalarDependencyRepairRefusesDecodedDriftWithValidYAML(t *testing.T) {
+	root := t.TempDir()
+	prerequisiteID := testutil.TaskID("fidelity-prerequisite")
+	writeGraphMutationTask(t, root, "fidelity-prerequisite", domain.StatusCompleted, nil, "")
+	// A hand-authored invalid declaration may remain while --auto removes a
+	// different duplicate. Editing that sequence makes yaml.v3 refold the retained
+	// scalar into valid YAML with a different decoded value. No fabricated nodes.
+	dependencies := "depends_on:\n  - >\n    first line\n      indented line\n  - " + prerequisiteID + "\n  - " + prerequisiteID + "\n"
+	path, content := testutil.TaskFixture(root, "not-started", "fidelity-owner.md",
+		"---\nschema: 1\nepic: 01-x\ntags: [probe]\ntier: 2\n"+dependencies+"---\nbody\n")
+	before := []byte(content)
+	testutil.Write(t, path, content)
+	edit := core.TaskGraphSourceEdit{Field: core.TaskDependencyDependsOn, Action: core.TaskGraphSourceDedupe, Value: prerequisiteID}
+	if out, _, err := updateDependencySourceEdits(before, []core.TaskGraphSourceEdit{edit}, "2026-10-07"); out != nil || !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), "decoded values differ from the requested edit") {
+		t.Fatalf("expected decoded-value refusal rather than a syntax error: out=%q err=%v", out, err)
+	}
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
+	service := core.MustNewService(fs)
+	for _, dryRun := range []bool{true, false} {
+		receipt, err := service.RepairTaskGraph(core.TaskGraphRepairRequest{Auto: true}, dryRun)
+		if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), "decoded values differ from the requested edit") || receipt.Committed || len(receipt.AppliedFiles) != 0 {
+			t.Fatalf("dry-run=%v: unsafe serialization was not refused before effects: receipt=%+v err=%v", dryRun, receipt, err)
+		}
+		after, err := os.ReadFile(path)
+		if err != nil || !bytes.Equal(after, before) {
+			t.Fatalf("dry-run=%v: refused graph repair changed file bytes: err=%v\n%s", dryRun, err, after)
+		}
 	}
 }
 

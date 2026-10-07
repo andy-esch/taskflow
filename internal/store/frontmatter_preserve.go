@@ -168,13 +168,23 @@ func frontmatterEntrySources(source []byte, mapping *yaml.Node) (map[string]fron
 		}
 		line := key.Line - 1
 		// Comments on a following key belong to that entry, not to the previous
-		// scalar. Consume exactly the parsed head comment, never the blank lines
-		// that a preceding |+ scalar owns. The first entry's document preamble is
-		// kept separately, even if that field is removed.
+		// scalar. Match the parsed comment lines, preserving physical paragraph
+		// separators but never the blank lines that a preceding |+ scalar owns.
+		// Keep the first entry's document preamble separate, even when removing
+		// that field.
 		if i > 0 && key.HeadComment != "" {
 			comments := strings.Split(key.HeadComment, "\n")
 			for j := len(comments) - 1; j >= 0; j-- {
-				if line == 0 || strings.TrimSpace(string(source[lines[line-1]:lines[line]])) != strings.TrimSpace(comments[j]) {
+				// yaml.v3 coalesces blank runs and can add a trailing newline for
+				// CRLF comments. Empty parsed segments aren't physical line counts.
+				comment := strings.TrimSpace(comments[j])
+				if comment == "" {
+					continue
+				}
+				for line > 0 && strings.TrimSpace(string(source[lines[line-1]:lines[line]])) == "" {
+					line--
+				}
+				if line == 0 || strings.TrimSpace(string(source[lines[line-1]:lines[line]])) != comment {
 					return nil, nil, 0, fmt.Errorf("cannot locate head comment for %q", key.Value)
 				}
 				line--
