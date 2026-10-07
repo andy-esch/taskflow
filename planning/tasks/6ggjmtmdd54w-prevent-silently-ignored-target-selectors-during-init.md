@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6ggjmtmdd54w
-status: next-up
+status: in-progress
 epic: 21-code-quality-architecture-hardening
 description: Reject or explicitly honor init target selectors so -C or --space cannot silently initialize the caller's working directory.
 effort: 2-4 hours
@@ -11,7 +11,8 @@ autonomy_level: 3
 tags: [cli, safety, contracts]
 created: "2026-10-04"
 depends_on: [6g1xp8qymz1m]
-updated_at: "2026-10-04"
+updated_at: "2026-10-06"
+started_at: "2026-10-06"
 ---
 # Prevent silently ignored target selectors during init
 
@@ -34,11 +35,11 @@ During 2026-10-04 throwaway-space dogfood for task 6ggdkztshmzz, running `tskflw
 
 ## Acceptance criteria
 
-- [ ] A two-directory test proves init cannot mutate caller cwd after an explicit different target selector is supplied.
-- [ ] Unsupported or conflicting explicit target combinations fail before any write, with actionable guidance.
-- [ ] Accepted target combinations work for fresh scaffold and existing-config repair; pointer mode remains covered.
-- [ ] Environment space defaults are deliberate and documented; no hidden registry mutation occurs in no-register tests.
-- [ ] Human help, generated docs, and JSON/exit behavior match the chosen policy; normal validation passes.
+- [x] A two-directory test proves init cannot mutate caller cwd after an explicit different target selector is supplied.
+- [x] Unsupported or conflicting explicit target combinations fail before any write, with actionable guidance.
+- [x] Accepted target combinations work for fresh scaffold and existing-config repair; pointer mode remains covered.
+- [x] Environment space defaults are deliberate and documented; no hidden registry mutation occurs in no-register tests.
+- [x] Human help, generated docs, and JSON/exit behavior match the chosen policy; normal validation passes.
 
 ## Sequencing
 
@@ -48,3 +49,45 @@ Independent CLI safety followup, not a blocker for the adapter-neutral refactor 
 
 - [Core impact/recovery task](6ggdkztshmzz-make-dependency-impact-and-recovery-semantics-core-owned.md)
 - [Configuration lifecycle](6g1xp8qymz1m-consolidate-the-configuration-lifecycle-under-one-config-command-hub.md)
+
+## Implemented selector policy (2026-10-06)
+
+Init now honors global -C without requiring planning discovery, and --space/environment
+defaults use the ordinary exact registered-entry selector. Explicit --path or -C
+overrides TSKFLW_SPACE. --path/-C/--space are mutually exclusive explicit targets;
+blank selectors fail validation before writes. Stale or missing space selections
+never fall back to caller cwd.
+
+Two-directory snapshots prove caller/registry remain untouched for selected scaffold,
+repair, pointer mode, and invalid combinations. Pointer-relative planning paths
+resolve from the selected directory. JSON receipts and real-process smoke tests pass.
+Existing init test helpers injected -C implicitly; they now distinguish real cwd from
+the selector, avoiding the same blind spot in future tests.
+
+The only other style-only namespace is space: it intentionally operates on registry
+entries identified by explicit subcommand arguments, not on an implicit planning tree.
+No independent ignored-planning-target mutation was found there. Help and generated
+reference document the policy. Race suite, lint, build, and planning lint passed.
+
+Machine-contract revision 1.82 is NOT ADDITIVE: formerly accepted combinations now refuse. Migration: choose exactly one explicit --path, -C, or --space; --path/-C override the ambient space default.
+
+## External review handoff (2026-10-06)
+
+Prepared two independent audits with no findings:
+[Codex](../audits/6gh86jxj4sve-2026-10-06-shared-write-and-audit-safety-implementation-codex.md)
+and [Antigravity](../audits/6gh86jxtyx5k-2026-10-06-shared-write-and-audit-safety-implementation-antigravity.md).
+
+Codex leads init/audit/machine-contract checks; Antigravity leads YAML preservation.
+Both cross-check the other lens and must use independent dirty-state-capturing sandboxes,
+bounded compiler-valid mutation evidence, and guarded one-audit transfer. Review has
+not run; implementation remains in-progress pending owner triage.
+
+## Review triage (2026-10-07)
+
+Codex M1 was confirmed and fixed: scaffold-repair advice now includes the shell-quoted
+resolved -C target and preserves flag/environment registration opt-out. A real-process
+regression executes the emitted command verbatim from another cwd for -C, --path,
+registered --space, and environment selection. Quote/expansion-like path contents stay
+literal; only the selected scaffold changes, not caller or registry. Full race suite,
+lint, build, generated comparisons, and planning lint pass. Codex findings are settled;
+Antigravity remains pending and this task stays in-progress until final review closeout.

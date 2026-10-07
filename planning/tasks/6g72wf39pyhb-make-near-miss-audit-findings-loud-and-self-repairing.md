@@ -10,7 +10,7 @@ priority: high
 autonomy_level: 3
 tags: [audit, findings, dx, robustness]
 created: "2026-09-05"
-updated_at: "2026-09-05"
+updated_at: "2026-10-06"
 depends_on: [6fm8p1cj11qf, 6g392b0rps7w]
 audit_sources: [planning/audits/6g7731f5kjkw-2026-09-05-tool-owned-sub-entity-writes-implementation-claude.md, planning/audits/6g7731f8zzjq-2026-09-05-tool-owned-sub-entity-writes-implementation-antigravity.md]
 started_at: "2026-09-05"
@@ -149,3 +149,14 @@ rule inside it is easy to miss. Land that first, or land it with this.
   every queued brief and fresh scaffold.
 - [x] Reviewer-brief boilerplate and schema audit no longer state that **Status:**
   on its own line breaks parsing, because it does not.
+
+## Recognition amendment (2026-10-06)
+
+The followup [6g77rn6b9wf8](6g77rn6b9wf8-narrow-the-near-miss-finding-recognizer-and-re-measure-across-every-entity-type.md)
+replaces this task's historical code-shaped heuristic with four explicit evidence
+classes. Raw matches are not auto-repair permission. Number-only and seven-hash
+headings intentionally remain outside the canonical grammar; ordinary numbered
+sections must never become findings. Suspected headings are reported separately,
+not counted in parsed denominators. Repairable drift requires its own Status marker;
+Status on its own line is valid and is not a parser-loss condition. The review-brief
+generator now states that correctly as well.

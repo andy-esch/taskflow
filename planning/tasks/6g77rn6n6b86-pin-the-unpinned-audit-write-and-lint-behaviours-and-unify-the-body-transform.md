@@ -10,6 +10,7 @@ priority: medium
 autonomy_level: 3
 tags: [audit, store, tests, hygiene]
 created: "2026-09-05"
+updated_at: "2026-10-06"
 ---
 
 # Pin the unpinned audit write and lint behaviours, and unify the body-transform twins
@@ -47,7 +48,7 @@ while unifying the twins.
 - [ ] `TransformAuditBody` tests assert that the returned `domain.Audit` is the parsed post-transform
   entity (including stable identity and updated finding counts) and that an invalid transformed
   document is rejected before any disk write.
-- [ ] The comments for `NearMissHeader`, `LintFindings`, `auditProgressCell`, and `auditStateNote`
+- [x] The comments for `NearMissHeader`, `LintFindings`, `auditProgressCell`, and `auditStateNote`
   each document the declaration they precede. `internal/wire/schema_comments.json` is regenerated
   and no longer attributes `LintFindings` semantics to `NearMissHeader`.
 - [ ] Only after the preceding pins are green, `TransformAuditBody` and `TransformTaskBody` delegate
@@ -85,3 +86,12 @@ while unifying the twins.
   [audit read surfaces](6g77rn6em6n8-report-unparsed-findings-on-the-audit-read-surfaces.md),
   [remaining write guards](6g77rn6hvmh8-close-the-remaining-audit-body-write-guard-gaps.md), and
   [candidate-task convention](6g3ag8py12y9-decide-the-candidate-list-convention-and-make-the-tool-own-it.md)
+
+## Overlap settled (2026-10-06)
+
+The classifier/read-surface batch repaired declaration ownership for NearMissHeader,
+LintFindings, auditProgressCell, and auditStateNote and regenerated schema_comments.json.
+AC 7 is met here rather than left as stale work. New tests also cover empty/unparsed
+rendering and evidence upgrades in IntroducedNearMissHeaders, but the remaining
+mutation-killing behavior pins and shared body-transform extraction are not claimed
+complete. Keep those independent review units scoped here.
