@@ -18,7 +18,7 @@ func TestSchemaHumanNormalizesRevisionPolicy(t *testing.T) {
 			t.Fatalf("SchemaHuman: %v", err)
 		}
 		for _, want := range []string{
-			"JSON revision: monotonic-revision · additive · classified since 1.68",
+			"JSON revision: " + wire.SchemaRevisionScheme + " · " + wire.SchemaRevisionCompatibility + " · classified since " + wire.SchemaRevisionClassificationSince,
 			"Scope: all-json-output · generated schema: typed-envelopes",
 		} {
 			if !strings.Contains(out.String(), want) {

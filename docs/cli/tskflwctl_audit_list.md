@@ -17,6 +17,9 @@ into four bands so the shape reads at a glance:
   ░ dim     still open           open
 
 The glyphs differ as well as the colors, so the bands survive --color=never.
+Unparsed finding-like headers are reported separately, never counted as findings;
+use audit lint <audit> to inspect them. The optional unparsed_findings column
+(alias unparsed) is blank when the optional JSON count is absent.
 
 ```
 tskflwctl audit list [flags]
@@ -35,7 +38,7 @@ tskflwctl audit list [flags]
 ```
       --all               all buckets
       --closed            closed audits only
-  -c, --columns strings   select columns for -o table/csv/json, comma-separated (-o table when no format is pinned); available: slug,bucket,area,date,findings,open_findings,id,location
+  -c, --columns strings   select columns for -o table/csv/json, comma-separated (-o table when no format is pinned); available: slug,bucket,area,date,findings,open_findings,id,unparsed_findings,location
       --deferred          deferred audits only
   -h, --help              help for list
   -o, --output string     output format: human|json|name|table|csv

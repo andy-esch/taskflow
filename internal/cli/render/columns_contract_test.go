@@ -134,6 +134,26 @@ func TestContractColumnSupportsSelfNamedCanonicalProjection(t *testing.T) {
 	}
 }
 
+func TestLoadedRecordColumnsPreserveOptionalProjectionPolicy(t *testing.T) {
+	base, err := SelectColumns(AuditColumns(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	loaded, err := SelectColumns(AuditReadColumns(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(names(base), ",") != strings.Join(names(loaded), ",") {
+		t.Fatalf("lifting expanded default columns: base=%v loaded=%v", names(base), names(loaded))
+	}
+	for _, selector := range []string{"unparsed", "unparsed_findings"} {
+		selected, err := SelectColumns(AuditReadColumns(), []string{selector})
+		if err != nil || len(selected) != 1 || selected[0].selectorName() != "unparsed_findings" {
+			t.Fatalf("lifting lost optional alias/projection: %+v err=%v", selected, err)
+		}
+	}
+}
+
 func assertPanicsWith(t *testing.T, want string, fn func()) {
 	t.Helper()
 	defer func() {
@@ -188,7 +208,7 @@ func TestColumnRegistriesMatchFullWireValues(t *testing.T) {
 		[]registryFixture[core.LoadedRecord[domain.Audit]]{
 			{name: "present", item: core.LoadedRecord[domain.Audit]{Value: domain.Audit{
 				ID: "6ga000000099", Slug: "2026-09-14-present", Bucket: domain.AuditOpen,
-				Area: "cli", Date: "2026-09-14", Findings: 4, OpenFindings: 2,
+				Area: "cli", Date: "2026-09-14", Findings: 4, OpenFindings: 2, UnparsedFindings: 1,
 			}, Source: core.RecordSource{ID: "6ga000000003", Location: "db://audits/present"}}},
 			{name: "zero counts and absent optional strings", item: core.LoadedRecord[domain.Audit]{Value: domain.Audit{
 				Slug: "2026-09-14-zero", Bucket: domain.AuditClosed,

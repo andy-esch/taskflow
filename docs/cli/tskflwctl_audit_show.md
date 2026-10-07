@@ -2,6 +2,11 @@
 
 Show an audit's metadata and body
 
+### Synopsis
+
+Show an audit's metadata and body. Unparsed finding-like headers qualify the
+parsed counts even with --frontmatter-only; use audit lint <audit> for details.
+
 ```
 tskflwctl audit show <audit> [flags]
 ```

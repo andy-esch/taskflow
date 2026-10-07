@@ -47,6 +47,42 @@ func TestAppendAuditBody_RefusesIntroducedNearMissHeader(t *testing.T) {
 	}
 }
 
+func TestAuditBodyWritesPreserveOrdinaryCodeShapedHeadings(t *testing.T) {
+	for _, heading := range []string{"S3 Storage Architecture", "V2 Migration Guide", "MP3 Audio Support", "Top3 Recommendations"} {
+		t.Run(heading, func(t *testing.T) {
+			fs, path := auditRepo(t, "probe.md", cleanAuditSource)
+			text := "## Context\n\n### " + heading + "\n\nOrdinary explanatory prose.\n"
+			if _, _, err := fs.AppendAuditBody("probe", text, writeNow, false); err != nil {
+				t.Fatalf("ordinary append refused: %v", err)
+			}
+			_, changed, err := fs.EditAudit("probe", writeNow, func(current string, _ error) (string, error) {
+				return current + "\n### " + heading + " again\n", nil
+			})
+			if err != nil || !changed {
+				t.Fatalf("ordinary edit refused: changed=%v err=%v", changed, err)
+			}
+			before, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, _, changed, err = fs.TransformAuditBody("probe", writeNow, false, func(_ domain.Audit, body string) (string, error) {
+				next, hits := domain.CanonicalizeFindingHeaders(body)
+				if len(hits) != 0 {
+					t.Fatalf("ordinary prose was repairable: %+v", hits)
+				}
+				return next, nil
+			})
+			if err != nil || changed {
+				t.Fatalf("ordinary repair was not a no-op: changed=%v err=%v", changed, err)
+			}
+			after, err := os.ReadFile(path)
+			if err != nil || string(after) != string(before) {
+				t.Fatalf("ordinary prose changed: %v\n%s", err, after)
+			}
+		})
+	}
+}
+
 // A canonical append still lands — the guard must not make appending findings harder.
 func TestAppendAuditBody_AcceptsCanonicalHeader(t *testing.T) {
 	fs, p := auditRepo(t, "2026-01-01-c.md", cleanAuditSource)

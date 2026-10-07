@@ -82,8 +82,9 @@ We dogfood: drive this repo's planning with the tool itself.
   **`tracked` means handed to a task and REQUIRES the destination** (`tracked by
   <task-id>`) — it counts toward the audit's done band, because the audit's interest
   concludes when a finding is transferred. An audit's headline percent is the **settled**
-  share (everything with a terminal disposition), so 100% is exactly when it is ready to
-  close.
+  share of parsed findings with a terminal disposition. With complete parsing, 100%
+  is ready to close; an `unparsed_findings` warning suppresses that claim and points
+  to `audit lint` without adding suspected headings to the denominator.
 - **Triage (agents, cheapest first):** lead with the terse path — `epic show
   <id>` for an epic's task roster, and `task list -o table -c
   slug,status,description` for a compact, byte-stable table. `--json` is compact

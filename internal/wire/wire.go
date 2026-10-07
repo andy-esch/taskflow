@@ -340,7 +340,14 @@ import (
 // core-owned newly_unsafe/newly_inconsistent warning decisions. Dependency
 // mutation receipts expose optional remedy guidance for proposed unsafe changes
 // and durable-prefix recovery; preview/refusal/applied evidence remains explicit.
-const SchemaVersion = "1.81"
+// 1.82: NOT ADDITIVE — init now honors entry-point selectors and rejects formerly
+// accepted --path/-C/--space combinations. Callers must choose one explicit target;
+// --path or -C overrides TSKFLW_SPACE. Audit DTOs also gain optional unparsed_findings
+// and an opt-in unparsed list column. Suspected headers qualify read completeness:
+// parsed denominators stay unchanged, but incomplete audits no longer claim readiness.
+// Status authority is limited to visible heading metadata or standalone Status
+// lines; inline code and body prose/quoted examples cannot grant automatic repair.
+const SchemaVersion = "1.82"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.
@@ -355,7 +362,7 @@ const (
 	SchemaRevisionClassificationSince = "1.68"
 	// SchemaRevisionCompatibility classifies the current revision. It must agree
 	// with the current changelog entry; wire_changelog_test.go enforces that.
-	SchemaRevisionCompatibility = "additive"
+	SchemaRevisionCompatibility = "not-additive"
 	// SchemaRevisionCompatibilityDefault is policy, not a guarantee: every
 	// revision still declares its own classification.
 	SchemaRevisionCompatibilityDefault = "additive"

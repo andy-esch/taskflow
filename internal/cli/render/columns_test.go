@@ -349,7 +349,11 @@ func TestWriteTablePlain_EpicExtractors(t *testing.T) {
 
 func TestWriteTablePlain_AuditExtractors(t *testing.T) {
 	var b bytes.Buffer
-	WriteTablePlain(&b, AuditColumns(), []domain.Audit{{
+	cols, err := SelectColumns(AuditColumns(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	WriteTablePlain(&b, cols, []domain.Audit{{
 		ID: "6ga000000002", Slug: "2026-06-19-x", Bucket: domain.AuditOpen, Area: "cli",
 		Date: "2026-06-19", Findings: 4, OpenFindings: 1,
 	}})
@@ -405,7 +409,11 @@ func TestWriteCSV(t *testing.T) {
 
 func TestWriteCSV_EmptyIsHeaderOnly(t *testing.T) {
 	var b bytes.Buffer
-	if err := WriteCSV(&b, AuditColumns(), nil); err != nil {
+	cols, err := SelectColumns(AuditColumns(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := WriteCSV(&b, cols, nil); err != nil {
 		t.Fatal(err)
 	}
 	if got := strings.TrimSpace(b.String()); got != "slug,bucket,area,date,findings,open,id" {

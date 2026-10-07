@@ -114,7 +114,10 @@ func newAuditListCmd(app *App) *cobra.Command {
 			"  ▓ yellow  still being worked   in-progress\n" +
 			"  ▒ gray    settled by dropping  deferred · superseded · wontfix\n" +
 			"  ░ dim     still open           open\n\n" +
-			"The glyphs differ as well as the colors, so the bands survive --color=never.",
+			"The glyphs differ as well as the colors, so the bands survive --color=never.\n" +
+			"Unparsed finding-like headers are reported separately, never counted as findings;\n" +
+			"use audit lint <audit> to inspect them. The optional unparsed_findings column\n" +
+			"(alias unparsed) is blank when the optional JSON count is absent.",
 		Example:     "  tskflwctl audit list\n  tskflwctl audit list --all -o table -c slug,open\n  tskflwctl audit list --closed -o json",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "read-only"},
@@ -471,6 +474,7 @@ func newAuditShowCmd(app *App) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "show <audit>",
 		Short:             "Show an audit's metadata and body",
+		Long:              "Show an audit's metadata and body. Unparsed finding-like headers qualify the\nparsed counts even with --frontmatter-only; use audit lint <audit> for details.",
 		Example:           "  tskflwctl audit show 2026-06-20-api-gateway\n  tskflwctl audit show 2026-06-20-api-gateway --section findings\n  tskflwctl audit show 2026-06-20-api-gateway --frontmatter-only",
 		Args:              cobra.MaximumNArgs(1), // bare → picker on a TTY; non-interactive needs the slug
 		Annotations:       map[string]string{"safety": "read-only"},

@@ -266,5 +266,7 @@ func parseAuditWithFindings(content []byte, path string) (domain.Audit, []domain
 	a.ActiveFindings = tally.Active
 	a.DoneFindings = tally.Done
 	a.DroppedFindings = tally.Dropped
-	return a, findings, domain.NearMissFindingHeaders(bodyText), domain.LintCandidateTasks(bodyText, findings), nil
+	nearMisses := domain.NearMissFindingHeaders(bodyText)
+	a.UnparsedFindings = len(nearMisses)
+	return a, findings, nearMisses, domain.LintCandidateTasks(bodyText, findings), nil
 }

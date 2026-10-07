@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-// Every shape that ParseFindings silently drops must be recognised, and each must
+// Supported drift with local finding evidence must be recognised, and each must
 // canonicalise to a header the parser then accepts. The canonical output is fed
 // back through ParseFindings so the repair is proven, not just asserted.
 func TestNearMissFindingHeaders_CatchesEverySilentLossShape(t *testing.T) {
@@ -74,6 +74,9 @@ func TestNearMissFindingHeaders_IgnoresOrdinaryHeadings(t *testing.T) {
 		"### Step 4 verification",
 		"### Option 3 tradeoffs",
 		"### Wave 1 follow-up",
+		"#### 1. Numeric sections are not finding codes",
+		"#### 1. Numeric section · **Status:** open",
+		"####### H1. Seven hashes are outside ATX finding depth · **Status:** open",
 	} {
 		if hits := NearMissFindingHeaders(line + "\n"); len(hits) != 0 {
 			t.Errorf("false positive on %q: %+v", line, hits)
@@ -104,12 +107,12 @@ func TestNearMissFindingHeaders_IgnoresReferencesToExistingFindings(t *testing.T
 		"## H1 fixed — 2026-07-20\n" +
 		"### M1 — dateless activities no longer anchor the slider domain\n" +
 		"### L1 — day-index helpers deduplicated\n" +
-		"## H2 needs a canonical header\n"
+		"## H2 needs a canonical header · **Status:** open\n"
 
 	// H2 has no real definition and remains a genuine near miss; every code that is
 	// already defined is ignored even when referenced more than once.
 	hits := NearMissFindingHeaders(body)
-	if len(hits) != 1 || hits[0].Text != "## H2 needs a canonical header" {
+	if len(hits) != 1 || hits[0].Text != "## H2 needs a canonical header · **Status:** open" {
 		t.Fatalf("want only the undefined H2 heading, got %+v", hits)
 	}
 	fixed, changed := CanonicalizeFindingHeaders(body)
