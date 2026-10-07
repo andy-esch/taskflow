@@ -552,7 +552,7 @@ func TestBareInitReportsAvailableThreadScaffoldRepair(t *testing.T) {
 
 	out := runRoot(t, "init", "--path", root, "--no-register")
 	if !strings.Contains(out, "scaffold repair available") ||
-		!strings.Contains(out, `tskflwctl init --taskflow-root "."`) {
+		!strings.Contains(out, initScaffoldRepairCommand(root, ".", false)) {
 		t.Fatalf("bare init omitted repair guidance:\n%s", out)
 	}
 	if _, err := os.Stat(filepath.Join(root, domain.ThreadsDir)); !os.IsNotExist(err) {

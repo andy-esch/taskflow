@@ -65,10 +65,10 @@ func newInitCmd(app *App) *cobra.Command {
 			// A bare init against an existing config is an identity read, never a hidden
 			// migration or a scaffold attempt. Explicit topology flags retain their existing
 			// validation paths; only the natural re-run takes this lifecycle handoff.
-			if existing, ok := config.Describe(abs); ok && !initTopologyFlagsChanged(cmd, tracks) {
-				return runInitExisting(app, abs, existing)
-			}
 			register := !noRegister && !envEnabled("TSKFLW_NO_REGISTER")
+			if existing, ok := config.Describe(abs); ok && !initTopologyFlagsChanged(cmd, tracks) {
+				return runInitExisting(app, abs, existing, register)
+			}
 			pointer, repo, chosenRoot, err := app.resolveInitTarget(
 				abs, planningRepo, cmd.Flags().Changed("planning-repo"), taskflowRoot, cmd.Flags().Changed("taskflow-root"))
 			if err != nil {
@@ -135,7 +135,7 @@ func initTopologyFlagsChanged(cmd *cobra.Command, tracks []string) bool {
 		cmd.Flags().Changed("no-link-back") || len(tracks) > 0
 }
 
-func runInitExisting(app *App, abs string, description config.Description) error {
+func runInitExisting(app *App, abs string, description config.Description, register bool) error {
 	pending, err := config.PendingMigrations(abs)
 	if err != nil {
 		return err
@@ -156,7 +156,7 @@ func runInitExisting(app *App, abs string, description config.Description) error
 			return err
 		}
 		if len(repair.Created) > 0 || len(repair.Removed) > 0 {
-			repairCommand = fmt.Sprintf("tskflwctl init --taskflow-root %q", description.TaskflowRoot)
+			repairCommand = initScaffoldRepairCommand(abs, description.TaskflowRoot, register)
 		}
 	}
 	if app.JSON {
@@ -183,6 +183,18 @@ func runInitExisting(app *App, abs string, description config.Description) error
 		fmt.Fprintln(app.Out, app.Style.Dim("→ "+repairCommand))
 	}
 	return nil
+}
+
+// Advice must survive execution from a different cwd and ambient space default.
+// POSIX single-argument quoting prevents path contents becoming shell expansions;
+// registration opt-out must survive the trip through the human/JSON receipt too.
+func initScaffoldRepairCommand(root, tree string, register bool) string {
+	quote := func(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'" }
+	command := "tskflwctl -C " + quote(root) + " init --taskflow-root " + quote(tree)
+	if !register {
+		command += " --no-register"
+	}
+	return command
 }
 
 // resolveInitTarget decides init's mode (the flag-twin pattern) AND, for scaffold mode,
