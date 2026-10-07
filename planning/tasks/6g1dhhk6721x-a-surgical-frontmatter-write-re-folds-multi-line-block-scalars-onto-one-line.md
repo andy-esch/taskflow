@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1dhhk6721x
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Preserve untouched YAML block scalars during frontmatter edits; more-indented folded values currently accumulate decoded newlines.
 effort: 4-8 hours
@@ -10,10 +10,11 @@ priority: high
 autonomy_level: 3
 tags: [store, frontmatter]
 created: "2026-08-18"
-updated_at: "2026-10-06"
+updated_at: "2026-10-07"
 audited: "2026-09-27"
 audit_sources: [2026-09-27-weekly-task-sweep, 2026-10-05-arch-data-model-and-storage]
 started_at: "2026-10-06"
+completed_at: "2026-10-07"
 ---
 
 # Preserve untouched YAML block scalar values and formatting
@@ -175,8 +176,8 @@ and [Antigravity](../audits/6gh86jxtyx5k-2026-10-06-shared-write-and-audit-safet
 
 Codex leads init/audit/machine-contract checks; Antigravity leads YAML preservation.
 Both cross-check the other lens and must use independent dirty-state-capturing sandboxes,
-bounded compiler-valid mutation evidence, and guarded one-audit transfer. Review has
-not run; implementation remains in-progress pending owner triage.
+bounded compiler-valid mutation evidence, and guarded one-audit transfer. At handoff,
+implementation remained in-progress pending owner triage; final dispositions follow.
 
 ## Review triage (2026-10-07)
 
@@ -184,5 +185,12 @@ Codex completed an independent dirty-snapshot review, including repeated real fi
 scalar writes and byte-identical refusal checks; it found no YAML preservation defect.
 Its two init/audit findings are fixed with production-path regressions and recorded
 resolutions. Final race suite, lint, build, generated-output comparisons, and planning
-lint pass. Antigravity's preservation-led report is still pending, not a clean verdict;
-the task remains in-progress while the reviewed implementation proceeds to a PR.
+lint pass. Antigravity's preservation-led report subsequently confirmed two gaps:
+paragraph-spaced comments falsely refused writes, and the decoded-value safeguard
+lacked a differentiating regression. Both are fixed: comment localization matches
+actual comment lines through separators without consuming preceding keep-chomp blanks,
+and a real dependency-dedupe fixture refuses valid YAML whose decoded value drifts.
+LF/CRLF, indentation, 0/1/2/3/5 separator lines, shared field/body/dependency writers,
+deletion, and real filesystem field writes are covered. Disabling only the semantic
+guard compiled but failed the new regression; restored code passes the full race suite.
+Both audits are closed and this task is completed in [PR #287](https://github.com/andy-esch/taskflow/pull/287).

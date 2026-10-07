@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g77rn6em6n8
-status: in-progress
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: audit show and audit list say 'no findings' for an audit whose headings all failed to parse, which is confidently false on the cheapest triage path.
 effort: 2-3 hours
@@ -10,8 +10,9 @@ priority: high
 autonomy_level: 3
 tags: [audit, cli, ux]
 created: "2026-09-05"
-updated_at: "2026-10-06"
+updated_at: "2026-10-07"
 started_at: "2026-10-06"
+completed_at: "2026-10-07"
 ---
 
 # Report unparsed findings on the audit read surfaces
@@ -88,8 +89,8 @@ and [Antigravity](../audits/6gh86jxtyx5k-2026-10-06-shared-write-and-audit-safet
 
 Codex leads init/audit/machine-contract checks; Antigravity leads YAML preservation.
 Both cross-check the other lens and must use independent dirty-state-capturing sandboxes,
-bounded compiler-valid mutation evidence, and guarded one-audit transfer. Review has
-not run; implementation remains in-progress pending owner triage.
+bounded compiler-valid mutation evidence, and guarded one-audit transfer. At handoff,
+implementation remained in-progress pending owner triage; final dispositions follow.
 
 ## Review triage (2026-10-07)
 
@@ -99,7 +100,11 @@ readiness regressions; phantom settled findings cannot be manufactured from the 
 examples. Full race suite, lint, build, generated comparisons, and planning lint pass.
 The unchanged compact audit info warning gap joins TUI/lifecycle consumers in the
 existing 6gh82rm9sf3b followup, rather than claiming every audit consumer is migrated.
-Codex findings are settled; Antigravity is pending and this task remains in-progress.
+Antigravity independently confirmed qualified list output, absent readiness for
+incomplete evidence, and opt-in projections; its shared YAML findings are fixed.
+Both audits are closed and this task is completed in
+[PR #287](https://github.com/andy-esch/taskflow/pull/287). These are read/readiness
+guarantees, not completion of the separate lifecycle/TUI followup.
 
 ## Additional baseline audit evidence (2026-10-06)
 

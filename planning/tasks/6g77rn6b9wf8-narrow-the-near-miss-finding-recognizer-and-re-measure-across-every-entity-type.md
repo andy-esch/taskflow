@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g77rn6b9wf8
-status: in-progress
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: The recognizer claims ordinary prose headings and lint --fix rewrites them; the clean measurement was taken only on the tool-scaffolded audit corpus.
 effort: 2-4 hours
@@ -10,8 +10,9 @@ priority: high
 autonomy_level: 3
 tags: [audit, findings, lint, robustness]
 created: "2026-09-05"
-updated_at: "2026-10-06"
+updated_at: "2026-10-07"
 started_at: "2026-10-06"
+completed_at: "2026-10-07"
 ---
 
 # Narrow the near-miss finding recognizer and re-measure across every entity type
@@ -122,8 +123,8 @@ and [Antigravity](../audits/6gh86jxtyx5k-2026-10-06-shared-write-and-audit-safet
 
 Codex leads init/audit/machine-contract checks; Antigravity leads YAML preservation.
 Both cross-check the other lens and must use independent dirty-state-capturing sandboxes,
-bounded compiler-valid mutation evidence, and guarded one-audit transfer. Review has
-not run; implementation remains in-progress pending owner triage.
+bounded compiler-valid mutation evidence, and guarded one-audit transfer. At handoff,
+implementation remained in-progress pending owner triage; final dispositions follow.
 
 ## Review triage (2026-10-07)
 
@@ -133,5 +134,7 @@ Status line. Inline code, indented examples, and body prose/quotes cannot author
 repair or supply a terminal status. Real lint --fix regressions preserve example bytes,
 invent no finding/readiness, and permit narrative append. Domain tests additionally
 pin real status spans, literal title code, code-formatted decoration replacement, and
-CRLF preservation. The full race suite and lint pass. Codex findings are settled;
-Antigravity remains pending, so task lifecycle completion is not yet claimed.
+CRLF preservation. The full race suite and lint pass. Antigravity independently
+confirmed diagnostic-only ambiguity and evidence-backed repair; its two shared YAML
+findings are fixed. Both audits are closed and this task is completed in
+[PR #287](https://github.com/andy-esch/taskflow/pull/287).

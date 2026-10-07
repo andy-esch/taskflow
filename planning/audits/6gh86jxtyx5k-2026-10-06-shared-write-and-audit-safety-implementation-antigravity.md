@@ -1,9 +1,10 @@
 ---
 schema: 1
 id: 6gh86jxtyx5k
-bucket: open
+bucket: closed
 area: shared-write-and-audit-safety-implementation-antigravity
 date: "2026-10-06"
+updated_at: "2026-10-07"
 ---
 # Audit: Shared writes, bootstrap targeting, and audit evidence safety — antigravity — 2026-10-06
 
@@ -307,4 +308,180 @@ the single-file transfer must not carry implementation patches.
 
 ## Reviewer report
 
-Awaiting the assigned external review. No findings or verdict have been recorded.
+### 1. Verdict, captured baseline, and evidence limits
+
+- **Verdict:** needs changes
+- **Captured baseline:** `a27c361e890ce6edf2b53c8daa06e2e2550ce183` (overlaying `main` base `af259c017374bed3333a61b0e38bb60e49c2f39e`)
+- **Evidence limits:** Focused and full test execution performed strictly inside the isolated sandbox (`/private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.KsbbYG`); real binary smoke and CLI end-to-end probes run with a disposable compiled binary against temporary directories outside the checkout; compiler-valid mutations applied one-at-a-time and verified against the captured baseline; sibling review and uncommitted external skill tooling were neither inspected nor executed.
+
+### 2. Workspace and guarded-transfer attestation
+
+```sh
+sandbox_path=/private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.KsbbYG
+git_dir=/private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.KsbbYG/.git
+baseline_commit=a27c361e890ce6edf2b53c8daa06e2e2550ce183
+source_blob=8654d520132a632916f64863ede7535f0526b565
+source_fingerprint=f47a05567248bca2bd65a44f4b387f9d89e5e326
+deliverable=planning/audits/6gh86jxtyx5k-2026-10-06-shared-write-and-audit-safety-implementation-antigravity.md
+deliverable_changed=true
+transfer=succeeded
+```
+
+### 3. Verified consumer inventory
+
+- **Existing-document frontmatter encoders (`assembleEditedFile`):**
+  - [`internal/store/frontmatter.go:153`](file:///internal/store/frontmatter.go#L153): `updateFrontmatter` — shared entry point for surgical field updates across entities (`fs.SetFields` for tasks, `SetEpicFields`, `SetResearchFields`, `UpdateEpic`, `materializeThreadMutation`, `applyThreadPlanWrites`, `repairInvalidID`, `backfillMissingID`, `moveTask`/`MoveAudit`).
+  - [`internal/store/frontmatter.go:256`](file:///internal/store/frontmatter.go#L256): `updateDependencySourceEdits` — dependency graph repair writer invoked by `repairGraphSourcesAtomic` ([`internal/store/graphrepair.go:142`](file:///internal/store/graphrepair.go#L142)).
+  - [`internal/store/frontmatter.go:332`](file:///internal/store/frontmatter.go#L332): `replaceBodyWith` / `replaceBodyStamped` — markdown body rewrites preserving frontmatter in `fs.Edit` ([`internal/store/edit.go:133`](file:///internal/store/edit.go#L133)), `TransformAuditBody` ([`internal/store/auditstore.go:175`](file:///internal/store/auditstore.go#L175)), and `AppendAuditBody` / `ReplaceBody` ([`internal/store/body.go:78`](file:///internal/store/body.go#L78)).
+- **Fresh document creation writers (`assembleFile`):**
+  - [`internal/store/create.go:39`](file:///internal/store/create.go#L39): `createTaskContent` in `fs.CreateTask` — fresh tasks use the ordinary encoder.
+  - [`internal/store/frontmatter_preserve.go:29`](file:///internal/store/frontmatter_preserve.go#L29): bypass in `assembleEditedFile` when `!containsBlockScalar(&before)`.
+- **Finding header classification and write guards:**
+  - [`internal/domain/finding_header.go:35`](file:///internal/domain/finding_header.go#L35): `ClassifyFindingHeaders` — single AST/regex classification for canonical, repairable, ambiguous, and ordinary headings.
+  - [`internal/domain/finding.go:263`](file:///internal/domain/finding.go#L263): `NearMissFindingHeaders` — filters classified headers to repairable and ambiguous items.
+  - [`internal/domain/finding.go:293`](file:///internal/domain/finding.go#L293): `CanonicalizeFindingHeaders` — rewrites repairable candidates in place while preserving ambiguous and ordinary lines.
+  - [`internal/domain/finding.go:327`](file:///internal/domain/finding.go#L327): `NearMissFindingIssues` — produces diagnostic messages distinguishing auto-repairable items (`lint --fix`) from ambiguous ones requiring manual triage.
+  - [`internal/domain/finding.go:350`](file:///internal/domain/finding.go#L350): `IntroducedNearMissHeaders` — tracks header text and repairability authority delta between pre- and post-edit bodies.
+  - [`internal/domain/finding.go:384`](file:///internal/domain/finding.go#L384): `NearMissWriteError` — write gate for `AppendAuditBody` and `EditAudit`; refuses newly introduced repairable headers while permitting ambiguous prose.
+  - [`internal/domain/finding_create.go:52`](file:///internal/domain/finding_create.go#L52): `CreateFinding` — blocks allocation of new finding codes when near misses are present, returning actionable advice (`audit lint` for ambiguous, `lint --fix` for repairable).
+  - [`internal/store/auditstore.go:270`](file:///internal/store/auditstore.go#L270): `parseAuditWithFindings` — calculates `a.UnparsedFindings = len(nearMisses)`.
+- **Audit read, tally, projection, and DTO consumers:**
+  - [`internal/domain/audit.go:106`](file:///internal/domain/audit.go#L106): `Audit.Settled()` — requires `UnparsedFindings == 0` in addition to zero open/in-progress findings.
+  - [`internal/domain/audit.go:113`](file:///internal/domain/audit.go#L113): `Audit.ReadyToClose()` — requires `Bucket == AuditOpen && Settled()`.
+  - [`internal/wire/dto.go:217`](file:///internal/wire/dto.go#L217): `AuditJSON` — wire DTO defining `UnparsedFindings` (`omitempty`) and `ReadyToClose` (`omitempty`).
+  - [`internal/wire/dto.go:280`](file:///internal/wire/dto.go#L280): `toAuditJSON` & `ToLoadedAuditJSON` — maps domain fields to JSON wire envelopes.
+  - [`internal/cli/render/columns.go:487`](file:///internal/cli/render/columns.go#L487): `unparsedProjection` — formats `unparsed_findings` (aliased as `unparsed`) with `optIn = true` (omitted from default tables/CSV; outputs `""` for 0).
+  - [`internal/cli/render/render.go:686`](file:///internal/cli/render/render.go#L686): `auditProgressCell` & `auditStateNote` — qualifies human progress bar with unparsed warnings and replaces "ready to close" with `→ audit lint <slug>`.
+  - [`internal/core/audit_unparsed_test.go:9`](file:///internal/core/audit_unparsed_test.go#L9): `TestPortableAuditReadsRetainIncompleteFindingEvidence` — portable read service preserves unparsed evidence across store boundaries.
+- **Init entry-point selection and bootstrap:**
+  - [`internal/cli/init.go:109`](file:///internal/cli/init.go#L109): `App.initDirectory` — validates mutual exclusivity across `--path`, `-C`, and `--space`; checks non-empty paths; delegates to `startDir()` when `--path` is unflagged.
+  - [`internal/cli/root.go:387`](file:///internal/cli/root.go#L387): `App.startDir()` — shared entry-point resolution; enforces `-C` over `TSKFLW_SPACE`, validates registered `--space`, falls back to cwd.
+  - [`internal/cli/init.go:56`](file:///internal/cli/init.go#L56): `initCmd.RunE` — validates selection before `authorizeMutation()`, avoiding spurious writes or side effects on invalid invocations.
+
+### 4. Hostile probe and mutation ledger
+
+| Probe / Mutation | Target Invariant | Exact Test / Command | Result | Consequence |
+|---|---|---|---|---|
+| **Probe 1** (YAML comment backtracking) | Comments before keys in block-scalar documents must be preserved | Go probe updating sibling key with multi-line comment containing blank line (`\n\n\n`) | Refused with `cannot locate head comment for "tier"` | **Defect (M1)**: Hand-authored documents with paragraph-spaced comments fail comment localization and become uneditable. |
+| **Probe 2** (Nested folded scalar refolding) | Decoded YAML values must not silently change | `TestProbe_NestedFoldedScalarCorruptionCaughtByDeepEqual` mutating nested sibling field next to folded scalar with indented line | Refused by `reflect.DeepEqual(want, got)` with `decoded values differ from the requested edit` | Confirms `DeepEqual` guard protects against `yaml.v3` encoder blank-line corruption. |
+| **Probe 3** (CLI init selectors) | Target selectors must be mutually exclusive and fail closed before writes | Real binary: `tskflwctl -C $TARGET init --path $TARGET --no-register --json` | Exited with code 11 (`ErrValidation`), zero filesystem writes to caller or target | Confirms explicit conflict validation fails closed. Empty target (`--path ""`) also yields code 11. Unknown `TSKFLW_SPACE` yields code 10 (`ErrNotFound`) without falling back to cwd. |
+| **Probe 4** (Audit repair & read projection) | Unparsed findings qualify read completeness, readiness, and advice | Real binary: `audit list`, `audit lint`, `lint --fix`, and `-c slug,unparsed` on test audit with mixed canonical, repairable, and ambiguous findings | Progress shows `100% settled 1/1 · 2 unparsed → audit lint`; `ready_to_close` omitted; `lint --fix` auto-repairs only repairable header; projection emits `"1"` when >0 and `""` when 0 | Confirms full lifecycle qualification, safe non-destructive repair, and wire contract compliance. |
+| **Mutation 1** (Bypass source preservation) | Untouched block scalars must not be re-encoded | Mutated `updateFrontmatter` (`frontmatter.go:153`) to call `assembleFile` directly | `TestFrontmatterEditsPreserveUntouchedBlockScalars` FAILED across all scalar styles and line endings | **Killed**. Source preservation is strictly required by the fidelity matrix. |
+| **Mutation 2** (Disable decoded-value comparison) | Decoded values must match requested edits | Mutated `frontmatter_preserve.go:96` to bypass `if !reflect.DeepEqual(want, got)` | `go test ./internal/store -count=1` PASSED (all tests green) | **Survived** in existing test suite (**L1**). Killed only by constructed probe `TestProbe_NestedFoldedScalarCorruptionCaughtByDeepEqual`. |
+
+#### Hypotheses resolved or remaining unresolved
+
+1. **Multi-line comment paragraph breaks (Survives / Confirmed Defect M1):** `yaml.v3` condenses multiple blank lines in `HeadComment` into single newlines, breaking the 1-to-1 reverse physical line search in `frontmatterEntrySources` and locking valid files against writes.
+2. **Decoded-value comparison test coverage (Survives / Confirmed Gap L1):** No committed test differentiated `DeepEqual` value validation from YAML syntax parsing or broken-anchor errors, allowing the mutation to survive.
+3. **Init selector precedence over environment (Resolved):** Both explicit `-C` and `--path` reliably override ambient `TSKFLW_SPACE`, preventing target confusion in CI and scripted environments.
+4. **Distinction between recognition and repair authority (Resolved):** Ambiguous headings inside `## Findings` without status markers are flagged by lint as requiring triage, but are not rewritten by `lint --fix` and do not block generic body appends.
+5. **CRLF preservation across surgical updates (Resolved):** `assembleEditedFile` normalizes to LF during entry slicing and converts all newlines to CRLF prior to final assembly when `eol == "\r\n"`, preserving byte fidelity.
+
+### 5. Actionable findings
+
+#### M1. Comment-block blank lines cause frontmatterEntrySources to fail comment localization · **Status:** fixed (PR #287)
+
+- **Location:** [`internal/store/frontmatter_preserve.go:174-182`](file:///internal/store/frontmatter_preserve.go#L174-L182)
+- **Reachable consequence:** When an existing document containing block scalars has a comment block before any top-level key that includes two or more consecutive blank lines (a common idiom for multi-paragraph comments), any subsequent surgical write to the document—such as `fs.SetFields`, `updateFrontmatter`, `updateDependencySourceEdits`, or `replaceBodyWith`—fails closed with:
+  `validation failed: cannot preserve block-scalar frontmatter safely: cannot locate head comment for "<field>"; edit the document explicitly instead`
+  The document becomes completely uneditable through automated CLI and store operations even when the modified field is completely unrelated to the comment or the block scalar.
+- **Root cause:** In `go.yaml.in/yaml/v3`, `yaml.Unmarshal` condenses multiple consecutive blank lines inside a node's `HeadComment` into a single empty line (`\n\n`). However, `frontmatterEntrySources` performs a strict 1-to-1 reverse-line matching loop against the raw source:
+  ```go
+  comments := strings.Split(key.HeadComment, "\n")
+  for j := len(comments) - 1; j >= 0; j-- {
+      if line == 0 || strings.TrimSpace(string(source[lines[line-1]:lines[line]])) != strings.TrimSpace(comments[j]) {
+          return nil, nil, 0, fmt.Errorf("cannot locate head comment for %q", key.Value)
+      }
+      line--
+  }
+  ```
+  When the source contains two blank lines (`lines[line-1]:lines[line]` is empty), matching the preceding comment token against this second blank line fails, returning the error.
+- **Minimal reproduction:**
+  ```go
+  src := []byte("---\nnotes: |\n  hello\n\n# paragraph 1\n\n\n# paragraph 2\ntier: 1\n---\nbody\n")
+  _, err := updateFrontmatter(src, map[string]any{"tier": 2})
+  // err: cannot locate head comment for "tier"
+  ```
+- **Recommended correction:** In `frontmatterEntrySources`, permit consecutive blank lines in `source` when backtracking over comment paragraphs, or advance `line--` through empty lines in `source` while matching empty comment segments.
+
+**Resolution:** Reproduced and fixed comment localization by matching non-empty
+parsed comment lines through physical paragraph separators, including yaml.v3
+CRLF trailing-newline artifacts, without consuming preceding keep-chomp scalar
+blanks. TestBlockScalarParagraphCommentsAllowSurgicalWrites covers LF/CRLF, root
+indentation, 0/1/2/3/5 separator lines, field/body/dependency edits, and
+deletion; TestBlockScalarParagraphCommentsAllowFieldWrites proves actual
+filesystem writes preserve values and comments. Focused and full race suites
+pass.
+
+#### L1. Decoded-value comparison lacks differentiation test against parser validity · **Status:** fixed (PR #287)
+
+- **Location:** [`internal/store/frontmatter_preserve.go:96-98`](file:///internal/store/frontmatter_preserve.go#L96-L98) and [`internal/store/frontmatter_fidelity_test.go`](file:///internal/store/frontmatter_fidelity_test.go)
+- **Reachable consequence:** The critical safeguard in `assembleEditedFile` comparing decoded values (`reflect.DeepEqual(want, got)`) can be disabled or bypassed without failing any test in the test suite. If a future regression alters this check, silent data corruption from `yaml.v3` encoder re-folding of nested multi-line scalars would go undetected by the test suite.
+- **Root cause:** The existing refusal tests in `frontmatter_fidelity_test.go` (`TestBlockScalarEditRefusesBrokenAliasBeforeWriting` and `TestBlockScalarFieldWritesPreserveValuesAndRefusalLeavesFileUntouched`) test broken anchors. In both cases, `yaml.Unmarshal(preserved.Bytes(), &got)` at line 93 fails first with an unresolved anchor error. No committed test exercises a fixture where re-encoded YAML is syntactically valid (line 93 succeeds) but the decoded values differ from `want` (line 96 catches the corruption).
+- **Minimal reproduction:**
+  Mutate line 96 of `internal/store/frontmatter_preserve.go`:
+  ```go
+  _ = reflect.DeepEqual(want, got)
+  // if !reflect.DeepEqual(want, got) { ... }
+  ```
+  Run `go test ./internal/store -count=1`. All tests pass.
+- **Adoptable test suggestion:**
+  ```go
+  func TestBlockScalarEditRefusesDecodedValueDriftEvenWhenSyntaxValid(t *testing.T) {
+      original := []byte("---\ncustom:\n  nested: >\n    first line\n      indented line\n  tier: 1\n---\nbody\n")
+      fm, body, err := splitFrontmatterStrict(original)
+      if err != nil {
+          t.Fatal(err)
+      }
+      var doc yaml.Node
+      if err := yaml.Unmarshal(fm, &doc); err != nil {
+          t.Fatal(err)
+      }
+      mapping, err := documentMapping(&doc)
+      if err != nil {
+          t.Fatal(err)
+      }
+      for i := 0; i+1 < len(mapping.Content); i += 2 {
+          if mapping.Content[i].Value == "custom" {
+              m := mapping.Content[i+1]
+              for j := 0; j+1 < len(m.Content); j += 2 {
+                  if m.Content[j].Value == "tier" {
+                      m.Content[j+1].Value = "2"
+                  }
+              }
+          }
+      }
+      _, err = assembleEditedFile(fm, mapping, body, "\n")
+      if err == nil || !strings.Contains(err.Error(), "decoded values differ from the requested edit") {
+          t.Fatalf("expected DeepEqual refusal, got: %v", err)
+      }
+  }
+  ```
+
+**Resolution:** Added
+TestBlockScalarDependencyRepairRefusesDecodedDriftWithValidYAML using a
+hand-authored dependency sequence and actual dedupe writer, not fabricated YAML
+nodes. Syntactically valid re-folded output must fail specifically at
+decoded-value comparison; real service dry-run/apply both return validation and
+leave original file bytes untouched. Disabling only DeepEqual compiled but
+failed the regression with valid YAML and err=nil; restored guard and full race
+suite pass.
+
+## Implementation-owner triage (2026-10-07)
+
+Both findings were independently reproduced and fixed; the original needs-changes
+verdict above describes the captured baseline, not the repaired tree. M1 additionally
+exposed a CRLF trailing-newline artifact in parsed comments, now covered alongside
+paragraph spacing. L1 was addressed through the real dependency-repair writer rather
+than the suggested manually modified YAML-node fixture. Its compiler-valid single-guard
+mutation fails the new regression; the guard is restored. Full race tests, lint, build,
+module tidiness, and generated-doc drift checks pass.
+
+The ledger's phrase "full lifecycle qualification" overstates the evidence: this
+batch qualifies reads and derived readiness, not every lifecycle verb. TUI, compact
+audit info, and actual closure/deferral decisions remain explicitly owned by
+[6gh82rm9sf3b](../tasks/6gh82rm9sf3b-carry-unparsed-finding-evidence-into-audit-tui-and-lifecycle-decisions.md).
+The reviewer inventory is baseline context, not a blanket owner attestation; the
+two reported findings were checked against current callers and production-path tests.
+Both external reports have been received, their findings settled, and their audits
+closed. Implementing tasks are completed in [PR #287](https://github.com/andy-esch/taskflow/pull/287).

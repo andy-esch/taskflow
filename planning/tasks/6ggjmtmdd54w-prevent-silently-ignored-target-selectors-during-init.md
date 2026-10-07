@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6ggjmtmdd54w
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Reject or explicitly honor init target selectors so -C or --space cannot silently initialize the caller's working directory.
 effort: 2-4 hours
@@ -11,9 +11,10 @@ autonomy_level: 3
 tags: [cli, safety, contracts]
 created: "2026-10-04"
 depends_on: [6g1xp8qymz1m]
-updated_at: "2026-10-06"
+updated_at: "2026-10-07"
 started_at: "2026-10-06"
 audit_sources: [planning/audits/6gh1frgyz2fh-2026-10-06-adapter-hygiene.md]
+completed_at: "2026-10-07"
 ---
 # Prevent silently ignored target selectors during init
 
@@ -80,8 +81,8 @@ and [Antigravity](../audits/6gh86jxtyx5k-2026-10-06-shared-write-and-audit-safet
 
 Codex leads init/audit/machine-contract checks; Antigravity leads YAML preservation.
 Both cross-check the other lens and must use independent dirty-state-capturing sandboxes,
-bounded compiler-valid mutation evidence, and guarded one-audit transfer. Review has
-not run; implementation remains in-progress pending owner triage.
+bounded compiler-valid mutation evidence, and guarded one-audit transfer. At handoff,
+implementation remained in-progress pending owner triage; final dispositions follow.
 
 ## Review triage (2026-10-07)
 
@@ -90,8 +91,10 @@ resolved -C target and preserves flag/environment registration opt-out. A real-p
 regression executes the emitted command verbatim from another cwd for -C, --path,
 registered --space, and environment selection. Quote/expansion-like path contents stay
 literal; only the selected scaffold changes, not caller or registry. Full race suite,
-lint, build, generated comparisons, and planning lint pass. Codex findings are settled;
-Antigravity remains pending and this task stays in-progress until final review closeout.
+lint, build, generated comparisons, and planning lint pass. Antigravity independently
+confirmed selector conflict, empty-target, and missing-space refusals without writes;
+its two shared YAML findings are fixed. Both audits are closed and this task is
+completed in [PR #287](https://github.com/andy-esch/taskflow/pull/287).
 
 ## Additional baseline audit evidence (2026-10-06)
 
