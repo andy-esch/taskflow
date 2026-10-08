@@ -7,7 +7,7 @@ List audits (open by default)
 List audits with a segmented progress bar per row.
 
 The headline number is the SETTLED share — findings that have reached a terminal
-disposition, however they got there — so 100% is exactly the point an open audit
+disposition, however they got there — with complete parsing, 100% is the point an open audit
 becomes `✔ ready to close`. The bar says how it settled, grouping the seven statuses
 into four bands so the shape reads at a glance:
 

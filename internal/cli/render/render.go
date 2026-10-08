@@ -188,12 +188,16 @@ func AuditInfoJSON(w io.Writer, record core.LoadedRecord[core.AuditWithBody], pa
 
 // AuditInfoHuman prints audit metadata as an aligned key/value block: bucket and
 // the finding disposition tally (the audit analogue of a task's acceptance tally).
-func AuditInfoHuman(w io.Writer, st Style, a domain.Audit, path string) {
+func AuditInfoHuman(w io.Writer, st Style, record core.LoadedRecord[core.AuditWithBody], path string) {
+	a := record.Value.Audit
 	field := fieldPrinter(w, st, 9, false)
 	field("slug", st.Bold(a.Slug))
 	field("bucket", string(a.Bucket))
 	field("findings", fmt.Sprintf("%d total · %d open · %d in-progress · %d done · %d dropped",
 		a.Findings, a.OpenFindings, a.ActiveFindings, a.DoneFindings, a.DroppedFindings))
+	if a.UnparsedFindings > 0 {
+		field("unparsed", st.Warn(fmt.Sprintf("⚠ %d finding-like header(s) · → audit lint %s", a.UnparsedFindings, record.Source.ID)))
+	}
 	if path == "" {
 		path = st.Dim("unavailable (no local path capability)")
 	}
@@ -701,10 +705,10 @@ func auditProgressCell(st Style, a domain.Audit, width int, gap string) string {
 // auditStateNote supplies the shared trailing call-to-action. Unparsed evidence
 // takes precedence over readiness. Detail views also report outstanding findings;
 // lists omit that count to stay scannable.
-func auditStateNote(st Style, a domain.Audit, detail bool) string {
+func auditStateNote(st Style, a domain.Audit, source core.RecordSource, detail bool) string {
 	switch {
 	case a.UnparsedFindings > 0:
-		return st.Warn("→ audit lint " + a.Slug)
+		return st.Warn("→ audit lint " + source.ID)
 	case a.ReadyToClose():
 		return st.Green("✔ ready to close")
 	case detail && a.OpenFindings > 0:
@@ -715,17 +719,18 @@ func auditStateNote(st Style, a domain.Audit, detail bool) string {
 }
 
 // AuditsHuman writes a table of audits with finding counts.
-func AuditsHuman(w io.Writer, st Style, audits []domain.Audit) error {
+func AuditsHuman(w io.Writer, st Style, audits []core.LoadedRecord[domain.Audit]) error {
 	if len(audits) == 0 {
 		return nil
 	}
 	rows := make([][]string, 0, len(audits))
-	for _, a := range audits {
+	for _, record := range audits {
+		a := record.Value
 		progress := auditProgressCell(st, a, 8, " ")
-		if note := auditStateNote(st, a, false); note != "" {
+		if note := auditStateNote(st, a, record.Source, false); note != "" {
 			progress += "  " + note
 		}
-		rows = append(rows, []string{st.Bucket(string(a.Bucket)), st.Bold(a.Slug), progress, a.Area})
+		rows = append(rows, []string{st.Bucket(string(a.Bucket)), st.Bold(a.Slug + readableLocationSuffix(record.Source)), progress, a.Area})
 	}
 	writeTable(w, st.width, []string{st.Dim("BUCKET"), st.Dim("AUDIT"), st.Dim("PROGRESS"), st.Dim("AREA")}, rows)
 	return nil
@@ -738,13 +743,7 @@ func AuditsJSON(w io.Writer, audits []core.LoadedRecord[domain.Audit], problems 
 }
 
 func AuditsReadHuman(w io.Writer, st Style, audits []core.LoadedRecord[domain.Audit]) error {
-	values := make([]domain.Audit, 0, len(audits))
-	for _, record := range audits {
-		audit := record.Value
-		audit.Slug += readableLocationSuffix(record.Source)
-		values = append(values, audit)
-	}
-	return AuditsHuman(w, st, values)
+	return AuditsHuman(w, st, audits)
 }
 
 // ResearchHuman prints the research corpus as a date-led table. There is no status or
@@ -826,7 +825,8 @@ var findingStatusOrder = []string{"open", "in-progress", "fixed", "tracked", "de
 // AuditShowHuman prints an audit's metadata, a status-grouped finding tree, and
 // its body. findings is parsed from the raw body by the caller; body is the
 // already-rendered (glamour/raw) markdown.
-func AuditShowHuman(w io.Writer, st Style, a domain.Audit, findings []domain.Finding, body string) error {
+func AuditShowHuman(w io.Writer, st Style, record core.LoadedRecord[core.AuditWithBody], findings []domain.Finding, body string) error {
+	a := record.Value.Audit
 	field := func(label, value string) {
 		lbl := fmt.Sprintf("%-9s", label+":")
 		if st.width > 0 { // fit the value to the terminal (TTY only; piped stays full)
@@ -846,7 +846,7 @@ func AuditShowHuman(w io.Writer, st Style, a domain.Audit, findings []domain.Fin
 		field("updated", a.Updated)
 	}
 	progress := auditProgressCell(st, a, 10, "  ")
-	if note := auditStateNote(st, a, true); note != "" {
+	if note := auditStateNote(st, a, record.Source, true); note != "" {
 		progress += "  " + note
 	}
 	field("findings", progress)

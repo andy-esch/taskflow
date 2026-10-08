@@ -12,6 +12,7 @@
   "github.com/andy-esch/taskflow/internal/domain.Audit.UnparsedFindings": "UnparsedFindings counts diagnostic-only or repairable finding-like headers,\nnot real findings. It qualifies read completeness without inventing statuses\nor changing the parsed-finding denominator.",
   "github.com/andy-esch/taskflow/internal/domain.Audit.Updated": "Updated is the audit's own last-edited date (stamped by edit/append). Unlike\nDate — immutable, part of the slug — this advances on each content edit. A\nbucket move (close/reopen/defer) rewrites the `bucket:` frontmatter in place but\ndoes NOT touch this stamp.",
   "github.com/andy-esch/taskflow/internal/domain.AuditBucket": "AuditBucket is an audit's lifecycle state, authoritative in frontmatter (ADR-0003 §4).",
+  "github.com/andy-esch/taskflow/internal/domain.AuditIncompleteEvidenceError": "AuditIncompleteEvidenceError describes a semantic refusal without inventing a record selector from its display slug or declared ID.",
   "github.com/andy-esch/taskflow/internal/domain.Class": "Class is a domain error's outcome category — the single, adapter-neutral classification of a sentinel-wrapped error.",
   "github.com/andy-esch/taskflow/internal/domain.Criterion": "Criterion is one acceptance-criteria checkbox for `task ac --list`: its 1-based position, whether it's checked, and the first-line text after the checkbox.",
   "github.com/andy-esch/taskflow/internal/domain.Criterion.Reason": "Reason is the explanation carried by a non-binary state, required for those and\nempty otherwise.",

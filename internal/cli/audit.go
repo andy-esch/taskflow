@@ -107,7 +107,7 @@ func newAuditListCmd(app *App) *cobra.Command {
 		Short: "List audits (open by default)",
 		Long: "List audits with a segmented progress bar per row.\n\n" +
 			"The headline number is the SETTLED share — findings that have reached a terminal\n" +
-			"disposition, however they got there — so 100% is exactly the point an open audit\n" +
+			"disposition, however they got there — with complete parsing, 100% is the point an open audit\n" +
 			"becomes `✔ ready to close`. The bar says how it settled, grouping the seven statuses\n" +
 			"into four bands so the shape reads at a glance:\n\n" +
 			"  █ green   settled here         fixed · tracked\n" +
@@ -504,7 +504,7 @@ func newAuditShowCmd(app *App) *cobra.Command {
 				if record.Value.Body != "" { // --frontmatter-only → no body render (and no trailing blank line)
 					rendered = render.RenderBody(app.Style, record.Value.Body, app.markdownStyle, raw)
 				}
-				return render.AuditShowHuman(w, app.Style, record.Value.Audit, findings, rendered)
+				return render.AuditShowHuman(w, app.Style, record, findings, rendered)
 			})
 		},
 	}
@@ -520,6 +520,7 @@ func newAuditInfoCmd(app *App) *cobra.Command {
 	return &cobra.Command{
 		Use:               "info <audit>",
 		Short:             "Show an audit's metadata, finding tally, and local path when available (no body)",
+		Long:              "Show an audit's metadata, parsed finding tally, and local path when available, without the body.\nUnparsed finding-like headers qualify the tally separately; use audit lint <audit> for details.",
 		Example:           "  tskflwctl audit show 2026-06-20-api-gateway --frontmatter-only\n  tskflwctl audit info 2026-06-20-api-gateway --json",
 		Args:              cobra.MaximumNArgs(1),
 		Annotations:       map[string]string{"safety": "read-only"},
@@ -546,7 +547,7 @@ func newAuditInfoCmd(app *App) *cobra.Command {
 			if app.JSON {
 				return render.AuditInfoJSON(app.Out, record, path)
 			}
-			render.AuditInfoHuman(app.Out, app.Style, record.Value.Audit, path)
+			render.AuditInfoHuman(app.Out, app.Style, record, path)
 			return nil
 		},
 	}
@@ -577,9 +578,14 @@ func newAuditPathCmd(app *App) *cobra.Command {
 }
 
 func newAuditMoveCmd(app *App, use, short string, to domain.AuditBucket) *cobra.Command {
+	long := short + ". Close/defer refuse while parsed open findings or unparsed finding-like\n" +
+		"headers remain, including ambiguous headings. Run audit lint <audit> and repair or\n" +
+		"clarify the headings first; there is no --force bypass. Reopen remains available\n" +
+		"for repair. Empty audits may close/defer. Dry-run applies the same validation."
 	return &cobra.Command{
 		Use:               use + " <audit>...",
 		Short:             short,
+		Long:              long,
 		Example:           "  tskflwctl audit " + use + " 2026-06-06-schemas-scripts\n  tskflwctl audit " + use + "   # pick from a list",
 		Args:              cobra.ArbitraryArgs, // bare → picker on a TTY; non-interactive needs ≥1 arg
 		Annotations:       map[string]string{"safety": "mutating"},

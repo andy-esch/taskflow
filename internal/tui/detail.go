@@ -1686,23 +1686,35 @@ func terminalText(value string) string {
 
 type auditDetail struct {
 	a         domain.Audit
+	source    core.RecordSource
 	body      string
 	localPath string
 }
 
-func (d auditDetail) Title() string                { return d.a.Slug }
-func (d auditDetail) Path() string                 { return d.localPath }
-func (d auditDetail) rawBody() string              { return d.body }
-func (d auditDetail) meta(w int, s *styles) string { return renderAuditMeta(d.a, d.body, w, s) }
+func (d auditDetail) Title() string   { return d.a.Slug }
+func (d auditDetail) Path() string    { return d.localPath }
+func (d auditDetail) rawBody() string { return d.body }
+func (d auditDetail) meta(w int, s *styles) string {
+	return renderAuditMeta(d.a, d.source, d.body, w, s)
+}
 
-func renderAuditMeta(a domain.Audit, body string, width int, s *styles) string {
+func renderAuditMeta(a domain.Audit, source core.RecordSource, body string, width int, s *styles) string {
 	var b strings.Builder
 	tok := theme.Bucket(a.Bucket)
 	pct := a.Percent()
 	progress := fmt.Sprintf("%s %s  %s",
 		s.segBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 12),
 		s.fg(theme.Percent(pct), theme.AuditPercentLabel(pct)), theme.Counts(a.Resolved(), a.Findings))
+	if a.Findings == 0 {
+		progress = s.dim("no findings")
+		if a.UnparsedFindings > 0 {
+			progress = ""
+		}
+	}
 	switch {
+	case a.UnparsedFindings > 0:
+		progress = strings.TrimSpace(progress + "  " + s.fg(theme.ColorYellow,
+			fmt.Sprintf("⚠ %d unparsed finding-like header(s) → audit lint %s", a.UnparsedFindings, source.ID)))
 	case a.ReadyToClose():
 		progress += "  " + s.fg(theme.ColorGreen, "✔ ready to close")
 	case a.OpenFindings > 0:

@@ -358,7 +358,7 @@ func TestAuditsJSONAndHuman(t *testing.T) {
 	}
 
 	out.Reset()
-	if err := AuditsHuman(&out, NewStyle(false), audits); err != nil {
+	if err := AuditsHuman(&out, NewStyle(false), loaded); err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(out.String(), "2026-06-01-x") || !strings.Contains(out.String(), "store") {
@@ -421,7 +421,7 @@ func TestAuditProgressDistinguishesTriaged(t *testing.T) {
 	allFixed := domain.Audit{Slug: "2026-06-01-allfixed", Bucket: domain.AuditOpen, Area: "store", Findings: 2, DoneFindings: 2}
 
 	var out bytes.Buffer
-	if err := AuditsHuman(&out, NewStyle(false), []domain.Audit{triaged, untouched, allFixed}); err != nil {
+	if err := AuditsHuman(&out, NewStyle(false), []core.LoadedRecord[domain.Audit]{{Value: triaged}, {Value: untouched}, {Value: allFixed}}); err != nil {
 		t.Fatal(err)
 	}
 	lines := strings.Split(strings.TrimRight(out.String(), "\n"), "\n")
@@ -462,14 +462,14 @@ func TestAuditProgressDistinguishesTriaged(t *testing.T) {
 	// audit show: an open audit with open findings keeps the "(N open)" note; a
 	// settled one gets the ready-to-close marker instead.
 	out.Reset()
-	if err := AuditShowHuman(&out, NewStyle(false), untouched, nil, ""); err != nil {
+	if err := AuditShowHuman(&out, NewStyle(false), core.LoadedRecord[core.AuditWithBody]{Value: core.AuditWithBody{Audit: untouched}}, nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if s := out.String(); !strings.Contains(s, "(2 open)") || strings.Contains(s, "ready to close") {
 		t.Errorf("audit show for an untouched audit should note (2 open), not ready to close:\n%s", s)
 	}
 	out.Reset()
-	if err := AuditShowHuman(&out, NewStyle(false), triaged, nil, ""); err != nil {
+	if err := AuditShowHuman(&out, NewStyle(false), core.LoadedRecord[core.AuditWithBody]{Value: core.AuditWithBody{Audit: triaged}}, nil, ""); err != nil {
 		t.Fatal(err)
 	}
 	if s := out.String(); !strings.Contains(s, "ready to close") || strings.Contains(s, "open)") {
@@ -488,7 +488,7 @@ func TestAuditShowHuman_FindingTree(t *testing.T) {
 		{Code: "L9", Title: "mystery"}, // missing status → grouped under (no status), not dropped
 	}
 	var out bytes.Buffer
-	if err := AuditShowHuman(&out, NewStyle(false), a, findings, "# body"); err != nil {
+	if err := AuditShowHuman(&out, NewStyle(false), core.LoadedRecord[core.AuditWithBody]{Value: core.AuditWithBody{Audit: a}}, findings, "# body"); err != nil {
 		t.Fatal(err)
 	}
 	s := out.String()

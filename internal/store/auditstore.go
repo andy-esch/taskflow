@@ -130,16 +130,10 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.
 		return domain.Audit{}, err
 	}
 	from := cur.Bucket
-	// Bucket↔state invariant (the same rule `audit lint` enforces): a non-open bucket
-	// must have no still-open findings. Refuse rather than write a state the linter
-	// immediately rejects. Runs before the dry-run return so a preview fails identically.
-	if to != domain.AuditOpen {
-		_, body := splitFrontmatter(content)
-		if open := domain.CountOpenFindings(domain.ParseFindings(string(body))); open > 0 {
-			return domain.Audit{}, fmt.Errorf(
-				"%w: audit %q has %d open finding(s); resolve or defer them before moving to %s",
-				domain.ErrValidation, slug, open, to)
-		}
+	// The domain owns bucket policy; these counts belong to the exact content the
+	// CAS below protects. Refuse incomplete evidence before no-op or dry-run returns.
+	if err := cur.ValidateMove(to); err != nil {
+		return domain.Audit{}, &core.AuditMoveError{Source: auditSource(path), Cause: err}
 	}
 	// No-op: already in the target bucket (there is no relocation to owe under flat).
 	if from == to {

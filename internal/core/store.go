@@ -302,6 +302,13 @@ type TaskWithBody struct {
 type AuditStore interface {
 	ReadAudits() (AuditRead, error)
 	ReadAudit(ref string) (LoadedRecord[AuditWithBody], error)
+	// MoveAudit applies domain.Audit.ValidateMove to freshly loaded counts from
+	// the exact source protected by the write guard. Incomplete finding evidence
+	// must refuse close/defer before no-op, preview, or persistence; reopening
+	// remains available for repair. A concurrent content change must not bypass
+	// validation or be overwritten by a bucket move.
+	// Policy refusals carry AuditMoveError with adapter-established source identity
+	// so remediation never resolves a display slug or frontmatter-declared ID.
 	MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error)
 	CreateAudit(a domain.Audit, body string, dryRun bool) (AuditCreationReceipt, error)
 	// EditAudit hands the current file content to edit (the caller's editor) and

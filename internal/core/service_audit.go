@@ -116,7 +116,9 @@ func (s *Service) AuditPath(slug string) (string, error) {
 	return requireResolvedLocalPath(EntityAudit, path, err)
 }
 
-// MoveAudit relocates an audit to another bucket (close/reopen/defer).
+// MoveAudit changes an audit's authoritative bucket (close/reopen/defer). The
+// persistence port validates domain policy against its guarded source; a retry
+// must reload counts so newly unparsed evidence cannot be overwritten.
 func (s *Service) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error) {
 	return retryOnConflict(s, dryRun, func() (domain.Audit, error) {
 		return s.store.MoveAudit(slug, to, dryRun)

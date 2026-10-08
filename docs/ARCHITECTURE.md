@@ -762,7 +762,23 @@ will give these decisions a durable authority without duplicating the current ma
   Status lines. Inline code and body prose/quoted examples grant no authority.
   Audit reads carry `UnparsedFindings` separately from real finding counts and do not
   advertise incomplete audits as ready to close; `audit lint` names the affected
-  headings and applicable repair.
+  headings and applicable repair. CLI list/show/info and TUI list/detail qualify
+  their tallies with the adapter-established count, without reclassifying the body
+  to derive the warning or inferring local paths. `audit info` publishes optional
+  top-level `unparsed_findings`, not extra
+  members of its parsed disposition tally. A parsed 100% remains a parsed percentage,
+  not an assertion that the full body has been understood.
+  `Audit.ValidateMove` owns the complete-parsing gate for close/defer; the audit port
+  requires it on the exact source protected by the store's lock/content CAS, before
+  same-bucket or preview returns. Both repairable and ambiguous headers refuse with
+  an `audit lint` route; reopen and genuinely empty audits remain supported, without
+  a force bypass. Domain refusal is structured (`AuditIncompleteEvidenceError`);
+  the adapter attaches its established identity in `core.AuditMoveError`.
+  Executable lint advice uses `RecordSource.ID`, never a display slug or declared
+  ID. CLI list/show/info/status and TUI detail retain that source separately from
+  display labels, including duplicate slugs and identity declarations that drift.
+  The older literal-open-only *parsed-status* gate remains a
+  [separate policy followup](../planning/tasks/6ghht05bzxkk-align-audit-lifecycle-and-finding-writes-with-parsed-settlement-policy.md).
 
 ## Why these boundaries (and why not collapse them)
 Reviews periodically suggest folding the packages together ("Go favors fewer

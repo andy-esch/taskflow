@@ -436,8 +436,18 @@ func (d auditDelegate) Render(w io.Writer, m list.Model, index int, item list.It
 	bar := st.segBar(it.a.DoneFindings, it.a.ActiveFindings, it.a.DroppedFindings, it.a.Findings, 8)
 	pctStr := st.fg(theme.Percent(pct), theme.AuditPercentLabelPadded(pct))
 	counts := rollupCounts(it.a.Resolved(), it.a.Findings, it.countsW)
-	line := fmt.Sprintf("%s %s %s %s  %s  %s",
-		st.fg(tok.Color, tok.Glyph), bar, pctStr, counts, it.displayLabel(), st.dim(it.a.Area))
+	progress := fmt.Sprintf("%s %s %s", bar, pctStr, counts)
+	if it.a.Findings == 0 {
+		progress = st.dim("no findings")
+		if it.a.UnparsedFindings > 0 {
+			progress = ""
+		}
+	}
+	if it.a.UnparsedFindings > 0 {
+		progress = strings.TrimSpace(progress + "  " + st.fg(theme.ColorYellow, fmt.Sprintf("⚠ %d unparsed", it.a.UnparsedFindings)))
+	}
+	line := fmt.Sprintf("%s %s  %s  %s",
+		st.fg(tok.Color, tok.Glyph), progress, it.displayLabel(), st.dim(it.a.Area))
 	if it.a.ReadyToClose() {
 		line += "  " + st.fg(theme.ColorGreen, "✔ ready to close")
 	}

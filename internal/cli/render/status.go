@@ -51,7 +51,7 @@ func SummaryHuman(w io.Writer, st Style, s core.Summary) error {
 			a := loaded.Value
 			bar := fmt.Sprintf("%s %s", st.SegmentBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, 10), st.AuditPercent(a.Percent()))
 			counts := theme.Counts(a.Resolved(), a.Findings)
-			if note := auditStateNote(st, a, false); note != "" {
+			if note := auditStateNote(st, a, loaded.Source, false); note != "" {
 				counts += "  " + note
 			}
 			rows = append(rows, []string{"  " + st.Bold(a.Slug), bar, counts, a.Area})
