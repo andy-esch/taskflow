@@ -675,32 +675,36 @@ func EpicShowHuman(w io.Writer, st Style, es core.EpicSummary, tasks []domain.Ta
 	return nil
 }
 
-// auditStateNote is the trailing call-to-action on an audit's progress line, kept
-// in one place so the list / show / dashboard surfaces can't drift. An open,
-// fully-triaged audit is flagged "✔ ready to close" (green) on every surface. It now
-// restates what the number already says (100% settled) rather than compensating for it,
-// which is the point: the marker and the percent agree. detail=true (single-audit views) additionally shows the routine
-// "(N open)" while findings remain; list rows omit that to stay scannable. Returns
-// "" (no leading space) when there is nothing to note.
 // auditProgressCell is the audit progress cell shared by `audit list` and
 // `audit show`, so the two surfaces cannot drift.
 //
 // An audit with no findings reads as an explicit "no findings" rather than
 // "░░░░░░░░ 0% settled 0/0", which invited the reader to see a real audit making no
 // progress. It is a percentage of nothing: an empty bar and a 0% that can never
-// move say strictly less than the words do. Whether the audit is empty on purpose
-// or because its headers failed to parse is not this cell's job to answer — the
-// near-miss lint rule reports that loudly, and by name.
+// move say strictly less than the words do. Body-derived unparsed evidence must
+// qualify that claim, even when no real findings survived parsing.
 func auditProgressCell(st Style, a domain.Audit, width int, gap string) string {
 	if a.Findings == 0 {
+		if a.UnparsedFindings > 0 {
+			return st.Warn(fmt.Sprintf("⚠ %d unparsed finding-like header(s)", a.UnparsedFindings))
+		}
 		return st.Dim("no findings")
 	}
 	bar := st.SegmentBar(a.DoneFindings, a.ActiveFindings, a.DroppedFindings, a.Findings, width)
-	return fmt.Sprintf("%s %s%s%s", bar, st.AuditPercent(a.Percent()), gap, theme.Counts(a.Resolved(), a.Findings))
+	progress := fmt.Sprintf("%s %s%s%s", bar, st.AuditPercent(a.Percent()), gap, theme.Counts(a.Resolved(), a.Findings))
+	if a.UnparsedFindings > 0 {
+		progress += st.Warn(fmt.Sprintf(" · %d unparsed", a.UnparsedFindings))
+	}
+	return progress
 }
 
+// auditStateNote supplies the shared trailing call-to-action. Unparsed evidence
+// takes precedence over readiness. Detail views also report outstanding findings;
+// lists omit that count to stay scannable.
 func auditStateNote(st Style, a domain.Audit, detail bool) string {
 	switch {
+	case a.UnparsedFindings > 0:
+		return st.Warn("→ audit lint " + a.Slug)
 	case a.ReadyToClose():
 		return st.Green("✔ ready to close")
 	case detail && a.OpenFindings > 0:

@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g1dhhk6721x
-status: ready-to-start
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Preserve untouched YAML block scalars during frontmatter edits; more-indented folded values currently accumulate decoded newlines.
 effort: 4-8 hours
@@ -10,9 +10,11 @@ priority: high
 autonomy_level: 3
 tags: [store, frontmatter]
 created: "2026-08-18"
-updated_at: "2026-10-05"
+updated_at: "2026-10-07"
 audited: "2026-09-27"
 audit_sources: [2026-09-27-weekly-task-sweep, 2026-10-05-arch-data-model-and-storage]
+started_at: "2026-10-06"
+completed_at: "2026-10-07"
 ---
 
 # Preserve untouched YAML block scalar values and formatting
@@ -52,13 +54,13 @@ frontmatter.
 
 ## Acceptance criteria
 
-- [ ] A surgical field write leaves an untouched multi-line block scalar byte-identical,
+- [x] A surgical field write leaves an untouched multi-line block scalar byte-identical,
       including its wrap width and its chomping indicator (`>-` vs `>` vs `|`).
-- [ ] Test fixture covers `>-`, `>`, and `|` alongside a normal scalar edit.
-- [ ] If exact preservation isn't achievable through the current yaml.Node round-trip,
+- [x] Test fixture covers `>-`, `>`, and `|` alongside a normal scalar edit.
+- [x] If exact preservation isn't achievable through the current yaml.Node round-trip,
       the fallback is to leave a node untouched when its value is unchanged, rather than
       re-emitting it.
-- [ ] Repeated unrelated writes preserve decoded values of >, >-, and | scalars
+- [x] Repeated unrelated writes preserve decoded values of >, >-, and | scalars
   with blank and more-indented lines; regression assertions distinguish value
   corruption from formatting churn.
 
@@ -148,3 +150,47 @@ Require decoded-value equality across repeated unrelated writes for `>`, `>-`, a
 including blank and more-indented lines, alongside byte/wrapping checks. If faithful
 editing is infeasible, explicitly evaluate a fail-closed diagnostic rather than
 silently corrupting intent; do not rely on a raw-string diff alone.
+
+## Implementation evidence (2026-10-06)
+
+Existing-document encoders now share source-preserving assembly for block-scalar
+documents. Unchanged top-level entries retain original source (including nested
+scalars, anchors, comments, indentation, chomping, and LF/CRLF). Edited output must
+decode to the requested mapping; unsupported or unsafe layouts fail before writing.
+
+Regression matrix: eight folded/literal/chomping/indent indicators, both line endings,
+five unrelated writes, body timestamping, and dependency dedupe. Real filesystem
+field writes preserve decoded values and a broken-anchor replacement leaves the
+original file untouched. Sibling deletion/replacement also pins comment ownership.
+The original encoder failed the preservation matrix; the new encoder passes.
+
+Shared coverage: updateFrontmatter, updateDependencySourceEdits, and replaceBodyWith;
+fresh file creation still uses the normal encoder. Race suite, lint, build,
+module tidiness, and planning/audit lint passed. Await independent review before merge.
+
+## External review handoff (2026-10-06)
+
+Prepared two independent audits with no findings:
+[Codex](../audits/6gh86jxj4sve-2026-10-06-shared-write-and-audit-safety-implementation-codex.md)
+and [Antigravity](../audits/6gh86jxtyx5k-2026-10-06-shared-write-and-audit-safety-implementation-antigravity.md).
+
+Codex leads init/audit/machine-contract checks; Antigravity leads YAML preservation.
+Both cross-check the other lens and must use independent dirty-state-capturing sandboxes,
+bounded compiler-valid mutation evidence, and guarded one-audit transfer. At handoff,
+implementation remained in-progress pending owner triage; final dispositions follow.
+
+## Review triage (2026-10-07)
+
+Codex completed an independent dirty-snapshot review, including repeated real filesystem
+scalar writes and byte-identical refusal checks; it found no YAML preservation defect.
+Its two init/audit findings are fixed with production-path regressions and recorded
+resolutions. Final race suite, lint, build, generated-output comparisons, and planning
+lint pass. Antigravity's preservation-led report subsequently confirmed two gaps:
+paragraph-spaced comments falsely refused writes, and the decoded-value safeguard
+lacked a differentiating regression. Both are fixed: comment localization matches
+actual comment lines through separators without consuming preceding keep-chomp blanks,
+and a real dependency-dedupe fixture refuses valid YAML whose decoded value drifts.
+LF/CRLF, indentation, 0/1/2/3/5 separator lines, shared field/body/dependency writers,
+deletion, and real filesystem field writes are covered. Disabling only the semantic
+guard compiled but failed the new regression; restored code passes the full race suite.
+Both audits are closed and this task is completed in [PR #287](https://github.com/andy-esch/taskflow/pull/287).

@@ -207,23 +207,24 @@ func ToEpicJSON(e core.EpicSummary) EpicJSON {
 
 // AuditJSON is the wire shape of an audit inside the --json envelopes.
 type AuditJSON struct {
-	ID           string `json:"id,omitempty" jsonschema:"description=stable identifier — the immutable key; absent on audits created before id assignment"`
-	Location     string `json:"location,omitempty" jsonschema:"description=optional opaque readable source location; not a selector or necessarily a filesystem path"`
-	Slug         string `json:"slug" jsonschema:"description=audit slug (filename without .md) — the human handle"`
-	Bucket       string `json:"bucket" jsonschema:"description=open | closed | deferred — authoritative, read from frontmatter (ADR-0003 §4)"`
-	Area         string `json:"area,omitempty" jsonschema:"description=subsystem/topic audited"`
-	Date         string `json:"date,omitempty" jsonschema:"description=audit date YYYY-MM-DD (immutable — part of the slug)"`
-	Updated      string `json:"updated_at,omitempty" jsonschema:"description=audit's own last-edited date YYYY-MM-DD (edit/append); a bucket move does not change it"`
-	Findings     int    `json:"findings" jsonschema:"description=total findings parsed from the body"`
-	OpenFindings int    `json:"open_findings" jsonschema:"description=findings whose status is open"`
+	ID               string `json:"id,omitempty" jsonschema:"description=stable identifier — the immutable key; absent on audits created before id assignment"`
+	Location         string `json:"location,omitempty" jsonschema:"description=optional opaque readable source location; not a selector or necessarily a filesystem path"`
+	Slug             string `json:"slug" jsonschema:"description=audit slug (filename without .md) — the human handle"`
+	Bucket           string `json:"bucket" jsonschema:"description=open | closed | deferred — authoritative, read from frontmatter (ADR-0003 §4)"`
+	Area             string `json:"area,omitempty" jsonschema:"description=subsystem/topic audited"`
+	Date             string `json:"date,omitempty" jsonschema:"description=audit date YYYY-MM-DD (immutable — part of the slug)"`
+	Updated          string `json:"updated_at,omitempty" jsonschema:"description=audit's own last-edited date YYYY-MM-DD (edit/append); a bucket move does not change it"`
+	Findings         int    `json:"findings" jsonschema:"description=total findings parsed from the body"`
+	UnparsedFindings int    `json:"unparsed_findings,omitempty" jsonschema:"description=finding-like headers requiring inspection or repair; not included in parsed finding counts"`
+	OpenFindings     int    `json:"open_findings" jsonschema:"description=findings whose status is open"`
 	// The progress bar's disposition bands. open + in_progress + done + dropped ≤
 	// findings (an unrecognized/missing status counts toward none).
 	InProgressFindings int `json:"in_progress_findings" jsonschema:"description=findings whose status is in-progress"`
 	DoneFindings       int `json:"done_findings" jsonschema:"description=findings whose status is fixed or tracked (the bar's done band)"`
 	DroppedFindings    int `json:"dropped_findings" jsonschema:"description=findings whose status is deferred, superseded, or wontfix"`
-	// ReadyToClose is true for an OPEN audit whose findings are all resolved/dropped
+	// ReadyToClose is true for an OPEN audit with no unparsed headings whose findings are all resolved/dropped
 	// (none open or in-progress) — a "ready to close" call-to-action.
-	ReadyToClose bool `json:"ready_to_close,omitempty" jsonschema:"description=true when an open audit has no open/in-progress findings left (ready to close)"`
+	ReadyToClose bool `json:"ready_to_close,omitempty" jsonschema:"description=true when an open audit has no open/in-progress findings or unparsed finding-like headers left (ready to close)"`
 }
 
 // ResearchJSON is the wire DTO for a research doc. Thin by design and the omissions
@@ -277,7 +278,7 @@ func ToLoadedAuditJSON(record core.LoadedRecord[domain.Audit]) AuditJSON {
 func toAuditJSON(a domain.Audit, id string) AuditJSON {
 	return AuditJSON{
 		ID: id, Slug: a.Slug, Bucket: string(a.Bucket), Area: a.Area, Date: a.Date, Updated: a.Updated,
-		Findings: a.Findings, OpenFindings: a.OpenFindings,
+		Findings: a.Findings, OpenFindings: a.OpenFindings, UnparsedFindings: a.UnparsedFindings,
 		InProgressFindings: a.ActiveFindings, DoneFindings: a.DoneFindings, DroppedFindings: a.DroppedFindings,
 		ReadyToClose: a.ReadyToClose(),
 	}

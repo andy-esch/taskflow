@@ -60,6 +60,10 @@ type Audit struct {
 	Updated string `yaml:"updated_at"`
 
 	Findings int `yaml:"-"`
+	// UnparsedFindings counts diagnostic-only or repairable finding-like headers,
+	// not real findings. It qualifies read completeness without inventing statuses
+	// or changing the parsed-finding denominator.
+	UnparsedFindings int `yaml:"-"`
 	// Per-disposition finding tally (see TallyFindings), the segmented progress
 	// bar's source. Open + Active + Done + Dropped ≤ Findings (an unrecognized or
 	// missing status, which audit lint flags, counts toward none and falls into the
@@ -99,7 +103,7 @@ func (a Audit) Percent() int {
 // finding is still open/in-progress OR carries an unrecognized status (Done +
 // Dropped < Findings), and for an audit with no findings at all.
 func (a Audit) Settled() bool {
-	return a.Findings > 0 && a.DoneFindings+a.DroppedFindings == a.Findings
+	return a.UnparsedFindings == 0 && a.Findings > 0 && a.DoneFindings+a.DroppedFindings == a.Findings
 }
 
 // ReadyToClose is the call-to-action shared by the --json envelope (ready_to_close)

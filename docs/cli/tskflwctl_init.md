@@ -13,6 +13,9 @@ legacy content is preserved and reported.
 Bare init against an existing configuration reports its topology without
 changing it; use
 `tskflwctl config migrate` for safe configuration upgrades.
+Select the directory with --path or -C, or an existing registered entry
+point with --space (also TSKFLW_SPACE). Explicit --path or -C overrides
+TSKFLW_SPACE; conflicting explicit selectors are rejected before writes.
 
 ```
 tskflwctl init [flags]
@@ -22,6 +25,7 @@ tskflwctl init [flags]
 
 ```
   tskflwctl init
+  tskflwctl -C ../new-planning init --no-register
   tskflwctl init --taskflow-root planning
   tskflwctl init --planning-repo ../desirelines-planning
   tskflwctl init --no-register
@@ -33,8 +37,8 @@ tskflwctl init [flags]
   -h, --help                   help for init
       --no-link-back           pointer mode: don't add this repo to the planning repo's tracked_repos
       --no-register            don't add a freshly initialized repo to this machine's space registry (also TSKFLW_NO_REGISTER)
-      --path string            directory to initialize (default ".")
-      --planning-repo string   point this repo at an external planning repo (relative to --path, or absolute): writes a pointer config, no tree
+      --path string            directory to initialize (overrides TSKFLW_SPACE; conflicts with -C and --space) (default ".")
+      --planning-repo string   point this repo at an external planning repo (relative to the selected init directory, or absolute): writes a pointer config, no tree
       --taskflow-root string   scaffold the planning tree in this subdirectory instead of the repo root (sets taskflow_root; e.g. planning)
       --track strings          record an impl repo this planning repo tracks (repeatable; scaffold mode only)
 ```

@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.81",
+  "schema_version": "1.82",
   "task": [
     {
       "name": "slug",
@@ -185,6 +185,13 @@
     {
       "name": "id",
       "description": "stable audit identifier"
+    },
+    {
+      "name": "unparsed_findings",
+      "description": "finding-like headers requiring inspection (not parsed findings)",
+      "aliases": [
+        "unparsed"
+      ]
     },
     {
       "name": "location",

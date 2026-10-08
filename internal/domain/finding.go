@@ -61,28 +61,14 @@ var (
 	// capturing the code and the rest of the line (the title, possibly with an
 	// inline "· **Status:** …").
 	findingHeaderRe = regexp.MustCompile(`(?m)^#{2,6}\s+([A-Z]+\d+)\.[ \t]*(.*)$`)
-	// nearMissHeaderRe recognises a heading that MEANT to be a finding but drifted out
-	// of findingHeaderRe's grammar, so the parser drops it and lint stays green — the
-	// failure that rendered eight evidence-backed findings as `0/0` in audit
-	// 6g5axb85endz. Every silent-loss shape is a CODE-TOKEN deviation: `H1:`, `H-1.`,
-	// `h1.`, `H1 ` with no period, `**H1.**`, `H_1.`, `M2 —`.
-	//
-	// The class is deliberately narrow, the same rule acCheckboxyRe follows: a warning
-	// here must be high-confidence, not noise. Requiring an uninterrupted LETTER+DIGIT
-	// code is what does that — it excludes both ordinary numbered section headings
-	// (`### 1. Lifecycle`) and word-number headings (`### Phase 2`). A code-agnostic
-	// pattern that also accepted bare digits was measured at 116 false positives over
-	// the 57-audit corpus. Widen this only against a re-run of that corpus measurement.
-	// The hashes, code letters, digits, and the whole remaining title are captured so
-	// the repair is a pure recomposition — no byte arithmetic over a line that may
-	// carry multi-byte runes (an em-dash title once got sliced mid-rune that way).
-	// A dash between the code and the title is a SEPARATOR standing in for the
-	// period (`#### BTA-01 — title`), not title text, so it is consumed rather than
-	// carried into the canonical title where it would dangle as `BTA1. — title`.
-	nearMissHeaderRe = regexp.MustCompile(`^(#{2,6})[ \t]+\*{0,2}([A-Za-z]{1,4})[-_]?(\d{1,3})[.:)—–-]?\*{0,2}[.:)—–-]?[ \t]+(?:[—–-][ \t]+)?(\S.*)$`)
+	// Candidate recognition is not repair authority. The classifier below requires
+	// local finding evidence; it follows the canonical parser's unbounded code
+	// length, but intentionally excludes bare numbers and word-number headings.
+	nearMissHeaderRe      = regexp.MustCompile(`^(#{2,6})[ \t]+\*{0,2}([A-Za-z]+)[-_]?(\d+)[.:)—–-]?\*{0,2}[.:)—–-]?[ \t]+(?:[—–-][ \t]+)?(\S.*)$`)
+	findingStatusMarkerRe = regexp.MustCompile(`(?mi)(?:^[ \t]*|·[ \t]*)\*\*Status:\*\*`)
 	// statusRe captures the status VALUE's leading run after `**Status:**`, but ONLY
-	// where the marker is authoritative — at line start (a status line) or right after
-	// the header's `· ` separator — so a literal `**Status:**` mentioned in a title or
+	// where findingStatusSource exposes authority — a standalone status line or the
+	// header's `· ` separator — so a literal `**Status:**` mentioned in a title or
 	// prose can't be mistaken for the status. The token is the first run with no
 	// whitespace/·/|, so "fixed 2026-01-01 (PR #9)" yields "fixed" and "open-ish"
 	// stays distinct from "open". `*` is excluded too, so an EMPTY status before a
@@ -255,19 +241,17 @@ func ValidFindingStatus(s string) bool {
 	return findingStatuses[strings.ToLower(strings.TrimSpace(s))]
 }
 
-// LintFindings validates an audit's parsed findings plus the bucket↔state
-// invariant, returning one Issue per problem (Field = the finding code, or
-// "bucket" for the audit-level check). It checks what the in-repo grammar makes
-// knowable: every finding carries a legal **Status:**, and a non-open audit has no
-// still-open findings. (The closeout-block nuance + candidate-list drift live with
-// the finding-write/sync surface, which parses the candidate list.)
 // NearMissHeader is one heading that reads as a finding but does not parse as one.
 // Line is 1-based. Canonical is the exact replacement text for the whole line, so
-// both the lint message and `lint --fix` work from one derivation rather than two.
+// lint and repair share one spelling. Repairable determines whether that proposed
+// spelling is safe to apply automatically.
 type NearMissHeader struct {
 	Line      int
 	Text      string
 	Canonical string
+	// Only local, authoritative Status metadata permits repair. Ambiguous
+	// headings get diagnostics, never auto-edits or a general body-write refusal.
+	Repairable bool
 }
 
 // NearMissFindingHeaders returns every heading in body that the recognizer claims
@@ -277,33 +261,12 @@ type NearMissHeader struct {
 // This is the detection half of the contract; CanonicalizeFindingHeaders applies
 // the same derivation as a repair.
 func NearMissFindingHeaders(body string) []NearMissHeader {
-	var (
-		out           []NearMissHeader
-		fence         fenceScanner
-		existingCodes = make(map[string]struct{})
-	)
-	for _, finding := range ParseFindings(body) {
-		i := len(finding.Code)
-		for i > 0 && finding.Code[i-1] >= '0' && finding.Code[i-1] <= '9' {
-			i--
+	var out []NearMissHeader
+	for _, header := range ClassifyFindingHeaders(body) {
+		if header.Disposition == FindingHeaderRepairable || header.Disposition == FindingHeaderAmbiguous {
+			out = append(out, NearMissHeader{Line: header.Line, Text: header.Text, Canonical: header.Canonical,
+				Repairable: header.Disposition == FindingHeaderRepairable})
 		}
-		existingCodes[canonicalFindingCode(finding.Code[:i], finding.Code[i:])] = struct{}{}
-	}
-	for i, line := range strings.Split(normalizeNewlines(body), "\n") {
-		if fence.inCode(line) {
-			continue
-		}
-		if findingHeaderRe.MatchString(line) {
-			continue // already canonical
-		}
-		m := nearMissHeaderRe.FindStringSubmatch(line)
-		if m == nil {
-			continue
-		}
-		if _, exists := existingCodes[canonicalFindingCode(m[2], m[3])]; exists {
-			continue // a closeout/reference heading, not a dropped finding definition
-		}
-		out = append(out, NearMissHeader{Line: i + 1, Text: line, Canonical: canonicalFindingHeader(m[1], m[2], m[3], m[4])})
 	}
 	return out
 }
@@ -324,11 +287,15 @@ func canonicalFindingCode(letters, digits string) string {
 	return strings.ToUpper(letters) + n
 }
 
-// CanonicalizeFindingHeaders rewrites every near-miss heading in body to canonical
-// form, returning the new body and what it changed. Fence-aware and idempotent: a
-// body with no near-misses comes back byte-identical with no changes reported.
+// CanonicalizeFindingHeaders rewrites only evidence-backed, repairable headings.
+// Ambiguous and ordinary prose remain byte-identical, including line endings.
 func CanonicalizeFindingHeaders(body string) (string, []NearMissHeader) {
-	hits := NearMissFindingHeaders(body)
+	var hits []NearMissHeader
+	for _, h := range NearMissFindingHeaders(body) {
+		if h.Repairable {
+			hits = append(hits, h)
+		}
+	}
 	if len(hits) == 0 {
 		return body, nil
 	}
@@ -336,9 +303,12 @@ func CanonicalizeFindingHeaders(body string) (string, []NearMissHeader) {
 	for _, h := range hits {
 		fixed[h.Line] = h.Canonical
 	}
-	lines := strings.Split(normalizeNewlines(body), "\n")
+	lines := strings.Split(body, "\n")
 	for i := range lines {
 		if repl, ok := fixed[i+1]; ok {
+			if strings.HasSuffix(lines[i], "\r") {
+				repl += "\r"
+			}
 			lines[i] = repl
 		}
 	}
@@ -355,6 +325,12 @@ func CanonicalizeFindingHeaders(body string) (string, []NearMissHeader) {
 func NearMissFindingIssues(hits []NearMissHeader) []Issue {
 	var issues []Issue
 	for _, h := range hits {
+		if !h.Repairable {
+			issues = append(issues, Issue{Field: "findings", Message: fmt.Sprintf(
+				"line %d: ambiguous finding-like heading %q; inspect its intent and choose a unique canonical code if this is a finding (canonical spelling: %q; `lint --fix` will not rewrite it)",
+				h.Line, h.Text, h.Canonical)})
+			continue
+		}
 		issues = append(issues, Issue{Field: "findings", Message: fmt.Sprintf(
 			"line %d: %q is not a finding header, so it parses to nothing and its work is invisible — write %q (`lint --fix` does this)",
 			h.Line, h.Text, h.Canonical)})
@@ -374,17 +350,23 @@ func LintFindingHeaders(body string) []Issue {
 // an ordinary status stamp or an unrelated append on any already-drifted audit,
 // turning one bad header into a frozen document.
 //
-// Compared by header text rather than line number, because inserting a section
-// renumbers every heading below it without changing any of them.
+// Compared by header text and repair authority rather than line number: adding
+// Status evidence to an ambiguous heading makes it newly repairable, while
+// inserting unrelated content merely renumbers existing headings.
 func IntroducedNearMissHeaders(prev, next string) []NearMissHeader {
-	before := make(map[string]int)
+	type identity struct {
+		text       string
+		repairable bool
+	}
+	before := make(map[identity]int)
 	for _, h := range NearMissFindingHeaders(prev) {
-		before[h.Text]++
+		before[identity{h.Text, h.Repairable}]++
 	}
 	var out []NearMissHeader
 	for _, h := range NearMissFindingHeaders(next) {
-		if before[h.Text] > 0 {
-			before[h.Text]-- // an existing occurrence accounts for this one
+		key := identity{h.Text, h.Repairable}
+		if before[key] > 0 {
+			before[key]-- // an existing occurrence accounts for this one
 			continue
 		}
 		out = append(out, h)
@@ -403,13 +385,20 @@ func NearMissWriteError(noun string, hits []NearMissHeader) error {
 	}
 	parts := make([]string, 0, len(hits))
 	for _, h := range hits {
-		parts = append(parts, fmt.Sprintf("%q → write %q", h.Text, h.Canonical))
+		if h.Repairable {
+			parts = append(parts, fmt.Sprintf("%q → write %q", h.Text, h.Canonical))
+		}
+	}
+	if len(parts) == 0 {
+		return nil
 	}
 	return fmt.Errorf(
 		"%w: this %s write would add %d heading(s) that parse to nothing, so their findings would be invisible: %s",
-		ErrValidation, noun, len(hits), strings.Join(parts, "; "))
+		ErrValidation, noun, len(parts), strings.Join(parts, "; "))
 }
 
+// LintFindings checks per-finding status vocabulary and the bucket/state invariant.
+// Body-header diagnostics and managed candidate drift are separate inputs.
 func LintFindings(bucket string, fs []Finding) []Issue {
 	var issues []Issue
 	for _, f := range fs {
@@ -498,15 +487,16 @@ func TallyFindings(fs []Finding) FindingTally {
 // field means the two cannot disagree about WHICH token they matched — the drift the
 // grammar comment warns about.
 func fieldSpan(re *regexp.Regexp, section string, offset int) (string, Span) {
-	m := re.FindStringSubmatchIndex(section)
+	visible := findingStatusSource(section)
+	m := re.FindStringSubmatchIndex(visible)
 	if m == nil || m[2] < 0 {
 		return "", Span{}
 	}
 	// The span keeps the decoration (so a re-stamp overwrites it); the returned TOKEN
 	// drops it, via the same stripper criterion suffixes use — one rule for "ignore the
 	// author's glyphs, read the word", spelled once.
-	return stripLeadingDecoration(strings.TrimSpace(section[m[2]:m[3]])),
-		Span{Start: offset + m[2], End: offset + statusValueEnd(section, m[3])}
+	return stripLeadingDecoration(strings.TrimSpace(visible[m[2]:m[3]])),
+		Span{Start: offset + m[2], End: offset + statusValueEnd(section, visible, m[3])}
 }
 
 // findingNote extracts a finding's resolution note: the paragraph introduced by
@@ -571,10 +561,10 @@ func isBlank(b byte) bool { return b == ' ' || b == '\t' || b == '\n' || b == '\
 // line formats allow (`fixed 2026-01-01 (PR #9)`) belongs to the status, while a following
 // `·`/`|`-separated field or bold label belongs to the next field. Without this a re-stamp
 // would leave the old decoration stranded after the new value.
-func statusValueEnd(section string, tokenEnd int) int {
-	rest := section[tokenEnd:]
+func statusValueEnd(section, visible string, tokenEnd int) int {
+	rest := visible[tokenEnd:]
 	end := len(rest)
-	if i := strings.IndexByte(rest, '\n'); i >= 0 {
+	if i := strings.IndexAny(rest, "\r\n"); i >= 0 {
 		end = i
 	}
 	for _, sep := range []string{" · ", " | ", "**"} {
@@ -582,7 +572,9 @@ func statusValueEnd(section string, tokenEnd int) int {
 			end = i
 		}
 	}
-	return tokenEnd + len(strings.TrimRight(rest[:end], " \t"))
+	// Boundaries are found in visible metadata, but decoration may legitimately
+	// contain inline code. Trim the actual source, so restamping replaces it too.
+	return tokenEnd + len(strings.TrimRight(section[tokenEnd:tokenEnd+end], " \t"))
 }
 
 func field(re *regexp.Regexp, section string) string {
@@ -596,7 +588,7 @@ func field(re *regexp.Regexp, section string) string {
 // `· ` separator, so a literal `**Status:**` inside the title survives), leaving
 // just the title.
 func stripInlineStatus(title string) string {
-	if i := strings.Index(title, "· **Status:**"); i >= 0 {
+	if i := strings.Index(blankFindingInlineCode(title), "· **Status:**"); i >= 0 {
 		title = title[:i]
 	}
 	return strings.TrimRight(strings.TrimSpace(title), " ·\t")

@@ -482,6 +482,15 @@ func ResearchReadColumns() []Column[core.LoadedRecord[domain.Research]] {
 // as the human-facing handle projected by `-o name`; the durable id is appended
 // last for explicit selection without shifting established columns.
 func AuditColumns() []Column[domain.Audit] {
+	unparsedCount := func(a domain.Audit) string { return fmt.Sprintf("%d", a.UnparsedFindings) }
+	unparsedProjection := func(a domain.Audit) string {
+		if a.UnparsedFindings == 0 {
+			return "" // mirrors the optional wire field, rather than inventing a value
+		}
+		return unparsedCount(a)
+	}
+	unparsed := contractColumn("unparsed", "unparsed_findings", "finding-like headers requiring inspection (not parsed findings)", unparsedCount, unparsedProjection)
+	unparsed.optIn = true
 	return columnRegistry(
 		column("slug", "audit slug", func(a domain.Audit) string { return a.Slug }),
 		column("bucket", "open|closed|deferred", func(a domain.Audit) string { return string(a.Bucket) }),
@@ -492,6 +501,7 @@ func AuditColumns() []Column[domain.Audit] {
 			func(a domain.Audit) string { return fmt.Sprintf("%d", a.OpenFindings) },
 			func(a domain.Audit) string { return fmt.Sprintf("%d", a.OpenFindings) }),
 		column("id", "stable audit identifier", func(a domain.Audit) string { return a.ID }),
+		unparsed,
 	)
 }
 
@@ -525,6 +535,8 @@ func loadedRecordColumns[T any](base []Column[T]) []Column[core.LoadedRecord[T]]
 			}
 			lifted = contractColumn(c.Name, c.projection.name, c.Desc, display, project)
 		}
+		lifted.optIn = c.optIn
+		lifted.selectedName = c.selectedName
 		out = append(out, lifted)
 	}
 	out = append(out, optInColumn("location", "optional opaque readable source location (not a path or selector)",

@@ -753,6 +753,16 @@ will give these decisions a durable authority without duplicating the current ma
   used by renderers. Unversioned sections remain tolerated legacy prose rather than guessed
   migrations. Reads stay tolerant so `lint` can REPORT malformed managed data already on
   disk; writes refuse to create it.
+- **Finding recognition is not repair authority.** `domain.ClassifyFindingHeaders`
+  distinguishes canonical findings, evidence-backed repairable drift, diagnostic-only
+  ambiguity, and ordinary prose. `lint --fix` rewrites only the repairable class;
+  body-write guards refuse only newly introduced repairable drift. `S3`, `V2`, and
+  similar prose tokens alone are not findings. Classifier and parser share a
+  byte-offset-preserving Status authority boundary: heading metadata or standalone
+  Status lines. Inline code and body prose/quoted examples grant no authority.
+  Audit reads carry `UnparsedFindings` separately from real finding counts and do not
+  advertise incomplete audits as ready to close; `audit lint` names the affected
+  headings and applicable repair.
 
 ## Why these boundaries (and why not collapse them)
 Reviews periodically suggest folding the packages together ("Go favors fewer
@@ -780,6 +790,11 @@ not for hypothetical future flexibility. The specifics:
   package (`store`), split into files by concern — idiomatic Go. `domain/
   validate.go` is *semantic field rules* (tier 1–5, priority enum), a domain
   concern, deliberately not coupled to the storage format.
+  Existing-document encoders share `assembleEditedFile`: when block scalars are
+  present, untouched top-level entries retain their original source, including nested
+  scalars, comments, indentation, and chomping. Decoded output must equal the requested
+  YAML edit or the writer refuses before persistence. Body edits and dependency repair
+  use the same safeguard; fresh creation keeps the ordinary encoder.
 - **`cli/render` is the one genuinely revisitable call.** It's cli-only (the TUI
   renders via Bubble Tea views, not these text/JSON formatters) and imports `core`
   for its read-side view-models — today **five** (`Summary`, `StatusCount`,

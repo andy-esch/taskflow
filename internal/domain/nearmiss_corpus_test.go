@@ -108,6 +108,49 @@ func TestNearMissFindingHeaders_LiveCorpusIsClean(t *testing.T) {
 	t.Logf("scanned %d audits, zero near-miss claims", scanned)
 }
 
+func TestFindingHeaderClassifierAcrossAllPlanningBodies(t *testing.T) {
+	root := filepath.Join("..", "..", "planning")
+	if _, err := os.Stat(root); os.IsNotExist(err) {
+		t.Skip("planning corpus unavailable")
+	}
+	for _, kind := range []string{"tasks", "epics", "research", "threads", "audits"} {
+		t.Run(kind, func(t *testing.T) {
+			entries, err := os.ReadDir(filepath.Join(root, kind))
+			if err != nil {
+				t.Fatal(err)
+			}
+			counts := make(map[FindingHeaderDisposition]int)
+			scanned := 0
+			for _, entry := range entries {
+				if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".md") {
+					continue
+				}
+				content, err := os.ReadFile(filepath.Join(root, kind, entry.Name()))
+				if err != nil {
+					t.Fatal(err)
+				}
+				body := normalizeNewlines(string(content))
+				if strings.HasPrefix(body, "---\n") {
+					if end := strings.Index(body[4:], "\n---\n"); end >= 0 {
+						body = body[4+end+5:]
+					}
+				}
+				scanned++
+				for _, header := range ClassifyFindingHeaders(body) {
+					counts[header.Disposition]++
+					if header.Disposition == FindingHeaderRepairable {
+						t.Errorf("unreviewed auto-repair/write-refusal hit: %s body line %d %q", entry.Name(), header.Line, header.Text)
+					}
+					if header.Disposition == FindingHeaderAmbiguous {
+						t.Logf("diagnostic-only: %s body line %d %q", entry.Name(), header.Line, header.Text)
+					}
+				}
+			}
+			t.Logf("%d %s bodies; dispositions: %v", scanned, kind, counts)
+		})
+	}
+}
+
 // The corpus must also still parse the findings it has — the recognizer must not
 // have stolen any canonical header away from ParseFindings.
 func TestNearMissFindingHeaders_DoesNotShadowCanonicalFindings(t *testing.T) {

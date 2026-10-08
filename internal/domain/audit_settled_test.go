@@ -15,6 +15,7 @@ func TestAuditSettled(t *testing.T) {
 		{"has in-progress", Audit{Findings: 2, ActiveFindings: 1, DoneFindings: 1}, false},
 		{"unknown-status leftover (Done+Dropped < Findings)", Audit{Findings: 2, DoneFindings: 1}, false},
 		{"no findings", Audit{Findings: 0}, false},
+		{"settled parsed findings but incomplete body", Audit{Findings: 1, DoneFindings: 1, UnparsedFindings: 1}, false},
 	} {
 		if got := c.a.Settled(); got != c.want {
 			t.Errorf("%s: Settled() = %v, want %v", c.name, got, c.want)
@@ -32,6 +33,7 @@ func TestAuditReadyToClose(t *testing.T) {
 		{"open + all dropped (triaged)", Audit{Bucket: AuditOpen, Findings: 2, DroppedFindings: 2}, true},
 		{"open + still has open", Audit{Bucket: AuditOpen, Findings: 2, OpenFindings: 1, DoneFindings: 1}, false},
 		{"open + no findings", Audit{Bucket: AuditOpen, Findings: 0}, false},
+		{"open + unparsed findings remain", Audit{Bucket: AuditOpen, Findings: 1, DoneFindings: 1, UnparsedFindings: 1}, false},
 		{"closed but settled (already off the board)", Audit{Bucket: AuditClosed, Findings: 1, DoneFindings: 1}, false},
 		{"deferred but settled", Audit{Bucket: AuditDeferred, Findings: 2, DroppedFindings: 2}, false},
 	} {

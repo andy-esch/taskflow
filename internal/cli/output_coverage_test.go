@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/wire"
 )
 
 // These close the genuine render-coverage gaps (2026-06-17): the --json variants
@@ -84,7 +86,7 @@ func TestTaskTransition_JSON(t *testing.T) {
 func TestSchema_Human(t *testing.T) {
 	out := runRoot(t, "-C", t.TempDir(), "schema")
 	for _, want := range []string{
-		"JSON revision: monotonic-revision · additive · classified since 1.68",
+		"JSON revision: " + wire.SchemaRevisionScheme + " · " + wire.SchemaRevisionCompatibility + " · classified since " + wire.SchemaRevisionClassificationSince,
 		"Scope: all-json-output · generated schema: typed-envelopes",
 		"Task statuses", "Epic statuses", "Task fields", "Exit codes", "Command safety",
 		"Machine-readable paths and enforced safety tags",

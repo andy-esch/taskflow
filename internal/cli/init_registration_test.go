@@ -17,7 +17,7 @@ func TestInitAutoRegistration_ScaffoldAndPointerUseCheckoutWithPlanningIdentity(
 	parent := t.TempDir()
 	planning := filepath.Join(parent, "planning")
 
-	out, errOut, err := runIn(t, parent, "init", "--path", planning,
+	out, errOut, err := runInitIn(t, parent, "init", "--path", planning,
 		"--taskflow-root", "planning", "--json")
 	if err != nil {
 		t.Fatalf("scaffold init: %v\nstdout:\n%s\nstderr:\n%s", err, out, errOut)
@@ -40,7 +40,7 @@ func TestInitAutoRegistration_ScaffoldAndPointerUseCheckoutWithPlanningIdentity(
 	}
 
 	impl := filepath.Join(parent, "implementation")
-	out, errOut, err = runIn(t, parent, "init", "--path", impl,
+	out, errOut, err = runInitIn(t, parent, "init", "--path", impl,
 		"--planning-repo", "../planning", "--json")
 	if err != nil {
 		t.Fatalf("pointer init: %v\nstdout:\n%s\nstderr:\n%s", err, out, errOut)
@@ -67,7 +67,7 @@ func TestInitAutoRegistration_ScaffoldAndPointerUseCheckoutWithPlanningIdentity(
 		t.Fatalf("registered entry points = %+v", spaces)
 	}
 
-	out, errOut, err = runIn(t, impl, "init", "--path", impl, "--json")
+	out, errOut, err = runInitIn(t, impl, "init", "--path", impl, "--json")
 	if err != nil || errOut != "" {
 		t.Fatalf("bare pointer re-init: %v\nstdout:\n%s\nstderr:\n%s", err, out, errOut)
 	}
@@ -88,7 +88,7 @@ func TestInitAutoRegistration_DryRunIsHonestAndWriteFree(t *testing.T) {
 	t.Setenv(userconfig.DirEnv, home)
 	repo := filepath.Join(t.TempDir(), "preview")
 
-	out, errOut, err := runIn(t, filepath.Dir(repo), "init", "--path", repo,
+	out, errOut, err := runInitIn(t, filepath.Dir(repo), "init", "--path", repo,
 		"--dry-run", "--json")
 	if err != nil || errOut != "" {
 		t.Fatalf("dry-run init: %v\nstdout:\n%s\nstderr:\n%s", err, out, errOut)
@@ -112,7 +112,7 @@ func TestInitAutoRegistration_DryRunIsHonestAndWriteFree(t *testing.T) {
 func TestInitAutoRegistration_HumanOutputCarriesOneReceiptLine(t *testing.T) {
 	t.Setenv(userconfig.DirEnv, t.TempDir())
 	repo := filepath.Join(t.TempDir(), "human-receipt")
-	out, errOut, err := runIn(t, filepath.Dir(repo), "init", "--path", repo, "--color=never")
+	out, errOut, err := runInitIn(t, filepath.Dir(repo), "init", "--path", repo, "--color=never")
 	if err != nil || errOut != "" {
 		t.Fatalf("human init: %v\nstdout:\n%s\nstderr:\n%s", err, out, errOut)
 	}
@@ -127,26 +127,26 @@ func TestInitAutoRegistration_OptOutsAndExistingInitDoNotWriteRegistry(t *testin
 	parent := t.TempDir()
 
 	flagged := filepath.Join(parent, "flagged")
-	if out, errOut, err := runIn(t, parent, "init", "--path", flagged, "--no-register"); err != nil {
+	if out, errOut, err := runInitIn(t, parent, "init", "--path", flagged, "--no-register"); err != nil {
 		t.Fatalf("--no-register: %v\n%s%s", err, out, errOut)
 	}
 	// A bare re-run is a topology read. It must not retroactively register a checkout
 	// that was intentionally bootstrapped without registration.
-	if out, errOut, err := runIn(t, flagged, "init", "--path", flagged); err != nil {
+	if out, errOut, err := runInitIn(t, flagged, "init", "--path", flagged); err != nil {
 		t.Fatalf("bare existing init: %v\n%s%s", err, out, errOut)
 	}
 	repair := filepath.Join(parent, "repair")
 	if _, err := config.Init(repair, "", false); err != nil {
 		t.Fatal(err)
 	}
-	if out, errOut, err := runIn(t, repair, "init", "--path", repair,
+	if out, errOut, err := runInitIn(t, repair, "init", "--path", repair,
 		"--taskflow-root", "."); err != nil {
 		t.Fatalf("explicit scaffold repair: %v\n%s%s", err, out, errOut)
 	}
 
 	t.Setenv("TSKFLW_NO_REGISTER", "1")
 	environment := filepath.Join(parent, "environment")
-	if out, errOut, err := runIn(t, parent, "init", "--path", environment); err != nil {
+	if out, errOut, err := runInitIn(t, parent, "init", "--path", environment); err != nil {
 		t.Fatalf("TSKFLW_NO_REGISTER: %v\n%s%s", err, out, errOut)
 	}
 	spaces, err := userconfig.Spaces()
@@ -173,7 +173,7 @@ func TestInitAutoRegistration_FailureWarnsWithoutBreakingTopologyOrJSON(t *testi
 	}
 
 	repo := filepath.Join(parent, "collision")
-	out, errOut, err := runIn(t, parent, "init", "--path", repo, "--json")
+	out, errOut, err := runInitIn(t, parent, "init", "--path", repo, "--json")
 	if err != nil {
 		t.Fatalf("registration failure made init fail: %v\n%s%s", err, out, errOut)
 	}
@@ -203,7 +203,7 @@ func TestInitAutoRegistration_StalePhysicalPathIdentityWarnsInsteadOfClaimingSuc
 		t.Fatal(err)
 	}
 
-	out, errOut, err := runIn(t, parent, "init", "--path", repo, "--json")
+	out, errOut, err := runInitIn(t, parent, "init", "--path", repo, "--json")
 	if err != nil {
 		t.Fatalf("stale-path init: %v\nstdout:\n%s\nstderr:\n%s", err, out, errOut)
 	}

@@ -50,6 +50,11 @@ func CreateFinding(body string, draft FindingDraft) (string, Finding, error) {
 		return "", Finding{}, err
 	}
 	if nearMisses := NearMissFindingHeaders(body); len(nearMisses) > 0 {
+		for _, header := range nearMisses {
+			if !header.Repairable {
+				return "", Finding{}, fmt.Errorf("%w: audit has ambiguous finding headers; run `audit lint` and clarify them before allocating a new code", ErrValidation)
+			}
+		}
 		return "", Finding{}, fmt.Errorf("%w: audit has %d near-miss finding header(s); run `lint --fix` before allocating a new code", ErrValidation, len(nearMisses))
 	}
 	findings := ParseFindings(body)
