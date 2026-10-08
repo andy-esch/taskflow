@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
@@ -25,7 +26,7 @@ func TestAuditInfoHuman_PathNotTruncated(t *testing.T) {
 	longPath := "/Users/someone/very/long/path/to/the/planning/audits/6fxxxxxxxxxx-2026-01-02-some-area.md"
 	var b bytes.Buffer
 	st := NewStyle(false).WithWidth(40)
-	AuditInfoHuman(&b, st, domain.Audit{Slug: "s", Bucket: domain.AuditOpen, Findings: 2, OpenFindings: 1}, longPath)
+	AuditInfoHuman(&b, st, core.LoadedRecord[core.AuditWithBody]{Value: core.AuditWithBody{Audit: domain.Audit{Slug: "s", Bucket: domain.AuditOpen, Findings: 2, OpenFindings: 1}}}, longPath)
 	if !strings.Contains(b.String(), longPath) {
 		t.Errorf("audit info must print the full path on a narrow terminal, got:\n%s", b.String())
 	}

@@ -78,7 +78,8 @@ type Audit struct {
 // Resolved is the audit's SETTLED count — every finding that has reached a terminal
 // disposition, whether it was done here (fixed/tracked) or dropped (deferred,
 // superseded, wontfix). It is the numerator beside Percent, and the continuous form
-// of Settled: Resolved == Findings exactly when Settled reports true.
+// of parsed settlement. Unparsed evidence can still make Settled false even
+// when Resolved == Findings.
 //
 // It used to count only DoneFindings, which made a fully-triaged audit read as
 // unfinished — `2026-06-27-consumer-data-flow-architecture` closed with 17 done and 5
@@ -89,7 +90,7 @@ func (a Audit) Resolved() int { return a.DoneFindings + a.DroppedFindings }
 
 // Percent is the share of findings settled, 0–100 (0 when there are none) — the
 // segmented bar's headline number. 100 means every finding has a terminal disposition,
-// which for an open audit is exactly ReadyToClose.
+// which for an open audit with complete parsing is exactly ReadyToClose.
 func (a Audit) Percent() int {
 	if a.Findings == 0 {
 		return 0
@@ -101,7 +102,8 @@ func (a Audit) Percent() int {
 // (fixed/tracked) or dropped (deferred/superseded/wontfix) — so an open audit has
 // nothing left to work and is a "ready to close" call-to-action. False when any
 // finding is still open/in-progress OR carries an unrecognized status (Done +
-// Dropped < Findings), and for an audit with no findings at all.
+// Dropped < Findings), when finding-like headers remain unparsed, and for an
+// audit with no findings at all.
 func (a Audit) Settled() bool {
 	return a.UnparsedFindings == 0 && a.Findings > 0 && a.DoneFindings+a.DroppedFindings == a.Findings
 }
@@ -111,3 +113,43 @@ func (a Audit) Settled() bool {
 // to work and can be closed. A closed/deferred audit is not "ready to close" (it is
 // already off the open board), so this is false there regardless of Settled.
 func (a Audit) ReadyToClose() bool { return a.Bucket == AuditOpen && a.Settled() }
+
+// ValidateMove is the audit bucket-write policy over adapter-established counts.
+// Close and defer require complete parsing, including diagnostic-only ambiguous
+// headers. They retain the existing parsed-open-finding gate; an empty audit is
+// allowed even though ReadyToClose deliberately does not advertise it. Reopen
+// remains available for repairing any readable audit. Persistence adapters must
+// apply this policy to the exact source their write guard protects, before no-op
+// or dry-run returns, never to a separate preflight read.
+func (a Audit) ValidateMove(to AuditBucket) error {
+	if !to.Valid() {
+		return fmt.Errorf("%q: %w", to, ErrValidation)
+	}
+	if to == AuditOpen {
+		return nil
+	}
+	if a.UnparsedFindings > 0 {
+		return &AuditIncompleteEvidenceError{Slug: a.Slug, Count: a.UnparsedFindings, Target: to}
+	}
+	if a.OpenFindings > 0 {
+		return fmt.Errorf("%w: audit %q has %d open finding(s); resolve or defer them before moving to %s",
+			ErrValidation, a.Slug, a.OpenFindings, to)
+	}
+	return nil
+}
+
+// AuditIncompleteEvidenceError describes a semantic refusal without inventing a
+// record selector from its display slug or declared ID. Persistence adapters add
+// their established source identity for actionable diagnostics.
+type AuditIncompleteEvidenceError struct {
+	Slug   string
+	Count  int
+	Target AuditBucket
+}
+
+func (e *AuditIncompleteEvidenceError) Error() string {
+	return fmt.Sprintf("%v: audit %q has %d unparsed finding-like header(s); repair or clarify them before moving to %s",
+		ErrValidation, e.Slug, e.Count, e.Target)
+}
+
+func (e *AuditIncompleteEvidenceError) Unwrap() error { return ErrValidation }

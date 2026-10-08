@@ -34,8 +34,8 @@ func (*pathlessInfoStore) ReadTask(string) (core.LoadedRecord[core.TaskWithBody]
 func (*pathlessInfoStore) ReadAudit(string) (core.LoadedRecord[core.AuditWithBody], error) {
 	id := testutil.TaskID("pathless-audit-info")
 	return core.LoadedRecord[core.AuditWithBody]{
-		Value: core.AuditWithBody{Audit: domain.Audit{ID: id, Slug: "pathless-audit", Bucket: domain.AuditOpen,
-			Findings: 1, OpenFindings: 1}},
+		Value: core.AuditWithBody{Audit: domain.Audit{ID: "declared-other", Slug: "pathless-audit", Bucket: domain.AuditOpen,
+			Findings: 1, OpenFindings: 1, UnparsedFindings: 2}},
 		Source: core.RecordSource{ID: id, Location: "db:audit-row"},
 	}, nil
 }
@@ -65,10 +65,14 @@ func TestInfoCommandsRemainSemanticWithoutLocalPath(t *testing.T) {
 				t.Fatalf("decode info: %v\n%s", err, out.String())
 			}
 			var info struct {
-				Path string `json:"path"`
+				Path             string `json:"path"`
+				UnparsedFindings int    `json:"unparsed_findings"`
 			}
 			if err := json.Unmarshal(envelope[tc.key], &info); err != nil || info.Path != "" {
 				t.Fatalf("pathless %s info invented local path %q: %v", tc.name, info.Path, err)
+			}
+			if tc.name == "audit" && info.UnparsedFindings != 2 {
+				t.Fatalf("pathless audit info lost evidence: %+v", info)
 			}
 			out.Reset()
 			app.JSON = false
@@ -80,6 +84,9 @@ func TestInfoCommandsRemainSemanticWithoutLocalPath(t *testing.T) {
 			}
 			if !bytes.Contains(out.Bytes(), []byte("unavailable (no local path capability)")) {
 				t.Fatalf("pathless %s human info did not explain missing path:\n%s", tc.name, out.String())
+			}
+			if tc.name == "audit" && (!bytes.Contains(out.Bytes(), []byte("2 finding-like header(s)")) || !bytes.Contains(out.Bytes(), []byte("audit lint "+testutil.TaskID("pathless-audit-info"))) || bytes.Contains(out.Bytes(), []byte("audit lint declared-other"))) {
+				t.Fatalf("pathless audit info omitted incomplete evidence: %s", out.String())
 			}
 		})
 	}

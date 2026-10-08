@@ -156,18 +156,19 @@ type FindingsTallyJSON struct {
 // AuditInfoJSON is the token-cheap metadata read for an audit (`audit info`): where
 // the file lives, its bucket, and the finding tally — no body.
 type AuditInfoJSON struct {
-	ID       string            `json:"id,omitempty" jsonschema:"description=stable identifier — absent on audits created before id assignment"`
-	Slug     string            `json:"slug" jsonschema:"description=audit slug (filename without .md)"`
-	Bucket   string            `json:"bucket" jsonschema:"description=open | closed | deferred — authoritative from frontmatter (ADR-0003 §4)"`
-	Path     string            `json:"path" jsonschema:"description=absolute local path to the audit's markdown file when available; empty for pathless sources"`
-	Findings FindingsTallyJSON `json:"findings" jsonschema:"description=finding disposition tally"`
+	ID               string            `json:"id,omitempty" jsonschema:"description=stable identifier — absent on audits created before id assignment"`
+	Slug             string            `json:"slug" jsonschema:"description=audit slug (filename without .md)"`
+	Bucket           string            `json:"bucket" jsonschema:"description=open | closed | deferred — authoritative from frontmatter (ADR-0003 §4)"`
+	Path             string            `json:"path" jsonschema:"description=absolute local path to the audit's markdown file when available; empty for pathless sources"`
+	Findings         FindingsTallyJSON `json:"findings" jsonschema:"description=finding disposition tally"`
+	UnparsedFindings int               `json:"unparsed_findings,omitempty" jsonschema:"description=finding-like headers requiring inspection or repair; not included in parsed finding counts"`
 }
 
 // ToAuditInfoJSON maps an audit (whose disposition tally is populated on load) + its
 // resolved path to the info DTO.
 func ToAuditInfoJSON(a domain.Audit, path string) AuditInfoJSON {
 	return AuditInfoJSON{
-		ID: a.ID, Slug: a.Slug, Bucket: string(a.Bucket), Path: path,
+		ID: a.ID, Slug: a.Slug, Bucket: string(a.Bucket), Path: path, UnparsedFindings: a.UnparsedFindings,
 		Findings: FindingsTallyJSON{
 			Total: a.Findings, Open: a.OpenFindings, InProgress: a.ActiveFindings,
 			Done: a.DoneFindings, Dropped: a.DroppedFindings,

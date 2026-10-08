@@ -2,6 +2,13 @@
 
 Move audit(s) to the closed bucket
 
+### Synopsis
+
+Move audit(s) to the closed bucket. Close/defer refuse while parsed open findings or unparsed finding-like
+headers remain, including ambiguous headings. Run audit lint <audit> and repair or
+clarify the headings first; there is no --force bypass. Reopen remains available
+for repair. Empty audits may close/defer. Dry-run applies the same validation.
+
 ```
 tskflwctl audit close <audit>... [flags]
 ```

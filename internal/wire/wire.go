@@ -347,7 +347,12 @@ import (
 // parsed denominators stay unchanged, but incomplete audits no longer claim readiness.
 // Status authority is limited to visible heading metadata or standalone Status
 // lines; inline code and body prose/quoted examples cannot grant automatic repair.
-const SchemaVersion = "1.82"
+// 1.83: NOT ADDITIVE — audit close/defer (including previews and same-bucket calls)
+// refuse unparsed finding-like headers, whether repairable or ambiguous. Inspect
+// audit lint and repair or clarify before retrying; reopen and empty-audit moves
+// remain supported. Audit info gains optional unparsed_findings separate from
+// the unchanged parsed disposition tally, omitted at zero.
+const SchemaVersion = "1.83"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.

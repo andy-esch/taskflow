@@ -2,6 +2,11 @@
 
 Show an audit's metadata, finding tally, and local path when available (no body)
 
+### Synopsis
+
+Show an audit's metadata, parsed finding tally, and local path when available, without the body.
+Unparsed finding-like headers qualify the tally separately; use audit lint <audit> for details.
+
 ```
 tskflwctl audit info <audit> [flags]
 ```
