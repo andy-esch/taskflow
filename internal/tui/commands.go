@@ -288,7 +288,7 @@ func loadAuditDetail(svc *core.Service, id string) tea.Cmd {
 		if err != nil {
 			return detailErrMsg{kind: entityAudits, id: id, err: err, localPath: path}
 		}
-		return detailMsg{kind: entityAudits, id: id, sourceID: record.Source.ID, content: auditDetail{a: record.Value.Audit, body: record.Value.Body, localPath: path}}
+		return detailMsg{kind: entityAudits, id: id, sourceID: record.Source.ID, content: auditDetail{a: record.Value.Audit, source: record.Source, body: record.Value.Body, localPath: path}}
 	}
 }
 

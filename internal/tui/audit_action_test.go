@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"maps"
 	"strings"
 	"testing"
 
@@ -25,9 +26,37 @@ func auditsTab(t *testing.T, m Model) Model {
 	return m
 }
 
+func TestModel_AuditCloseBlockedByUnparsedEvidence(t *testing.T) {
+	for _, body := range []string{"## Findings\n\n#### H1 Missing metadata\n", "#### M1. Done · **Status:** fixed\n\n#### H-1. Lost · **Status:** fixed\n"} {
+		r := testutil.NewRepo(t)
+		r.Audit("open", "probe.md", "---\narea: probe\ndate: 2026-10-07\n---\n"+body)
+		m := New(core.MustNewService(testutil.Must(store.NewFS(r.Root, core.UnrestrictedMutations()))))
+		tm, _ := m.Update(tea.WindowSizeMsg{Width: 120, Height: 40})
+		m = tm.(Model)
+		tm, _ = m.Update(m.Init()())
+		m = auditsTab(t, tm.(Model))
+		before := testutil.SnapshotTree(t, r.Root)
+		tm, _ = m.Update(press("m"))
+		m = cursorTo(t, tm.(Model), "close")
+		tm, cmd := m.Update(press("enter"))
+		m = tm.(Model)
+		if cmd == nil {
+			t.Fatal("close did not request guarded lifecycle")
+		}
+		tm, _ = m.Update(cmd())
+		m = tm.(Model)
+		if !m.flashErr || !strings.Contains(m.flash, "unparsed") || !strings.Contains(m.flash, "audit lint "+testutil.TaskID("probe")) {
+			t.Fatalf("close did not surface incomplete evidence: %s", m.flash)
+		}
+		if !maps.Equal(before, testutil.SnapshotTree(t, r.Root)) {
+			t.Fatal("TUI close changed incomplete audit tree")
+		}
+	}
+}
+
 // TestModel_ActionMenuMovesAudit pins the M10 win: the registry-driven `m` menu
 // now drives audit lifecycle (close/reopen/defer), not just tasks. Closing an
-// open audit with no findings relocates it to the closed bucket on disk.
+// open audit with no findings changes its authoritative bucket on disk.
 func TestModel_ActionMenuMovesAudit(t *testing.T) {
 	m := loaded(t, 120, 40)
 	m = auditsTab(t, m)
