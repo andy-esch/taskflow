@@ -391,7 +391,7 @@ func deferTaskCmd(svc *core.Service, ref entityRef, revisit string) tea.Cmd {
 }
 
 // moveAudit applies an audit bucket transition (close/reopen/defer). The store
-// refuses closing/deferring an audit with parsed open findings or incomplete
+// refuses closing/deferring an audit with unsettled parsed findings or incomplete
 // finding evidence; that surfaces
 // as an actionErrMsg (red flash, no move), matching the CLI.
 func moveAudit(svc *core.Service, ref entityRef, tr transition) tea.Cmd {

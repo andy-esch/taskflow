@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://github.com/andy-esch/taskflow/internal/wire/json-envelopes/1.83",
+  "$id": "https://github.com/andy-esch/taskflow/internal/wire/json-envelopes/1.84",
   "$ref": "#/$defs/jsonEnvelopes",
   "$defs": {
     "ACJSON": {
@@ -30,7 +30,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "slug": {
           "type": "string"
@@ -55,7 +55,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "audit_info": {
           "$ref": "#/$defs/AuditInfoJSON"
@@ -162,7 +162,7 @@
         },
         "ready_to_close": {
           "type": "boolean",
-          "description": "true when an open audit has no open/in-progress findings or unparsed finding-like headers left (ready to close)"
+          "description": "true when a nonempty open audit has complete parsing and only terminal parsed findings (ready to close)"
         }
       },
       "additionalProperties": false,
@@ -182,7 +182,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "dry_run": {
           "type": "boolean"
@@ -212,7 +212,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "audit": {
           "$ref": "#/$defs/AuditJSON"
@@ -234,7 +234,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "audits": {
           "items": {
@@ -281,7 +281,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "columns": {
           "items": {
@@ -430,7 +430,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "repository": {
           "$ref": "#/$defs/ConfigRepositoryJSON"
@@ -456,7 +456,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "dry_run": {
           "type": "boolean"
@@ -665,7 +665,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "dry_run": {
           "type": "boolean"
@@ -823,7 +823,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "operation": {
           "type": "string"
@@ -970,7 +970,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "root": {
           "type": "string"
@@ -1182,7 +1182,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "dry_run": {
           "type": "boolean"
@@ -1209,7 +1209,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "epic": {
           "$ref": "#/$defs/EpicMetaJSON"
@@ -1238,7 +1238,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "epics": {
           "items": {
@@ -1265,7 +1265,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "error": {
           "$ref": "#/$defs/ErrorItem"
@@ -1386,7 +1386,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "dry_run": {
           "type": "boolean"
@@ -1474,7 +1474,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "findings": {
           "items": {
@@ -1575,7 +1575,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "dry_run": {
           "type": "boolean"
@@ -1726,7 +1726,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "dry_run": {
           "type": "boolean"
@@ -1928,7 +1928,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "unreadable": {
           "items": {
@@ -2039,7 +2039,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "dry_run": {
           "type": "boolean"
@@ -2069,7 +2069,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "path": {
           "type": "string",
@@ -2129,7 +2129,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "research": {
           "items": {
@@ -2156,7 +2156,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "dry_run": {
           "type": "boolean"
@@ -2186,7 +2186,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "research": {
           "$ref": "#/$defs/ResearchJSON"
@@ -2237,7 +2237,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "revision_policy": {
           "$ref": "#/$defs/SchemaRevisionPolicy"
@@ -2391,7 +2391,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "kind": {
           "type": "string"
@@ -2570,7 +2570,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "dry_run": {
           "type": "boolean"
@@ -2629,7 +2629,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "spaces": {
           "items": {
@@ -2650,7 +2650,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "spaces": {
           "items": {
@@ -2695,7 +2695,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "counts": {
           "items": {
@@ -2846,7 +2846,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "task": {
           "$ref": "#/$defs/GraphTaskJSON"
@@ -3070,7 +3070,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "changed": {
           "type": "boolean"
@@ -3421,7 +3421,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "task_info": {
           "$ref": "#/$defs/TaskInfoJSON"
@@ -3691,7 +3691,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "dry_run": {
           "type": "boolean"
@@ -3721,7 +3721,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "task_id": {
           "type": "string",
@@ -3910,7 +3910,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "task": {
           "$ref": "#/$defs/TaskJSON"
@@ -3960,7 +3960,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "task": {
           "$ref": "#/$defs/GraphTaskJSON"
@@ -4007,7 +4007,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "tasks": {
           "items": {
@@ -4055,7 +4055,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "template": {
           "$ref": "#/$defs/TemplateInfo"
@@ -4077,7 +4077,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "templates": {
           "items": {
@@ -4121,7 +4121,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "name": {
           "type": "string"
@@ -4175,7 +4175,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "themes": {
           "items": {
@@ -4196,7 +4196,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "dry_run": {
           "type": "boolean"
@@ -4247,7 +4247,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "thread_id": {
           "type": "string"
@@ -4490,7 +4490,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "view": {
           "$ref": "#/$defs/ThreadViewJSON"
@@ -4525,7 +4525,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "projection": {
           "$ref": "#/$defs/ThreadGraphProjectionJSON"
@@ -4781,7 +4781,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "thread": {
           "$ref": "#/$defs/ThreadJSON"
@@ -4883,7 +4883,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "projection": {
           "$ref": "#/$defs/ThreadGraphProjectionJSON"
@@ -5015,7 +5015,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "view": {
           "$ref": "#/$defs/ThreadViewJSON"
@@ -5059,7 +5059,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "operation": {
           "type": "string",
@@ -5247,7 +5247,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "graph_health": {
           "type": "string",
@@ -5287,7 +5287,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "version": {
           "type": "string"
@@ -5305,7 +5305,7 @@
       "properties": {
         "schema_version": {
           "type": "string",
-          "const": "1.83"
+          "const": "1.84"
         },
         "workspace": {
           "$ref": "#/$defs/WorkspaceJSON"
@@ -5581,9 +5581,9 @@
       ]
     }
   },
-  "title": "tskflwctl --json output (schema_version 1.83)",
+  "title": "tskflwctl --json output (schema_version 1.84)",
   "description": "Each property of the root names a --json envelope and references its definition in $defs; validate a command's --json output against the matching definition.",
   "x-taskflow-revision-compatibility": "not-additive",
   "x-taskflow-revision-scheme": "monotonic-revision",
-  "x-taskflow-schema-version": "1.83"
+  "x-taskflow-schema-version": "1.84"
 }

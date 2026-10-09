@@ -333,21 +333,25 @@ func CountAcceptanceCriteria(body string) ACCount {
 const proseWrapWidth = 80
 
 // wrapProse renders text as hard-wrapped markdown lines: the first begins with lead, the
-// rest with indent, and no line exceeds proseWrapWidth RUNES.
+// rest with indent, targeting width RUNES except for unbreakable words and
+// block-leading tokens that must stay inline.
 //
 // Runes, not bytes: planning prose is full of `—`, `·`, and `→`, and measuring their UTF-8
 // length pulls those lines visibly short of the margin. A word longer than the margin gets
 // its own line rather than being broken, since it is likely a path, id, or URL. A word
 // starting `**` never begins a continuation line — it would read as a markdown label
 // starting a new block, which for a resolution note means lint counting it as a second one.
+// Likewise, a fence run stays inline: the structural scanner recognizes indented
+// fences too, so indentation alone cannot keep a wrapped fence example as prose.
 func wrapProse(text, lead, indent string, width int) []string {
 	line := lead
 	var out []string
 	for _, w := range strings.Fields(text) {
 		// Measure the line as it stands, trailing space included, so the test is exactly
 		// "would appending this word overflow" rather than a running total to keep in step.
+		_, _, _, startsFence := fenceAt(w)
 		if utf8.RuneCountInString(line)+utf8.RuneCountInString(w) > width &&
-			line != lead && line != indent && !strings.HasPrefix(w, "**") {
+			line != lead && line != indent && !strings.HasPrefix(w, "**") && !startsFence {
 			out = append(out, strings.TrimRight(line, " "))
 			line = indent
 		}

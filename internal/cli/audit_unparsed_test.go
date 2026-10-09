@@ -21,6 +21,9 @@ func TestAuditReadSurfacesQualifyUnparsedFindings(t *testing.T) {
 		{"ambiguous", "## Findings\n\n#### H1 Missing metadata\n", 0, 1, false},
 		{"mixed", "#### M1. Real · **Status:** fixed\n\n#### H-1. Lost · **Status:** open\n", 1, 1, false},
 		{"settled", "#### M1. Real · **Status:** fixed\n", 1, 0, true},
+		{"in-progress", "#### M1. Real · **Status:** in-progress\n", 1, 0, false},
+		{"missing-status", "#### M1. Real · **Status:** \n", 1, 0, false},
+		{"invalid-status", "#### M1. Real · **Status:** opne\n", 1, 0, false},
 		{"ordinary", "### S3 Storage Architecture\n\n```md\n#### H-1. Example · **Status:** open\n```\n", 0, 0, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {

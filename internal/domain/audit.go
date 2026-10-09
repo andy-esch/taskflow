@@ -88,6 +88,11 @@ type Audit struct {
 // separates the bands, so nothing about HOW it was settled is lost.
 func (a Audit) Resolved() int { return a.DoneFindings + a.DroppedFindings }
 
+// UnsettledFindings includes open, in-progress, missing, and invalid statuses.
+// It uses the same terminal bands as progress/readiness without treating an
+// unparsed heading as a parsed finding.
+func (a Audit) UnsettledFindings() int { return a.Findings - a.Resolved() }
+
 // Percent is the share of findings settled, 0–100 (0 when there are none) — the
 // segmented bar's headline number. 100 means every finding has a terminal disposition,
 // which for an open audit with complete parsing is exactly ReadyToClose.
@@ -105,7 +110,7 @@ func (a Audit) Percent() int {
 // Dropped < Findings), when finding-like headers remain unparsed, and for an
 // audit with no findings at all.
 func (a Audit) Settled() bool {
-	return a.UnparsedFindings == 0 && a.Findings > 0 && a.DoneFindings+a.DroppedFindings == a.Findings
+	return a.UnparsedFindings == 0 && a.Findings > 0 && a.UnsettledFindings() == 0
 }
 
 // ReadyToClose is the call-to-action shared by the --json envelope (ready_to_close)
@@ -116,7 +121,7 @@ func (a Audit) ReadyToClose() bool { return a.Bucket == AuditOpen && a.Settled()
 
 // ValidateMove is the audit bucket-write policy over adapter-established counts.
 // Close and defer require complete parsing, including diagnostic-only ambiguous
-// headers. They retain the existing parsed-open-finding gate; an empty audit is
+// headers, and every parsed finding must have a terminal status. An empty audit is
 // allowed even though ReadyToClose deliberately does not advertise it. Reopen
 // remains available for repairing any readable audit. Persistence adapters must
 // apply this policy to the exact source their write guard protects, before no-op
@@ -131,9 +136,8 @@ func (a Audit) ValidateMove(to AuditBucket) error {
 	if a.UnparsedFindings > 0 {
 		return &AuditIncompleteEvidenceError{Slug: a.Slug, Count: a.UnparsedFindings, Target: to}
 	}
-	if a.OpenFindings > 0 {
-		return fmt.Errorf("%w: audit %q has %d open finding(s); resolve or defer them before moving to %s",
-			ErrValidation, a.Slug, a.OpenFindings, to)
+	if unsettled := a.UnsettledFindings(); unsettled > 0 {
+		return &AuditUnsettledFindingsError{Slug: a.Slug, Count: unsettled, Target: to}
 	}
 	return nil
 }
@@ -153,3 +157,18 @@ func (e *AuditIncompleteEvidenceError) Error() string {
 }
 
 func (e *AuditIncompleteEvidenceError) Unwrap() error { return ErrValidation }
+
+// AuditUnsettledFindingsError refuses leaving the open bucket while parsed
+// findings lack terminal statuses. Adapters supply source-backed lint advice.
+type AuditUnsettledFindingsError struct {
+	Slug   string
+	Count  int
+	Target AuditBucket
+}
+
+func (e *AuditUnsettledFindingsError) Error() string {
+	return fmt.Sprintf("%v: audit %q has %d unsettled parsed finding(s); every finding needs a terminal status before moving to %s",
+		ErrValidation, e.Slug, e.Count, e.Target)
+}
+
+func (e *AuditUnsettledFindingsError) Unwrap() error { return ErrValidation }

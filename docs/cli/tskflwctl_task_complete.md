@@ -7,7 +7,7 @@ Move task(s) to completed
 Move task(s) to completed.
 
 Refuses a task whose acceptance criteria are still unmet with no reason given —
-the task counterpart of `audit close` refusing while findings are open. A criterion
+the task counterpart of `audit close` requiring terminal findings and complete parsing. A criterion
 carrying a state (`task ac --defer|--wontfix|--tracked|--na`) has been DECIDED and
 does not block; only a silently unticked box does. --force completes anyway.
 

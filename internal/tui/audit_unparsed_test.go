@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -28,15 +29,17 @@ func (s *incompleteAuditReadStore) ReadAudit(string) (core.LoadedRecord[core.Aud
 
 func TestPortableAuditViewsQualifyIncompleteEvidence(t *testing.T) {
 	for _, tc := range []struct {
-		name             string
-		parsed, unparsed int
+		name                           string
+		parsed, done, active, unparsed int
 	}{
-		{"empty", 0, 0}, {"unparsed-only", 0, 2}, {"mixed", 1, 2}, {"settled", 1, 0},
+		{"empty", 0, 0, 0, 0}, {"unparsed-only", 0, 0, 0, 2},
+		{"mixed", 1, 1, 0, 2}, {"settled", 1, 1, 0, 0},
+		{"in-progress", 1, 0, 1, 0}, {"missing-or-invalid-status", 1, 0, 0, 0},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			source := &incompleteAuditReadStore{sourceSet: core.NewSourceSetID(), audit: domain.Audit{
 				ID: "declared-other", Slug: "portable", Bucket: domain.AuditOpen,
-				Findings: tc.parsed, DoneFindings: tc.parsed, UnparsedFindings: tc.unparsed,
+				Findings: tc.parsed, DoneFindings: tc.done, ActiveFindings: tc.active, UnparsedFindings: tc.unparsed,
 			}}
 			svc := core.MustNewService(source)
 			msg := loadAuditList(&entityTab{}, svc)().(listLoadedMsg)
@@ -63,8 +66,11 @@ func TestPortableAuditViewsQualifyIncompleteEvidence(t *testing.T) {
 					} else if strings.Contains(view, "unparsed") || (tc.parsed == 0 && !strings.Contains(view, "no findings")) {
 						t.Fatalf("clean projection misrepresented evidence: %s", view)
 					}
-					if tc.parsed > 0 && !strings.Contains(view, "1/1") {
+					if tc.parsed > 0 && !strings.Contains(view, fmt.Sprintf("%d/%d", tc.done, tc.parsed)) {
 						t.Fatalf("parsed denominator changed: %s", view)
+					}
+					if tc.done < tc.parsed && strings.Contains(view, "ready to close") {
+						t.Fatalf("unsettled parsed findings advertised readiness: %s", view)
 					}
 				}
 				if tc.unparsed > 0 && (!strings.Contains(meta, "audit lint source-audit") || strings.Contains(meta, "audit lint portable") || strings.Contains(meta, "audit lint declared-other")) {

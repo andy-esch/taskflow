@@ -4,9 +4,10 @@ Move audit(s) to the deferred bucket
 
 ### Synopsis
 
-Move audit(s) to the deferred bucket. Close/defer refuse while parsed open findings or unparsed finding-like
-headers remain, including ambiguous headings. Run audit lint <audit> and repair or
-clarify the headings first; there is no --force bypass. Reopen remains available
+Move audit(s) to the deferred bucket. Close/defer require every parsed finding to have a terminal status:
+fixed, tracked, deferred, superseded, or wontfix. Open, in-progress, missing, or
+invalid statuses and unparsed finding-like headers (including ambiguous headings)
+block. Inspect with audit findings <audit> and audit lint <audit>; no --force bypass. Reopen is available
 for repair. Empty audits may close/defer. Dry-run applies the same validation.
 
 ```

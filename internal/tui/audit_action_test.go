@@ -155,7 +155,7 @@ func TestModel_AuditCloseBlockedByOpenFindings(t *testing.T) {
 	if err != nil || a.Bucket != domain.AuditOpen {
 		t.Errorf("audit must remain open after a blocked close: bucket=%s err=%v", a.Bucket, err)
 	}
-	if !strings.Contains(m.flash, "open finding") {
-		t.Errorf("the flash should explain the open-findings block, got %q", m.flash)
+	if !strings.Contains(m.flash, "unsettled parsed finding") {
+		t.Errorf("the flash should explain the unsettled-findings block, got %q", m.flash)
 	}
 }

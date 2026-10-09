@@ -104,7 +104,7 @@ func (s *FS) readAudit(slug string) (core.LoadedRecord[core.AuditWithBody], erro
 
 // MoveAudit changes an audit's bucket (close/reopen/defer) by rewriting its authoritative
 // `bucket:` frontmatter in place — under the flat layout (ADR-0003 §4) there is no bucket
-// directory to move between. Moving to the bucket it already declares is an idempotent no-op.
+// directory to move between. A same-bucket call is a no-op only after validation.
 func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error) {
 	if err := s.authorizeMutation(); err != nil {
 		return domain.Audit{}, err
@@ -131,7 +131,7 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.
 	}
 	from := cur.Bucket
 	// The domain owns bucket policy; these counts belong to the exact content the
-	// CAS below protects. Refuse incomplete evidence before no-op or dry-run returns.
+	// CAS below protects. Refuse incomplete/unsettled evidence before no-op or dry-run returns.
 	if err := cur.ValidateMove(to); err != nil {
 		return domain.Audit{}, &core.AuditMoveError{Source: auditSource(path), Cause: err}
 	}
@@ -174,7 +174,7 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.
 
 // testHookBeforeMoveAuditWrite runs between MoveAudit's validation and its
 // compare-and-swap re-resolve — the seam tests use to interleave a concurrent
-// relocation. Nil outside tests.
+// bucket/content edit. Nil outside tests.
 var testHookBeforeMoveAuditWrite func()
 
 // resolveAuditPath re-resolves an audit by its EXACT stable id for the version-CAS

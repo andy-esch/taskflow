@@ -115,3 +115,52 @@ func TestSetFindingNote_EmptyNoteRemovesAStrayLabel(t *testing.T) {
 		t.Errorf("H2 was disturbed:\n%s", out)
 	}
 }
+
+// Single-line input is not enough: the renderer inserts its own line breaks.
+// Wrapped Markdown must remain note text, not headers, metadata, or fences.
+func TestSetFindingNote_WrappingPreservesDocumentStructure(t *testing.T) {
+	body := "## Findings\n\n#### H1. Settled · **Status:** fixed\n\n" +
+		"#### M1. Unrelated · **Status:** in-progress\n\nExisting prose.\n\n" +
+		"## Candidate tasks\n\n" + CandidateTasksMarkerComment() + "\n"
+	for _, fragment := range []string{
+		"#### H2. Injected · **Status:** in-progress",
+		"#### H-2. Near miss · **Status:** open",
+		"## Candidate tasks",
+		"```md fence example",
+		"~~~md fence example",
+		"**Status:** in-progress",
+		"**Resolution:** example label",
+	} {
+		for _, pad := range []string{"x", "界"} {
+			for width := 30; width < 100; width++ {
+				note := strings.Repeat(pad, width) + " " + fragment
+				got, err := SetFindingNote(body, "H1", note)
+				if err != nil {
+					t.Fatal(err)
+				}
+				findings := ParseFindings(got)
+				if len(findings) != 2 || findings[0].Code != "H1" || findings[0].Status != "fixed" || findings[0].Note != note || findings[0].NoteLabels != 1 || findings[1].Code != "M1" || findings[1].Status != "in-progress" {
+					t.Fatalf("width=%d fragment=%q changed structured findings: %+v\n%s", width, fragment, findings, got)
+				}
+				if strings.Count(got, "\n## Candidate tasks\n") != 1 || len(NearMissFindingHeaders(got)) != 0 {
+					t.Fatalf("note created section/header drift:\n%s", got)
+				}
+				if _, _, open := UnterminatedFence(got); open {
+					t.Fatalf("note created a fence:\n%s", got)
+				}
+				if repaired, headers := CanonicalizeFindingHeaders(got); repaired != got || len(headers) != 0 {
+					t.Fatalf("header repair treated note prose as structure:\n%s", repaired)
+				}
+				// Replacement/removal must not orphan continuation text or touch M1.
+				replaced, err := SetFindingNote(got, "H1", "Replacement")
+				if err != nil || ParseFindings(replaced)[0].Note != "Replacement" || strings.Contains(replaced, strings.Repeat(pad, width)) {
+					t.Fatalf("wrapped note replacement: %v\n%s", err, replaced)
+				}
+				cleared, err := SetFindingNote(got, "H1", "")
+				if err != nil || cleared != body {
+					t.Fatalf("wrapped note removal did not restore exact source: %v\n%s", err, cleared)
+				}
+			}
+		}
+	}
+}

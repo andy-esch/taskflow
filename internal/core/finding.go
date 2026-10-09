@@ -226,6 +226,9 @@ func (e FindingEdit) apply(body, code string) (string, error) {
 // body-replace path so the rest of the file is byte-identical. Returns the audit and
 // whether anything changed — false means it already carried those exact values, so no
 // write happened.
+// An explicit status edit cannot leave its finding nonterminal in a non-open
+// audit, even on a no-op or preview. Terminal repairs and note/candidate-only
+// edits remain available; unrelated pre-existing defects are left to audit lint.
 //
 // This is the validated write path finding H1 of the 2026-08-17 audit asked for. Until now
 // the only way to resolve a finding was a hand edit or a scripted search-and-replace, which
@@ -243,7 +246,24 @@ func (s *Service) EditFinding(slug, code string, edit FindingEdit, dryRun bool) 
 	}
 	r, err := retryOnConflict(s, dryRun, func() (result, error) {
 		audit, _, changed, err := s.store.TransformAuditBody(slug, now, dryRun,
-			func(_ domain.Audit, current string) (string, error) { return edit.apply(current, code) })
+			func(audit domain.Audit, current string) (string, error) {
+				next, err := edit.apply(current, code)
+				if err != nil {
+					return "", err
+				}
+				if edit.Status != "" && audit.Bucket != domain.AuditOpen {
+					for _, finding := range domain.ParseFindings(next) {
+						if strings.EqualFold(finding.Code, code) {
+							if !domain.TerminalFindingStatus(finding.Status) {
+								return "", fmt.Errorf("%w: cannot set finding %s to %q in a %s audit; reopen the audit first",
+									domain.ErrValidation, finding.Code, finding.Status, audit.Bucket)
+							}
+							break
+						}
+					}
+				}
+				return next, nil
+			})
 		return result{audit: audit, changed: changed}, err
 	})
 	return r.audit, r.changed, err

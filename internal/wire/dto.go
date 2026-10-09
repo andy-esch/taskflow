@@ -223,9 +223,9 @@ type AuditJSON struct {
 	InProgressFindings int `json:"in_progress_findings" jsonschema:"description=findings whose status is in-progress"`
 	DoneFindings       int `json:"done_findings" jsonschema:"description=findings whose status is fixed or tracked (the bar's done band)"`
 	DroppedFindings    int `json:"dropped_findings" jsonschema:"description=findings whose status is deferred, superseded, or wontfix"`
-	// ReadyToClose is true for an OPEN audit with no unparsed headings whose findings are all resolved/dropped
-	// (none open or in-progress) — a "ready to close" call-to-action.
-	ReadyToClose bool `json:"ready_to_close,omitempty" jsonschema:"description=true when an open audit has no open/in-progress findings or unparsed finding-like headers left (ready to close)"`
+	// ReadyToClose is true for a nonempty OPEN audit with complete parsing and only
+	// terminal parsed findings — a "ready to close" call-to-action.
+	ReadyToClose bool `json:"ready_to_close,omitempty" jsonschema:"description=true when a nonempty open audit has complete parsing and only terminal parsed findings (ready to close)"`
 }
 
 // ResearchJSON is the wire DTO for a research doc. Thin by design and the omissions

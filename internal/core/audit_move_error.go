@@ -17,6 +17,10 @@ type AuditMoveError struct {
 
 func (e *AuditMoveError) Error() string {
 	var incomplete *domain.AuditIncompleteEvidenceError
+	var unsettled *domain.AuditUnsettledFindingsError
+	if errors.As(e.Cause, &unsettled) && e.Source.ID != "" {
+		return fmt.Sprintf("%v; inspect with `tskflwctl audit findings %s` and `tskflwctl audit lint %s`", e.Cause, e.Source.ID, e.Source.ID)
+	}
 	if errors.As(e.Cause, &incomplete) && e.Source.ID != "" {
 		return fmt.Sprintf("%v; inspect with `tskflwctl audit lint %s`", e.Cause, e.Source.ID)
 	}

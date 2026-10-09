@@ -7,7 +7,8 @@ Validate audit findings, managed candidate rows, and bucket↔state
 Lint audit findings — the audit analog of `lint` (which covers tasks, epics, and research).
 Checks every finding has a legal **Status:** (catching typos a free-text edit
 allows), every `candidate-tasks:v1` row still matches its finding, and a non-open
-audit has no still-open findings. Legacy unversioned candidate prose is ignored. With no argument
+audit has only terminal parsed findings (open, in-progress, missing, and invalid
+statuses are unsettled). Legacy unversioned candidate prose is ignored. With no argument
 it lints every audit; with a slug, just that one. Exit 11 when issues are found.
 
 ```
