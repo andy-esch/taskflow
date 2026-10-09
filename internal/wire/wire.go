@@ -352,7 +352,12 @@ import (
 // audit lint and repair or clarify before retrying; reopen and empty-audit moves
 // remain supported. Audit info gains optional unparsed_findings separate from
 // the unchanged parsed disposition tally, omitted at zero.
-const SchemaVersion = "1.83"
+// 1.84: NOT ADDITIVE — audit close/defer now require every parsed finding to
+// have a terminal status, including previews and same-bucket calls. Non-open
+// audits refuse finding status edits to open/in-progress; reopen first. Lint
+// reports non-open audits with unsettled parsed findings. Empty-audit closure,
+// reopening, terminal corrections, and note/candidate-only edits remain available.
+const SchemaVersion = "1.84"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.

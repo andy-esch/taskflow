@@ -307,6 +307,74 @@ func TestJSONSchemaRejectsEnvelopeFromAnotherRevision(t *testing.T) {
 	}
 }
 
+// Nondefault readiness must be checked semantically, not just accepted by the
+// schema. Keep expected terminal statuses independent of the production tally.
+func TestJSONSchemaAuditReadiness(t *testing.T) {
+	schemaBytes, err := JSONSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(schemaBytes))
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := doc.(map[string]any)["$id"].(string)
+	compiler := jsonschema.NewCompiler()
+	if err := compiler.AddResource(id, doc); err != nil {
+		t.Fatal(err)
+	}
+	schema, err := compiler.Compile(id + "#/$defs/AuditShowEnvelope")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, body string
+		bucket     domain.AuditBucket
+		ready      bool
+	}{
+		{"fixed", "#### H1. Issue · **Status:** fixed\n", domain.AuditOpen, true},
+		{"tracked", "#### H1. Issue · **Status:** tracked by 6g0000000001\n", domain.AuditOpen, true},
+		{"deferred", "#### H1. Issue · **Status:** deferred\n", domain.AuditOpen, true},
+		{"superseded", "#### H1. Issue · **Status:** superseded\n", domain.AuditOpen, true},
+		{"wontfix", "#### H1. Issue · **Status:** wontfix\n", domain.AuditOpen, true},
+		{"open", "#### H1. Issue · **Status:** open\n", domain.AuditOpen, false},
+		{"active", "#### H1. Issue · **Status:** in-progress\n", domain.AuditOpen, false},
+		{"missing", "#### H1. Issue\n", domain.AuditOpen, false},
+		{"invalid", "#### H1. Issue · **Status:** opne\n", domain.AuditOpen, false},
+		{"empty", "# No findings\n", domain.AuditOpen, false},
+		{"unparsed", "#### H1. Issue · **Status:** fixed\n\n#### H-2. Unparsed · **Status:** fixed\n", domain.AuditOpen, false},
+		{"closed", "#### H1. Issue · **Status:** fixed\n", domain.AuditClosed, false},
+		{"deferred-bucket", "#### H1. Issue · **Status:** fixed\n", domain.AuditDeferred, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			findings := domain.ParseFindings(tc.body)
+			tally := domain.TallyFindings(findings)
+			audit := domain.Audit{
+				ID: "6g0000000011", Slug: "probe", Bucket: tc.bucket,
+				Findings: len(findings), OpenFindings: tally.Open, ActiveFindings: tally.Active,
+				DoneFindings: tally.Done, DroppedFindings: tally.Dropped,
+				UnparsedFindings: len(domain.NearMissFindingHeaders(tc.body)),
+			}
+			var buf bytes.Buffer
+			if err := emit(&buf, ToAuditShowEnvelope(loadedAuditBody(audit, tc.body))); err != nil {
+				t.Fatal(err)
+			}
+			instance, err := jsonschema.UnmarshalJSON(bytes.NewReader(buf.Bytes()))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := schema.Validate(instance); err != nil {
+				t.Fatalf("readiness output violates its exact schema: %v\n%s", err, buf.String())
+			}
+			fields := instance.(map[string]any)["audit"].(map[string]any)
+			ready, present := fields["ready_to_close"]
+			if (tc.ready && (!present || ready != true)) || (!tc.ready && present) {
+				t.Fatalf("want ready=%t (false omitted), got %v present=%t\n%s", tc.ready, ready, present, buf.String())
+			}
+		})
+	}
+}
+
 // TestJSONSchema_ValidatesRealOutput is the round-trip proof: the emitted schema
 // actually validates real --json output across a representative spread of
 // envelopes (list, show, mutation, nested item, lint, and the nil-slice fix path).

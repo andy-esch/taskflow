@@ -51,7 +51,9 @@ We dogfood: drive this repo's planning with the tool itself.
   still work as hidden aliases). `defer` takes `--until <YYYY-MM-DD>` (snooze).
   **`complete` REFUSES** a task with an acceptance criterion that is unmet and gives no
   reason — tick it, give it a state (below), or pass `--force`. Same rule as `audit
-  close` refusing while findings are open.
+  close` requiring every parsed finding to have a terminal status and no unparsed
+  finding-like headers. Reopen first to resume work in a closed/deferred audit;
+  finding status writes cannot reactivate it. Empty audits may close/defer.
 - **Read/edit:** `task list|show|set|edit|append|ac`, `epic list|show`,
   `audit new|list|show|findings|finding|lint|close|reopen|defer`,
   `research new|list|show|path|set|edit|append` (no lifecycle verbs — research has no

@@ -304,7 +304,8 @@ type AuditStore interface {
 	ReadAudit(ref string) (LoadedRecord[AuditWithBody], error)
 	// MoveAudit applies domain.Audit.ValidateMove to freshly loaded counts from
 	// the exact source protected by the write guard. Incomplete finding evidence
-	// must refuse close/defer before no-op, preview, or persistence; reopening
+	// or nonterminal parsed statuses must refuse close/defer before no-op, preview,
+	// or persistence; reopening
 	// remains available for repair. A concurrent content change must not bypass
 	// validation or be overwritten by a bucket move.
 	// Policy refusals carry AuditMoveError with adapter-established source identity

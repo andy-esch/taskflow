@@ -777,8 +777,18 @@ will give these decisions a durable authority without duplicating the current ma
   Executable lint advice uses `RecordSource.ID`, never a display slug or declared
   ID. CLI list/show/info/status and TUI detail retain that source separately from
   display labels, including duplicate slugs and identity declarations that drift.
-  The older literal-open-only *parsed-status* gate remains a
-  [separate policy followup](../planning/tasks/6ghht05bzxkk-align-audit-lifecycle-and-finding-writes-with-parsed-settlement-policy.md).
+  The same guarded move also requires every parsed finding to have a terminal
+  status (`fixed`, `tracked`, `deferred`, `superseded`, `wontfix`); in-progress,
+  missing, and invalid statuses are unsettled, not just literal `open`.
+  `TallyFindings` and `TerminalFindingStatus` share one disposition mapping, used
+  by readiness, bucket validation, lint, and finding writes. `EditFinding` validates
+  explicit status edits against the bucket in its CAS-protected transform, again
+  on every retry: non-open audits cannot reactivate a finding, even on a no-op or
+  preview. Terminal corrections and note/candidate-only edits remain supported;
+  unrelated pre-existing defects remain lint diagnostics rather than locking out
+  repair. Terminal-token settlement does not replace independent metadata lint
+  (for example a `tracked` destination). See the
+  [settlement-policy task](../planning/tasks/6ghht05bzxkk-align-audit-lifecycle-and-finding-writes-with-parsed-settlement-policy.md).
 
 ## Why these boundaries (and why not collapse them)
 Reviews periodically suggest folding the packages together ("Go favors fewer
@@ -1045,7 +1055,7 @@ application seams; it is no longer architecture held in reserve for a hypothetic
   (`audit finding`), and the words the two
   share are declared once in `domain/resolution.go`. Two invariants are enforced at write
   time rather than reported after: `task complete` refuses a task with an unexplained
-  unmet criterion, mirroring `audit close` refusing while findings are open.
+  unmet criterion, mirroring `audit close` requiring terminal findings and complete parsing.
 
 The atlas decision has now activated the narrow reusable workspace-opening boundary:
 `core.WorkspaceService` and `internal/workspacestore` can open an explicit local entry

@@ -11,7 +11,9 @@ is normalised — decoration the line formats carry (`fixed 2026-08-24 (PR #12)`
 `deferred (see ADR-0003)`, `superseded by <link>`) is written verbatim, because it
 holds dates, links, and document names whose spelling is not the tool's to flatten.
 `tracked` additionally REQUIRES a destination (`tracked by <task-id>`), so a finding
-handed to a task always says where it went.
+handed to a task always says where it went. Closed/deferred audits accept only
+terminal status edits; reopen first to set open or in-progress. Note/candidate-only
+edits and terminal corrections remain available. Previews use the same policy.
 
 --note writes the `**Resolution:**` paragraph as the finding's last block: one
 paragraph, no newlines, placed inside the right finding by construction rather than

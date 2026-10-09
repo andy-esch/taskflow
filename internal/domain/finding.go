@@ -426,8 +426,9 @@ func LintFindings(bucket string, fs []Finding) []Issue {
 		}
 	}
 	if bucket != "" && bucket != string(AuditOpen) {
-		if open := CountOpenFindings(fs); open > 0 {
-			issues = append(issues, Issue{Field: "bucket", Message: fmt.Sprintf("%s audit still has %d open finding(s)", bucket, open)})
+		tally := TallyFindings(fs)
+		if unsettled := len(fs) - tally.Done - tally.Dropped; unsettled > 0 {
+			issues = append(issues, Issue{Field: "bucket", Message: fmt.Sprintf("%s audit still has %d unsettled parsed finding(s); assign terminal statuses or reopen the audit", bucket, unsettled)})
 		}
 	}
 	return issues
@@ -463,23 +464,36 @@ type FindingTally struct {
 func TallyFindings(fs []Finding) FindingTally {
 	var t FindingTally
 	for _, f := range fs {
-		switch strings.ToLower(strings.TrimSpace(f.Status)) {
-		case "open":
-			t.Open++
-		case "in-progress":
-			t.Active++
-		case "fixed", ResolutionTracked:
-			// `tracked` counts as DONE from the audit's point of view: the finding has been
-			// transferred to a task and is no longer the audit's business. That is the
-			// distinction it exists to draw — a deferred finding is still owned here, a
-			// tracked one is not, and an audit should not stay open waiting on work it
-			// handed away.
-			t.Done++
-		case ResolutionDeferred, "superseded", ResolutionWontFix:
-			t.Dropped++
-		}
+		one := tallyFindingStatus(f.Status)
+		t.Open += one.Open
+		t.Active += one.Active
+		t.Done += one.Done
+		t.Dropped += one.Dropped
 	}
 	return t
+}
+
+// TerminalFindingStatus is the status-token policy shared by finding writes and
+// audit settlement. Decoration and other finding metadata are linted separately.
+func TerminalFindingStatus(status string) bool {
+	t := tallyFindingStatus(status)
+	return t.Done+t.Dropped == 1
+}
+
+func tallyFindingStatus(status string) FindingTally {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "open":
+		return FindingTally{Open: 1}
+	case "in-progress":
+		return FindingTally{Active: 1}
+	case "fixed", ResolutionTracked:
+		// A tracked finding is settled here: responsibility passed to its task.
+		return FindingTally{Done: 1}
+	case ResolutionDeferred, "superseded", ResolutionWontFix:
+		return FindingTally{Dropped: 1}
+	default:
+		return FindingTally{}
+	}
 }
 
 // fieldSpan is field() that also reports where the captured token sits, offset by the

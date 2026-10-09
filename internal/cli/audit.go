@@ -222,7 +222,9 @@ func newAuditFindingCmd(app *App) *cobra.Command {
 			"`deferred (see ADR-0003)`, `superseded by <link>`) is written verbatim, because it\n" +
 			"holds dates, links, and document names whose spelling is not the tool's to flatten.\n" +
 			"`tracked` additionally REQUIRES a destination (`tracked by <task-id>`), so a finding\n" +
-			"handed to a task always says where it went.\n\n" +
+			"handed to a task always says where it went. Closed/deferred audits accept only\n" +
+			"terminal status edits; reopen first to set open or in-progress. Note/candidate-only\n" +
+			"edits and terminal corrections remain available. Previews use the same policy.\n\n" +
 			"--note writes the `**Resolution:**` paragraph as the finding's last block: one\n" +
 			"paragraph, no newlines, placed inside the right finding by construction rather than\n" +
 			"by careful typing. Passing an empty --note removes it. Both flags REPLACE what was\n" +
@@ -430,7 +432,8 @@ func newAuditLintCmd(app *App) *cobra.Command {
 		Long: "Lint audit findings — the audit analog of `lint` (which covers tasks, epics, and research).\n" +
 			"Checks every finding has a legal **Status:** (catching typos a free-text edit\n" +
 			"allows), every `candidate-tasks:v1` row still matches its finding, and a non-open\n" +
-			"audit has no still-open findings. Legacy unversioned candidate prose is ignored. With no argument\n" +
+			"audit has only terminal parsed findings (open, in-progress, missing, and invalid\n" +
+			"statuses are unsettled). Legacy unversioned candidate prose is ignored. With no argument\n" +
 			"it lints every audit; with a slug, just that one. Exit 11 when issues are found.",
 		Example:           "  tskflwctl audit lint\n  tskflwctl audit lint 2026-06-14-gateway --json",
 		Args:              cobra.MaximumNArgs(1),
@@ -578,9 +581,10 @@ func newAuditPathCmd(app *App) *cobra.Command {
 }
 
 func newAuditMoveCmd(app *App, use, short string, to domain.AuditBucket) *cobra.Command {
-	long := short + ". Close/defer refuse while parsed open findings or unparsed finding-like\n" +
-		"headers remain, including ambiguous headings. Run audit lint <audit> and repair or\n" +
-		"clarify the headings first; there is no --force bypass. Reopen remains available\n" +
+	long := short + ". Close/defer require every parsed finding to have a terminal status:\n" +
+		"fixed, tracked, deferred, superseded, or wontfix. Open, in-progress, missing, or\n" +
+		"invalid statuses and unparsed finding-like headers (including ambiguous headings)\n" +
+		"block. Inspect with audit findings <audit> and audit lint <audit>; no --force bypass. Reopen is available\n" +
 		"for repair. Empty audits may close/defer. Dry-run applies the same validation."
 	return &cobra.Command{
 		Use:               use + " <audit>...",

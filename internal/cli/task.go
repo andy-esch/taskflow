@@ -881,7 +881,7 @@ func newTransitionCmd(app *App, use, short string, to domain.Status) *cobra.Comm
 	case domain.StatusCompleted:
 		cmd.Long = short + ".\n\n" +
 			"Refuses a task whose acceptance criteria are still unmet with no reason given —\n" +
-			"the task counterpart of `audit close` refusing while findings are open. A criterion\n" +
+			"the task counterpart of `audit close` requiring terminal findings and complete parsing. A criterion\n" +
 			"carrying a state (`task ac --defer|--wontfix|--tracked|--na`) has been DECIDED and\n" +
 			"does not block; only a silently unticked box does. --force completes anyway."
 		cmd.Flags().BoolVar(&force, "force", false, "complete even with unmet, unexplained acceptance criteria")
