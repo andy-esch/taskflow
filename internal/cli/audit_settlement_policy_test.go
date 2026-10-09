@@ -117,3 +117,49 @@ func TestAuditFindingCLIRequiresExplicitReopenToReactivate(t *testing.T) {
 		}
 	}
 }
+
+func TestAuditFindingCLINoteWrappingPreservesSettlement(t *testing.T) {
+	note := strings.Repeat("x", 64) + " #### H2. Injected · **Status:** in-progress"
+	for _, bucket := range []string{"closed", "deferred"} {
+		for _, explicitStatus := range []bool{false, true} {
+			for _, dry := range []bool{true, false} {
+				t.Run(fmt.Sprintf("%s/status=%t/dry=%t", bucket, explicitStatus, dry), func(t *testing.T) {
+					root := setupRepo(t)
+					path, content := testutil.AuditFixture(root, bucket, "probe.md", "---\narea: probe\n---\n#### H1. Done · **Status:** fixed\n")
+					testutil.Write(t, path, content)
+					before := testutil.SnapshotTree(t, root)
+					args := []string{"-C", root, "audit", "finding", "probe", "H1", "--note", note, "--json"}
+					if explicitStatus {
+						args = append(args, "--status", "fixed")
+					}
+					if dry {
+						args = append(args, "--dry-run")
+					}
+					result, err := runRootStreams(t, args...)
+					if err != nil {
+						t.Fatal(err)
+					}
+					var receipt wire.AuditMutationEnvelope
+					if err := json.Unmarshal([]byte(result.Out), &receipt); err != nil || receipt.DryRun != dry || receipt.Audit.Bucket != bucket || receipt.Audit.Findings != 1 || receipt.Audit.InProgressFindings != 0 || receipt.Audit.DoneFindings != 1 {
+						t.Fatalf("note manufactured active work in receipt: %v\n%s", err, result.Out)
+					}
+					if dry {
+						if !maps.Equal(before, testutil.SnapshotTree(t, root)) {
+							t.Fatal("note preview changed planning tree")
+						}
+						return
+					}
+					findings := domain.ParseFindings(receipt.Body)
+					if len(findings) != 1 || findings[0].Status != "fixed" || findings[0].Note != note {
+						t.Fatalf("note failed round-trip through CLI receipt: %+v\n%s", findings, receipt.Body)
+					}
+					show := runRoot(t, "-C", root, "audit", "show", "probe", "--json")
+					var persisted wire.AuditShowEnvelope
+					if err := json.Unmarshal([]byte(show), &persisted); err != nil || persisted.Body != receipt.Body || persisted.Audit.Findings != 1 || persisted.Audit.InProgressFindings != 0 {
+						t.Fatalf("persisted audit differs from receipt: %v\n%s", err, show)
+					}
+				})
+			}
+		}
+	}
+}

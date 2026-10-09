@@ -181,3 +181,56 @@ func TestFindingEditRetryObservesConcurrentNonOpenBucket(t *testing.T) {
 		})
 	}
 }
+
+func TestFindingNoteWrappingCannotManufactureFindings(t *testing.T) {
+	const neighbor = "#### M1. Existing defect · **Status:** in-progress\n\nExisting prose.\n\n"
+	note := strings.Repeat("x", 64) + " #### H2. Injected · **Status:** in-progress"
+	for _, bucket := range []domain.AuditBucket{domain.AuditClosed, domain.AuditDeferred} {
+		for _, status := range []string{"", "fixed"} {
+			for _, residual := range []bool{false, true} {
+				for _, dry := range []bool{true, false} {
+					t.Run(fmt.Sprintf("%s/status=%s/residual=%t/dry=%t", bucket, status, residual, dry), func(t *testing.T) {
+						root := t.TempDir()
+						body := "#### H1. Settled · **Status:** fixed\n\n"
+						if residual {
+							body += neighbor
+						}
+						candidateSection := "## Candidate tasks\n\n" + domain.CandidateTasksMarkerComment() + "\n"
+						body += candidateSection
+						path, content := testutil.AuditFixture(root, string(bucket), "probe.md", "---\narea: probe\ncustom: retained\n---\n"+body)
+						testutil.Write(t, path, content)
+						fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
+						svc := core.MustNewService(fs)
+						original, _, err := fs.GetAudit("probe")
+						if err != nil {
+							t.Fatal(err)
+						}
+						before := testutil.SnapshotTree(t, root)
+						a, changed, err := svc.EditFinding("probe", "H1", core.FindingEdit{Status: status, Note: &note}, dry)
+						if err != nil || !changed || a.Bucket != bucket || a.Findings != original.Findings || a.ActiveFindings != original.ActiveFindings || a.DoneFindings != original.DoneFindings {
+							t.Fatalf("note changed settlement: changed=%t audit=%+v err=%v", changed, a, err)
+						}
+						if dry {
+							if !maps.Equal(before, testutil.SnapshotTree(t, root)) {
+								t.Fatal("note preview changed planning tree")
+							}
+							return
+						}
+						_, writtenBody, err := fs.GetAudit("probe")
+						if err != nil {
+							t.Fatal(err)
+						}
+						findings := domain.ParseFindings(writtenBody)
+						if len(findings) != original.Findings || findings[0].Code != "H1" || findings[0].Status != "fixed" || findings[0].Note != note || !strings.HasSuffix(writtenBody, candidateSection) || (residual && !strings.Contains(writtenBody, neighbor)) {
+							t.Fatalf("note did not remain isolated prose: %+v\n%s", findings, writtenBody)
+						}
+						written, err := os.ReadFile(path)
+						if err != nil || !strings.Contains(string(written), "custom: retained\n") {
+							t.Fatalf("note lost unknown frontmatter: %v\n%s", err, written)
+						}
+					})
+				}
+			}
+		}
+	}
+}

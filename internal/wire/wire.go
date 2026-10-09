@@ -357,6 +357,7 @@ import (
 // audits refuse finding status edits to open/in-progress; reopen first. Lint
 // reports non-open audits with unsettled parsed findings. Empty-audit closure,
 // reopening, terminal corrections, and note/candidate-only edits remain available.
+// Resolution-note wrapping preserves prose rather than creating finding headers.
 const SchemaVersion = "1.84"
 
 const (

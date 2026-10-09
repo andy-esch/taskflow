@@ -786,7 +786,10 @@ will give these decisions a durable authority without duplicating the current ma
   on every retry: non-open audits cannot reactivate a finding, even on a no-op or
   preview. Terminal corrections and note/candidate-only edits remain supported;
   unrelated pre-existing defects remain lint diagnostics rather than locking out
-  repair. Terminal-token settlement does not replace independent metadata lint
+  repair. Generated resolution-note continuations stay paragraph-indented, and
+  fence tokens stay inline: wrapping single-line input must not manufacture
+  finding headers, status labels, sections, or code fences. Terminal-token
+  settlement does not replace independent metadata lint
   (for example a `tracked` destination). See the
   [settlement-policy task](../planning/tasks/6ghht05bzxkk-align-audit-lifecycle-and-finding-writes-with-parsed-settlement-policy.md).
 

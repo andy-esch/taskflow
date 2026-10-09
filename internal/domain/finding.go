@@ -550,10 +550,11 @@ func findingNote(section string, offset int) (string, Span, int) {
 }
 
 // wrapNote renders the label and paragraph as hard-wrapped markdown, sharing the wrapper
-// criteria use. Wrapping is safe here because findingNote reads the paragraph back through
-// strings.Fields, so the wrapped form and the logical string round-trip to each other.
+// criteria use. Continuations are paragraph-indented so generated line breaks cannot
+// turn note text into a finding/section heading or standalone status metadata.
+// findingNote collapses that indentation through strings.Fields on readback.
 func wrapNote(text string) string {
-	return strings.Join(wrapProse(text, FindingNoteLabel+" ", "", proseWrapWidth), "\n")
+	return strings.Join(wrapProse(text, FindingNoteLabel+" ", "    ", proseWrapWidth), "\n")
 }
 
 // statusDecoration splits the trailing decoration off a raw status value: everything after
