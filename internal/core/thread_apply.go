@@ -91,6 +91,19 @@ type ThreadApplySnapshot struct {
 	ThreadBodies   map[string]string
 }
 
+// MissingPlanningIdentityError gives conditional recovery advice without asking
+// portable planners to discover configuration files or interpret local paths.
+// The explicit tree argument matters: initializing a nested tree with the
+// default flat layout could hide existing documents behind an empty new tree.
+func MissingPlanningIdentityError() error {
+	return fmt.Errorf("%w: planning repository has no durable id; recover at the planning repository itself, not an implementation pointer: "+
+		"with an existing configuration, run `tskflwctl -C <planning-repo> config migrate`; "+
+		"with no configuration, restore the original configuration if possible, or run "+
+		"`tskflwctl init --path <planning-repo> --taskflow-root <existing-tree> --no-register` "+
+		"(<existing-tree> is . for a flat tree, or its existing subdirectory, such as planning). "+
+		"A new identity invalidates old plans: recompose before applying, and explicitly review any external pointer binding; do not silently rebind it", domain.ErrValidation)
+}
+
 type ThreadApplyOperationState string
 
 const (
@@ -192,7 +205,7 @@ func ComposeThreadApplyPlan(snapshot ThreadApplySnapshot, manifest ThreadCompose
 		return ThreadApplyPlan{}, err
 	}
 	if snapshot.PlanningRepoID == "" {
-		return ThreadApplyPlan{}, fmt.Errorf("%w: planning repository has no durable id; run `tskflwctl config migrate` before composing an apply plan", domain.ErrValidation)
+		return ThreadApplyPlan{}, MissingPlanningIdentityError()
 	}
 	if manifest.Schema != 0 && manifest.Schema != ThreadApplyPlanSchema {
 		return ThreadApplyPlan{}, fmt.Errorf("%w: unsupported Thread authoring manifest schema %d", domain.ErrValidation, manifest.Schema)
@@ -330,7 +343,7 @@ func PrepareThreadApply(snapshot ThreadApplySnapshot, plan ThreadApplyPlan) (Thr
 		return ThreadApplyDecision{}, fmt.Errorf("%w: apply plan has no planning_repo_id", domain.ErrValidation)
 	}
 	if snapshot.PlanningRepoID == "" {
-		return ThreadApplyDecision{}, fmt.Errorf("%w: current planning repository has no durable id; run `tskflwctl config migrate`", domain.ErrValidation)
+		return ThreadApplyDecision{}, MissingPlanningIdentityError()
 	}
 	if plan.PlanningRepoID != snapshot.PlanningRepoID {
 		return ThreadApplyDecision{}, fmt.Errorf("%w: apply plan belongs to planning repository %q, current repository is %q", domain.ErrConflict, plan.PlanningRepoID, snapshot.PlanningRepoID)

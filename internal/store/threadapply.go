@@ -215,7 +215,7 @@ func (s *FS) currentPlanningIdentity() (string, error) {
 		return "", fmt.Errorf("planning configuration now resolves to %s instead of guarded root %s: %w", root, s.root, domain.ErrConflict)
 	}
 	if repoID == "" {
-		return "", fmt.Errorf("%w: planning repository has no durable id; run `tskflwctl config migrate` before applying a Thread plan", domain.ErrValidation)
+		return "", core.MissingPlanningIdentityError()
 	}
 	return repoID, nil
 }

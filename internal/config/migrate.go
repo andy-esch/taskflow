@@ -120,9 +120,18 @@ func migrateUnlocked(start string, dryRun bool, newID func() string) (MigrationR
 	}
 	targetID := planningRepoID(root)
 	if targetID == "" {
+		target := planningRepoDirectory(dir, cf.PlanningRepo)
+		tree := "."
+		markerDir, marker, hasMarker := configForRoot(root)
+		if hasMarker {
+			target, tree = markerDir, marker.TaskflowRoot
+		} else if evalOr(target) != root {
+			tree = defaultSubdirRoot
+		}
 		return MigrationResult{}, fmt.Errorf(
-			"%w: planning_repo %q has no durable id — run `tskflwctl -C %s config migrate` there first",
-			domain.ErrValidation, cf.PlanningRepo, root,
+			"%w: planning_repo %q has no durable id — restore its original configuration if possible, or run `%s` there first; "+
+				"a new identity invalidates old plans, so recompose before applying; then rerun this pointer migration to bind the target deliberately",
+			domain.ErrValidation, cf.PlanningRepo, planningIdentityRecoveryCommand(target, hasMarker, tree),
 		)
 	}
 	added, err := backfillPointerID(result.ConfigPath, cf, targetID, dryRun)

@@ -223,15 +223,7 @@ func resolveRoot(dir string, cf configFile) (string, error) {
 // checkTrackedRepo already accepts. A target that is neither is a loud error (the
 // "require + validate" contract), never a clean empty tree.
 func resolvePlanningRepo(dir, planningRepo, wantID string) (string, error) {
-	root := filepath.FromSlash(planningRepo)
-	if !filepath.IsAbs(root) {
-		// planning_repo points OUT of the repo and is committed, so it travels to
-		// every worktree. Anchor it at the canonical checkout, so `../planning` means
-		// the same thing from a worktree as from the main checkout (see worktree.go).
-		// Non-worktrees anchor to themselves, so this is a no-op for them.
-		root = filepath.Join(anchorDir(dir), root)
-	}
-	root = filepath.Clean(root)
+	root := planningRepoDirectory(dir, planningRepo)
 	if cfgPath := filepath.Join(root, ConfigFile); fileExists(cfgPath) {
 		cf, err := readConfigFile(cfgPath)
 		if err != nil {
@@ -249,7 +241,7 @@ func resolvePlanningRepo(dir, planningRepo, wantID string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("planning_repo %q: %w", planningRepo, err)
 		}
-		if err := verifyPlanningRepoID(planningRepo, root, wantID, cf.ID); err != nil {
+		if err := verifyPlanningRepoID(planningRepo, root, wantID, cf.ID, true, cf.TaskflowRoot); err != nil {
 			return "", err
 		}
 		return evalOr(target), nil
@@ -270,7 +262,11 @@ func resolvePlanningRepo(dir, planningRepo, wantID string) (string, error) {
 	}
 	// A config-less planning repo (bare tasks/ dir) carries no id, so an opted-in pointer
 	// must fail here for the same reason it fails on a mismatch — see verifyPlanningRepoID.
-	if err := verifyPlanningRepoID(planningRepo, root, wantID, ""); err != nil {
+	tree := "."
+	if target != root {
+		tree = defaultSubdirRoot
+	}
+	if err := verifyPlanningRepoID(planningRepo, root, wantID, "", false, tree); err != nil {
 		return "", err
 	}
 	// Resolve symlinks so Root is PHYSICAL, matching the in-tree branch (Discover
@@ -278,6 +274,17 @@ func resolvePlanningRepo(dir, planningRepo, wantID string) (string, error) {
 	// physical paths, so a symlinked external planning repo must not leave Root
 	// logical here. evalOr falls back to the lexical path if it can't resolve.
 	return evalOr(target), nil
+}
+
+// Pointer targets are anchored at the canonical checkout, not its worktree.
+// Recovery must use the same address as discovery rather than the resolved data
+// subdirectory, so initialization cannot create a second governing marker.
+func planningRepoDirectory(dir, planningRepo string) string {
+	root := filepath.FromSlash(planningRepo)
+	if !filepath.IsAbs(root) {
+		root = filepath.Join(anchorDir(dir), root)
+	}
+	return filepath.Clean(root)
 }
 
 // verifyPlanningRepoID enforces the opt-in identity check. wantID empty means the pointer
@@ -288,20 +295,41 @@ func resolvePlanningRepo(dir, planningRepo, wantID string) (string, error) {
 // missing case is the load-bearing one, not an edge: the hazard this exists to close is an
 // unrelated planning repo sitting where a committed relative path happens to land, and such
 // a repo has no id at all. Tolerating that would leave the hole open while looking closed.
-func verifyPlanningRepoID(planningRepo, root, wantID, gotID string) error {
+func verifyPlanningRepoID(planningRepo, root, wantID, gotID string, hasMarker bool, tree string) error {
 	if wantID == "" || wantID == gotID {
 		return nil
 	}
 	if gotID == "" {
+		if !hasMarker {
+			if markerDir, _, ok := configForRoot(root); ok && evalOr(markerDir) != evalOr(root) {
+				return fmt.Errorf("%w: planning_repo %q resolved to data tree %s, which carries no id at this pointer address; "+
+					"its governing configuration lives at %s — point planning_repo at that directory rather than initializing a second marker here; "+
+					"the expected identity %q and pointer binding are unchanged", domain.ErrConflict, planningRepo, root, markerDir, wantID)
+			}
+		}
 		return fmt.Errorf(
 			"%w: planning_repo %q resolved to %s, which carries no id — this pointer expects %q; "+
-				"run `tskflwctl init` there to mint one, or remove planning_repo_id to opt out",
-			domain.ErrConflict, planningRepo, root, wantID)
+				"restore the original configuration to retain that identity, or recover the target directly with `%s`; "+
+				"a new identity requires deliberate pointer rebinding and recomposition of old plans; this command will not rebind the pointer",
+			domain.ErrConflict, planningRepo, root, wantID, planningIdentityRecoveryCommand(root, hasMarker, tree))
 	}
 	return fmt.Errorf(
 		"%w: planning_repo %q resolved to %s, whose id is %q but this pointer expects %q — "+
 			"refusing to use a different planning repo",
 		domain.ErrConflict, planningRepo, root, gotID, wantID)
+}
+
+// Configuration discovery already knows whether the target marker exists and
+// which tree it addresses. Keep this local evidence out of portable planners.
+func planningIdentityRecoveryCommand(root string, hasMarker bool, tree string) string {
+	quote := func(value string) string { return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'" }
+	if hasMarker {
+		return "tskflwctl -C " + quote(root) + " config migrate"
+	}
+	if tree == "" {
+		tree = "."
+	}
+	return "tskflwctl init --path " + quote(root) + " --taskflow-root " + quote(tree) + " --no-register"
 }
 
 // resolvedID is the durable id of the tree a config resolved to: its own for an in-tree

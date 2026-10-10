@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6ggfd81jg0qg
-status: ready-to-start
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Make Thread compose/apply recovery hints executable for marker-backed, markerless, and missing pointer-target identities.
 effort: 2-4 hours
@@ -11,8 +11,10 @@ autonomy_level: 3
 tags: [cli, recovery, threads, testing]
 created: "2026-10-04"
 audit_sources: [2026-10-04-workspace-thread-apply-identity-parity-implementation-codex, 2026-10-05-explicit-persistence-authorization-implementation-codex]
-updated_at: "2026-10-05"
+updated_at: "2026-10-10"
 depends_on: [6g1xp8qymz1m]
+started_at: "2026-10-10"
+completed_at: "2026-10-10"
 ---
 # Make ID-less Thread planning recovery instructions executable
 
@@ -51,10 +53,40 @@ task's recovery evidence; no repair is claimed implemented and no refactor prere
 
 ## Acceptance criteria
 
-- [ ] ID-less compose/apply guidance distinguishes or clearly explains marker-backed migration versus markerless initialization.
-- [ ] Tests execute the emitted recovery steps against direct marker-backed, markerless, and missing pointer-target marker fixtures.
-- [ ] Following the instructions preserves existing semantic documents and does not silently rebind an opted-in pointer or adopt a stale plan.
-- [ ] Refusal sentinels, durability receipts, and identity guards remain unchanged; normal tests, lint, generated docs, and planning lint pass.
+- [x] ID-less compose/apply guidance distinguishes or clearly explains marker-backed migration versus markerless initialization.
+- [x] Tests execute the emitted recovery steps against direct marker-backed, markerless, and missing pointer-target marker fixtures.
+- [x] Following the instructions preserves existing semantic documents and does not silently rebind an opted-in pointer or adopt a stale plan.
+- [x] Refusal sentinels, durability receipts, and identity guards remain unchanged; normal tests, lint, generated docs, and planning lint pass.
+
+## Implementation
+
+Portable compose, preparation, and the apply writer now share honest conditional guidance:
+`config migrate` for an existing marker, or explicit `init --path <planning-repo>
+--taskflow-root <existing-tree> --no-register` for a markerless tree. The explicit layout
+argument prevents a nested `planning/` tree from being hidden by a newly scaffolded flat tree.
+Restore the original configuration where possible; regenerating identity requires recomposition.
+
+Configuration discovery already knows marker/layout evidence, so missing-ID pointer refusals
+and legacy-pointer migration give a shell-quoted command for the actual target. Target recovery
+does not modify the pointer or adopt its expected ID. An opted-in pointer continues refusing
+the regenerated ID; a legacy pointer binds only through a subsequent deliberate migration.
+
+`internal/cli/thread_recovery_test.go` parses emitted commands with a POSIX shell and executes
+their argv through the real CLI/composition. Flat/nested, legacy-marker/markerless, and
+bound/unbound-pointer cases run from an unrelated cwd with an unrelated ambient space. They
+check preserved document bytes, no home registration, surgical marker migration, old-plan
+refusal, recomposition success, and continued pointer conflict.
+
+An adjacent pre-existing mismatch is tracked by
+[data-directory pointer identity parity](6gjdgpq17sr6-preserve-planning-identity-for-pointers-addressing-data-subdirectories.md):
+legacy migration can bind the governing ancestor's ID, but discovery checks only an immediate
+marker at the pointer address. Recovery now directs this case to the existing governing marker,
+not initialization of a second marker; alias identity semantics remain a deliberate follow-up.
+
+Validation: focused real CLI replay tests and `just test` (race), `just lint`, `just build`,
+generated CLI/schema drift tests, and planning lint pass. A compiler-valid mutation forcing
+markerless pointer recovery to use `--taskflow-root .` failed the intended nested-target
+regressions; restored production behavior passes.
 
 ## Sequencing and boundaries
 
