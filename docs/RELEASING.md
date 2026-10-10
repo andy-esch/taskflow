@@ -6,10 +6,8 @@ Run the automated gate from a clean, committed candidate:
 just release-validate
 ```
 
-It checks supported tool versions, focused packages, the full race suite, formatting, module
-tidiness, generated CLI/schema material, lint, package vulnerabilities, planning integrity, and
-GoReleaser configuration. The snapshot build runs in a disposable clone, so validation leaves the
-candidate's tracked files unchanged.
+The gate checks tool versions, tests/races, formatting, module tidiness, generated docs/schema,
+lint, vulnerabilities, planning, and GoReleaser. Snapshot builds use a disposable clone.
 
 For the pinned headless Linux environment, use:
 
@@ -17,60 +15,33 @@ For the pinned headless Linux environment, use:
 just release-validate-container
 ```
 
-The container runner itself requires only Git and Docker (`just` dispatches it); set
-`TASKFLOW_CONTAINER_ENGINE=podman` to use Podman. It clones the exact clean candidate, mounts that
-clone read-only, runs as an unprivileged user, and stores reusable Go build/module caches in named
-volumes outside the repository. The image
-pins Go and the release tools in
-[`build/release-validation/Containerfile`](../build/release-validation/Containerfile). It validates
-Linux execution plus the same Darwin/Linux snapshot matrix, but is not a bit-for-bit reproducible
-build claim. A devcontainer may wrap this image later; it must not become a second release gate.
+Requires Git and Docker; use `TASKFLOW_CONTAINER_ENGINE=podman` for Podman. The runner clones
+the candidate, mounts it read-only, and runs unprivileged with reusable external caches.
+The [Containerfile](../build/release-validation/Containerfile) pins Go and release tools;
+validation covers Linux execution and Darwin/Linux snapshots, not bit-for-bit reproducibility.
 
 ## Go and linter version policy
 
-`go.mod` owns the minimum supported Go version; the CI test job tracks its newest patch.
-The release workflow owns the publication compiler line, which the CI lint job also uses
-(`go-version: "1.26"`, `check-latest: true` today). The container pins an exact patch on that
-release line, at least as new as the module minimum. A newer release/local compiler does not
-automatically raise the supported minimum; a Go-line change must retain minimum-line test coverage.
-
-CI selects a golangci-lint release line; the container pins a patch on that linter line. Go and
-linter version numbers are independent. The release preflight checks the actual linter binary's
-build Go against the module minimum and active compiler line, not its exact patch; successful
-lint remains necessary to prove compatibility.
-When changing Go lines, select a supporting linter and run both host and container qualification.
-Do not infer support for a future Go release from a linter's version number alone.
+- `go.mod` owns the supported minimum; CI tests its latest patch. Release/CI lint use the
+  publication line; the container pins a patch on it. Newer compilers need not raise the minimum.
+- CI/release/container use `GOTOOLCHAIN=local` to prevent automatic compiler replacement.
+- CI and container linters share a release line; exact stable CI pins are allowed. The linter
+  must be built with Go covering the minimum and active compiler line. Qualification requires
+  stable toolchains and real lint runs, not matching version numbers.
 
 ```sh
 just toolchain-check
+just renovate-toolchain-check /path/to/node_modules/renovate  # optional, when editing rules
 ```
 
-This offline drift check runs in CI and the shared release gate. It checks the module, CI/release
-Go selectors, latest-patch behavior, and container/linter pins. It does **not** check remote patch
-freshness or replace `govulncheck`; `just vulncheck` uses the same package scan as the release gate.
-
-Renovate proposes minimum/Go-line upgrades behind dashboard approval. Container/toolchain patch
-updates are separate, need no dashboard approval, and bypass the weekly schedule and release-age
-delay; they still require CI and human merge. This does not guarantee an instant bot run or that
-Docker/stdlib advisories appear as GitHub vulnerability alerts. Linter updates coordinate the CI
-selector and container ARG in a separate reviewed group, without forcing a Go-line upgrade.
-
-For changes to these rules, validate `renovate.json` with Renovate's config validator. The optional
-actual-engine regression check uses an installed Renovate package directory (no credentials or
-remote lookups; internal Renovate module layout may need updating across versions):
-
-```sh
-just renovate-toolchain-check /path/to/node_modules/renovate
-```
-
-It exercises real manager extraction and this repository's rule application, not a live hosted
-bot run or inherited-preset resolution. The [coordination task](../planning/tasks/6gd68x5gqkk0-reconcile-go-toolchain-versioning-across-go.mod-ci-linters-and-renovate.md)
-records the rationale and validation evidence.
+The drift check runs in CI and release validation; it does not certify patch freshness.
+Renovate gates minimum/line upgrades behind approval; compiler patches bypass schedule/age
+delays but still require CI and human merge. Validate rule changes with Renovate's config validator.
+The [coordination task](../planning/tasks/6gd68x5gqkk0-reconcile-go-toolchain-versioning-across-go.mod-ci-linters-and-renovate.md)
+records detailed policy, limitations, and review evidence.
 
 ## Tagging and publication
 
-Automated validation does not replace a release task's bounded CLI/TUI dogfood. After both are
-recorded on one immutable candidate, tag that exact commit. The tag-triggered
-[GitHub Actions workflow](../.github/workflows/release.yml) remains authoritative for publication;
-verify its archives, checksums, embedded version, and installed binary before completing the release
-task.
+Record automated validation and bounded CLI/TUI dogfood on one candidate, then tag that commit.
+The [release workflow](../.github/workflows/release.yml) publishes it. Verify archives, checksums,
+embedded version, and the installed binary before completing the release task.
