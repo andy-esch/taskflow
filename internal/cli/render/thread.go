@@ -36,6 +36,16 @@ func ThreadProblemsHuman(w io.Writer, st Style, problems []core.ThreadReadProble
 	}
 }
 
+// ThreadListGraphProblemsHuman keeps unhealthy repository context on stderr for
+// opt-in row streams, even when the selected page contains no affected Thread.
+func ThreadListGraphProblemsHuman(w io.Writer, st Style, list core.ThreadListView) {
+	if (list.GraphHealth == "" || list.GraphHealth == core.GraphHealthy) && len(list.GraphProblems) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "%s  repository graph: %s\n", st.Bold("Diagnostics"), list.GraphHealth)
+	graphDiagnosticsHuman(w, st, list.GraphProblems, nil)
+}
+
 func ThreadShowJSON(w io.Writer, view core.ThreadView, body string) error {
 	return wire.EncodeJSON(w, wire.ToThreadShowEnvelope(view, body))
 }

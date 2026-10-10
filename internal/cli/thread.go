@@ -234,8 +234,8 @@ func newThreadListCmd(app *App) *cobra.Command {
 					if err != nil {
 						return err
 					}
-					if err := render.ProjectedPageJSONWithProblems(
-						app.Out, "threads", selected, list.Threads, wire.ToThreadReadProblemsJSON(problems), page,
+					if err := render.ThreadsProjectedPageJSON(
+						app.Out, selected, list, problems, page,
 					); err != nil {
 						return err
 					}
@@ -264,6 +264,9 @@ func newThreadListCmd(app *App) *cobra.Command {
 					if err := render.ThreadsHuman(app.Out, app.Style, list); err != nil {
 						return err
 					}
+				}
+				if page != nil && (mode == modeName || mode == modeTable || mode == modeCSV) {
+					render.ThreadListGraphProblemsHuman(app.ErrOut, app.Style, list)
 				}
 				render.ThreadProblemsHuman(app.ErrOut, app.Style, problems)
 				listPageNotice(app.ErrOut, page)

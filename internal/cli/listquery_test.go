@@ -187,13 +187,75 @@ func TestThreadQueryKeepsUnhealthyGraphVisibleOnEmptyPage(t *testing.T) {
 		t.Fatal(err)
 	}
 	mustWrite(t, path, strings.Replace(string(b), "schema: 1", "schema: 1\ndepends_on: ["+testutil.TaskID("absent")+"]", 1))
-	res := runRoot(t, "-C", root, "thread", "list", "--json", "--limit", "1", "--search", "no matches")
-	var envelope wire.ThreadsEnvelope
-	if err := json.Unmarshal([]byte(res), &envelope); err != nil {
-		t.Fatal(err)
+	before := testutil.SnapshotTree(t, root)
+	for _, search := range []string{"no matches", "beta"} {
+		for _, columns := range [][]string{nil, {"-c", "id"}, {"-c", "id,graph_health,projection_health"}} {
+			args := []string{"-C", root, "thread", "list", "--json", "--limit", "1", "--search", search}
+			res, err := runRootStreams(t, append(args, columns...)...)
+			var envelope struct {
+				GraphHealth   string                  `json:"graph_health"`
+				GraphProblems []wire.GraphProblemJSON `json:"graph_problems"`
+				Threads       []map[string]any        `json:"threads"`
+				Page          *wire.ListPageJSON      `json:"page"`
+			}
+			if err != nil || res.Err != "" {
+				t.Fatalf("search=%q columns=%v streams=%+v err=%v", search, columns, res, err)
+			}
+			if err := json.Unmarshal([]byte(res.Out), &envelope); err != nil {
+				t.Fatal(err)
+			}
+			wantRows := 0
+			if search == "beta" {
+				wantRows = 1
+			}
+			if envelope.GraphHealth != "broken" || len(envelope.GraphProblems) == 0 ||
+				envelope.GraphProblems[0].Code != "missing-dependency" || envelope.Threads == nil ||
+				len(envelope.Threads) != wantRows || envelope.Page == nil || envelope.Page.Matched != wantRows {
+				t.Fatalf("search=%q columns=%v masked global graph problems: %+v", search, columns, envelope)
+			}
+		}
+		for _, mode := range []string{"name", "table", "csv", "human"} {
+			res, err := runRootStreams(t, "-C", root, "thread", "list", "--limit", "1", "--search", search, "-o", mode, "--color=never")
+			diagnostics := res.Err
+			if mode == "human" {
+				diagnostics = res.Out // Human output already contains the graph context.
+			} else if strings.Contains(res.Out, "missing-dependency") || strings.Contains(res.Out, "Diagnostics") {
+				t.Fatalf("mode=%s polluted row stream: %+v", mode, res)
+			}
+			if err != nil || !strings.Contains(diagnostics, "repository graph") || !strings.Contains(diagnostics, "missing-dependency") {
+				t.Fatalf("search=%q mode=%s masked global graph problems: %+v, %v", search, mode, res, err)
+			}
+		}
 	}
-	if envelope.GraphHealth != "broken" || len(envelope.GraphProblems) == 0 || len(envelope.Threads) != 0 || envelope.Page.Matched != 0 {
-		t.Fatalf("empty query masked global graph problems: %+v", envelope)
+	if !reflect.DeepEqual(before, testutil.SnapshotTree(t, root)) {
+		t.Fatal("graph diagnostics changed the corpus")
+	}
+	// The opt-in correction must not change legacy projected envelopes/streams.
+	legacy, err := runRootStreams(t, "-C", root, "thread", "list", "--json", "-c", "id")
+	if err != nil || legacy.Err != "" || strings.Contains(legacy.Out, "graph_health") || strings.Contains(legacy.Out, "page") {
+		t.Fatalf("legacy projection changed: %+v, %v", legacy, err)
+	}
+	for _, mode := range []string{"name", "table", "csv"} {
+		legacy, err := runRootStreams(t, "-C", root, "thread", "list", "-o", mode)
+		if err != nil || legacy.Err != "" {
+			t.Fatalf("legacy %s stream changed: %+v, %v", mode, legacy, err)
+		}
+	}
+	// Healthy bounded projections still publish an explicit, empty problem list.
+	mustWrite(t, path, string(b))
+	healthy, err := runRootStreams(t, "-C", root, "thread", "list", "--json", "--search", "no matches", "-c", "id")
+	var context struct {
+		GraphHealth   string                  `json:"graph_health"`
+		GraphProblems []wire.GraphProblemJSON `json:"graph_problems"`
+	}
+	if err != nil || json.Unmarshal([]byte(healthy.Out), &context) != nil || context.GraphHealth != "healthy" || context.GraphProblems == nil || len(context.GraphProblems) != 0 {
+		t.Fatalf("healthy query lost graph verdict: %+v, %v", healthy, err)
+	}
+	for _, mode := range []string{"name", "table", "csv"} {
+		healthy, err := runRootStreams(t, "-C", root, "thread", "list", "--search", "no matches", "-o", mode)
+		if err != nil || healthy.Err != "" {
+			t.Fatalf("healthy %s query emitted diagnostics: %+v, %v", mode, healthy, err)
+		}
 	}
 }
 

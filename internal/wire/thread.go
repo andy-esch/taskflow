@@ -95,7 +95,7 @@ func ToThreadViewJSON(view core.ThreadView) ThreadViewJSON {
 		ExternalGates: make([]ThreadExternalGateJSON, 0, len(view.ExternalGates)),
 		Frontier:      make([]ThreadTaskJSON, 0, len(view.Frontier)),
 		Problems:      make([]ThreadProblemJSON, 0, len(view.Problems)),
-		GraphProblems: toGraphProblemsJSON(view.GraphProblems),
+		GraphProblems: ToGraphProblemsJSON(view.GraphProblems),
 	}
 	for _, member := range view.Members {
 		payload.Members = append(payload.Members, toThreadTaskJSON(member))
@@ -145,7 +145,7 @@ type ThreadReadProblemJSON struct {
 
 func ToThreadsEnvelope(list core.ThreadListView, problems []core.ThreadReadProblem) ThreadsEnvelope {
 	payload := ThreadsEnvelope{
-		SchemaVersion: SchemaVersion, GraphHealth: string(list.GraphHealth), GraphProblems: toGraphProblemsJSON(list.GraphProblems),
+		SchemaVersion: SchemaVersion, GraphHealth: string(list.GraphHealth), GraphProblems: ToGraphProblemsJSON(list.GraphProblems),
 		Threads: make([]ThreadViewJSON, 0, len(list.Threads)), Unreadable: ToThreadReadProblemsJSON(problems),
 	}
 	for _, view := range list.Threads {

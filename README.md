@@ -457,6 +457,9 @@ values or diagnostics refuse continuation with exit 14: restart without the curs
 Malformed/foreign cursors fail validation (11). Cursors are opaque, versioned read tokens,
 not write authority; paging bounds output, not the filesystem scan. Diagnostics remain
 complete on every page and still cause the usual partial-read failure.
+Query-enabled Thread lists keep repository `graph_health`/`graph_problems` outside
+projected rows, even with no matches; row streams put graph warnings on stderr.
+Graph health is informational on this read—use `lint` for a validation exit status.
 
 `--updated-since YYYY-MM-DD` is inclusive and uses the document's own update date,
 falling back to creation (audit: `date`); missing/invalid dates do not match. It is not a

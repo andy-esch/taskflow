@@ -49,7 +49,9 @@ type GraphProblemJSON struct {
 	Cycle         []string `json:"cycle,omitempty"`
 }
 
-func toGraphProblemsJSON(problems []core.GraphProblem) []GraphProblemJSON {
+// ToGraphProblemsJSON shares the canonical diagnostic shape across typed and
+// projected graph contexts, preserving the distinction between paths and locations.
+func ToGraphProblemsJSON(problems []core.GraphProblem) []GraphProblemJSON {
 	out := make([]GraphProblemJSON, 0, len(problems))
 	for _, problem := range problems {
 		out = append(out, GraphProblemJSON{
@@ -134,7 +136,7 @@ func ToTaskBlockersEnvelope(result core.TaskBlockersResult) TaskBlockersEnvelope
 		SchemaVersion: SchemaVersion, Task: toGraphTaskJSON(result.TaskID, result.Task),
 		State: toTaskGraphStateJSON(result.State), Projection: result.Projection, Health: string(result.Health),
 		Blockers: make([]TaskBlockerJSON, 0, len(result.Blockers)),
-		Problems: toGraphProblemsJSON(result.Problems), Legacy: toLegacyDependenciesJSON(result.Legacy),
+		Problems: ToGraphProblemsJSON(result.Problems), Legacy: toLegacyDependenciesJSON(result.Legacy),
 	}
 	for _, blocker := range result.Blockers {
 		envelope.Blockers = append(envelope.Blockers, TaskBlockerJSON{
@@ -169,7 +171,7 @@ func ToTaskUnblocksEnvelope(result core.TaskUnblocksResult) TaskUnblocksEnvelope
 	envelope := TaskUnblocksEnvelope{
 		SchemaVersion: SchemaVersion, Task: toGraphTaskJSON(result.TaskID, result.Task),
 		State: toTaskGraphStateJSON(result.State), Health: string(result.Health), Unblocks: make([]TaskUnblockJSON, 0, len(result.Unblocks)),
-		Problems: toGraphProblemsJSON(result.Problems), Legacy: toLegacyDependenciesJSON(result.Legacy),
+		Problems: ToGraphProblemsJSON(result.Problems), Legacy: toLegacyDependenciesJSON(result.Legacy),
 	}
 	for _, dependent := range result.Unblocks {
 		envelope.Unblocks = append(envelope.Unblocks, TaskUnblockJSON{

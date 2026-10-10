@@ -43,3 +43,16 @@ func ThreadsPageJSON(w io.Writer, list core.ThreadListView, problems []core.Thre
 	envelope.Page = wire.ToListPageJSON(page)
 	return wire.EncodeJSON(w, envelope)
 }
+
+// ThreadsProjectedPageJSON preserves repository graph context independently of
+// selected columns and matching rows. A nil page retains the legacy projection.
+func ThreadsProjectedPageJSON(w io.Writer, cols []Column[core.ThreadView], list core.ThreadListView, problems []core.ThreadReadProblem, page *core.ListPage) error {
+	var context []orderedField
+	if page != nil {
+		context = []orderedField{
+			{"graph_health", string(list.GraphHealth)},
+			{"graph_problems", wire.ToGraphProblemsJSON(list.GraphProblems)},
+		}
+	}
+	return projectedPageJSONWithContext(w, "threads", cols, list.Threads, wire.ToThreadReadProblemsJSON(problems), page, context)
+}

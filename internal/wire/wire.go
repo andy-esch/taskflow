@@ -360,7 +360,8 @@ import (
 // Resolution-note wrapping preserves prose rather than creating finding headers.
 // 1.85: ADDITIVE — planning list queries accept optional bounds, sorting, search,
 // updated-since, and versioned continuation; opt-in typed/projected JSON gains
-// page metadata. Unbounded default calls retain their existing result shape.
+// page metadata. Opt-in Thread projections also retain repository graph context
+// outside rows. Unbounded default calls retain their existing result shape.
 const SchemaVersion = "1.85"
 
 const (

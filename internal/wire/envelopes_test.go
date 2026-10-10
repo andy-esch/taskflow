@@ -243,7 +243,7 @@ func TestEqualReadableRecordsRemainDistinctByLocationInEveryList(t *testing.T) {
 }
 
 func TestGraphProblemLocationNeverBecomesPath(t *testing.T) {
-	got := toGraphProblemsJSON([]core.GraphProblem{{
+	got := ToGraphProblemsJSON([]core.GraphProblem{{
 		Code: core.ProblemDuplicateTaskID, TaskID: "canonical", Location: "db://tasks/first", Message: "duplicate",
 	}, {
 		Code: core.ProblemUnreadable, TaskID: "canonical", Path: "/planning/tasks/local.md",
