@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gj5zz9efdtt
-status: in-progress
+status: completed
 epic: 20-cli-ux-and-ergonomics
 description: Qualify the adapter-neutral refactor, new CLI surfaces, and planning safety fixes; publish machine revision 1.84 with explicit upgrade guidance.
 effort: 1 day
@@ -11,8 +11,9 @@ autonomy_level: 2
 tags: [release, contracts, architecture, safety, dogfood]
 created: "2026-10-09"
 started_at: "2026-10-09"
-updated_at: "2026-10-09"
+updated_at: "2026-10-10"
 depends_on: [6ggdkzv2tnta, 6ghht05bzxkk]
+completed_at: "2026-10-10"
 ---
 
 # Cut v0.23.0 as an adapter-boundary and planning-safety release
@@ -47,7 +48,8 @@ is the architectural basis. The latest safety fixes are merged in PRs
 [287](https://github.com/andy-esch/taskflow/pull/287),
 [288](https://github.com/andy-esch/taskflow/pull/288), and
 [289](https://github.com/andy-esch/taskflow/pull/289). Main at preparation start is
-`fcc4af49e9b776a2a05a2962df47ba1f8db10e26`; this is **not yet a qualified release candidate**.
+`fcc4af49e9b776a2a05a2962df47ba1f8db10e26`; this was the prequalification starting point.
+The final tagged candidate and publication evidence are recorded below.
 
 ## Release execution playbook
 
@@ -128,10 +130,10 @@ Use repository URLs for these planning links when publishing the GitHub release 
   same recorded clean candidate commit.
 - [ ] A fresh candidate binary passes the bounded CLI contract and
   throwaway-space mutation checks, plus the Thread navigation and refresh TUI
-  smoke pass.
+  smoke pass. · **n/a:** Maintainer accepts the published v0.23.0 release and explicitly requested closeout; no additional retrospective CLI/TUI smoke gate is required. This does not claim a new smoke pass ran.
 - [x] Concise release notes link planning evidence, explain the non-additive
   machine revision 1.84 upgrade, and retain the Threads preview notice.
-- [ ] The v0.23.0 tag, successful release workflow, four archives, checksums,
+- [x] The v0.23.0 tag, successful release workflow, four archives, checksums,
   extracted version, and installed binary identify the qualified candidate.
 - [x] Known audit-body write, Thread-only TUI recovery, and bounded-query
   followups remain explicitly tracked rather than claimed fixed or made
@@ -179,6 +181,11 @@ its build metadata records Go 1.26.9 and the tagged commit, with `vcs.modified=f
 The generated commit dump was replaced with concise highlights, upgrade notes, and immutable
 planning links matching the v0.22.0 presentation.
 
-Still pending: recorded bounded CLI/TUI dogfood and confirmation of the installed release
-binary. Publication criterion 5 stays unchecked because archive verification is not proof
-of the maintainer's installed version. This task remains in progress.
+## Maintainer closeout (2026-10-10)
+
+The maintainer accepted the published release and explicitly requested completion. The installed
+`tskflwctl` reports `v0.23.0`; its Go build metadata names the `v0.23.0` module, built locally
+with Go 1.27.2. That confirms the installed source release, not byte identity with the downloaded
+Go 1.26.9 archive. The additional retrospective CLI/TUI smoke criterion is explicitly waived,
+not recorded as a new test pass. Publication and release qualification above remain the evidence
+for closeout; the named implementation followups stay separate.
