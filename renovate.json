@@ -14,6 +14,14 @@
   "prConcurrentLimit": 3,
   "prHourlyLimit": 2,
   "postUpdateOptions": ["gomodTidy"],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^build/release-validation/Containerfile$/"],
+      "matchStrings": ["# renovate: datasource=(?<datasource>github-releases) depName=(?<depName>golangci/golangci-lint)\\s+ARG GOLANGCI_LINT_VERSION=(?<currentValue>v[0-9]+\\.[0-9]+\\.[0-9]+)"],
+      "versioningTemplate": "semver"
+    }
+  ],
   "packageRules": [
     {
       "description": "Group all non-major updates by manager to keep PR volume low while isolating majors for individual review",
@@ -36,14 +44,44 @@
       "groupName": "charm"
     },
     {
-      "description": "Group Go toolchain and runtime version updates across go.mod and GitHub Actions workflows",
-      "matchDepNames": ["go", "golang"],
-      "groupName": "go version"
-    },
-    {
       "description": "Group GitHub Actions workflow updates into one PR",
       "matchManagers": ["github-actions"],
       "groupName": "github actions"
+    },
+    {
+      "description": "Coordinate Go minimum and release-line upgrades after broad manager grouping",
+      "matchManagers": ["gomod", "github-actions", "dockerfile"],
+      "matchDepNames": ["go", "golang"],
+      "groupName": "go version",
+      "dependencyDashboardApproval": true,
+      "separateMinorPatch": true
+    },
+    {
+      "description": "Explicitly propose module minimum updates; keep them deliberate even for patches",
+      "matchManagers": ["gomod"],
+      "matchDepNames": ["go"],
+      "matchDepTypes": ["golang"],
+      "rangeStrategy": "bump"
+    },
+    {
+      "description": "Do not delay release-toolchain patches behind weekly scheduling or line upgrades",
+      "matchManagers": ["github-actions", "dockerfile"],
+      "matchDepNames": ["go", "golang"],
+      "matchUpdateTypes": ["patch", "digest", "pinDigest"],
+      "groupName": "go toolchain patches",
+      "dependencyDashboardApproval": false,
+      "schedule": ["at any time"],
+      "updateNotScheduled": true,
+      "minimumReleaseAge": "0 days",
+      "prPriority": 10,
+      "automerge": false
+    },
+    {
+      "description": "Keep CI and container linter release lines together",
+      "matchManagers": ["github-actions", "custom.regex"],
+      "matchDepNames": ["golangci/golangci-lint"],
+      "groupName": "go lint tooling",
+      "dependencyDashboardApproval": true
     }
   ]
 }
