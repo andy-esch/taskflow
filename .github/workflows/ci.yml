@@ -10,6 +10,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  # Use setup-go's compiler, not a module/toolchain-triggered automatic replacement.
+  GOTOOLCHAIN: local
+
 jobs:
   lint:
     name: Lint
