@@ -230,8 +230,15 @@ func decodeListCursor(value string) (listCursor, error) {
 	if err := decoder.Decode(&cursor); err != nil {
 		return listCursor{}, fmt.Errorf("%w: invalid list cursor payload", domain.ErrValidation)
 	}
-	if decoder.Decode(new(any)) != io.EOF || cursor.Version != listCursorVersion || len(cursor.Query) != 64 || len(cursor.View) != 64 {
+	if decoder.Decode(new(any)) != io.EOF || cursor.Version != listCursorVersion || !isListDigest(cursor.Query) || !isListDigest(cursor.View) {
 		return listCursor{}, fmt.Errorf("%w: unsupported or malformed list cursor; restart the query", domain.ErrValidation)
 	}
 	return cursor, nil
+}
+
+// Issued digests are canonical lowercase SHA-256 hex. Reject corrupt encodings
+// before comparing views so malformed input cannot masquerade as a corpus change.
+func isListDigest(value string) bool {
+	decoded, err := hex.DecodeString(value)
+	return err == nil && len(decoded) == sha256.Size && hex.EncodeToString(decoded) == value
 }

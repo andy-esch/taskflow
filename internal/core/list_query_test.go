@@ -191,6 +191,39 @@ func TestListQueryKeepsDuplicateOccurrencesDeterministic(t *testing.T) {
 	}
 }
 
+func TestListCursorRequiresCanonicalSHA256Digests(t *testing.T) {
+	items := []queryItem{{ID: "a"}, {ID: "b"}}
+	first, err := queryItems(items, ListQuery{Limit: 1}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original, err := decodeListCursor(first.Page.NextCursor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"query", "view"} {
+		for _, value := range []string{"", strings.Repeat("0", 63), strings.Repeat("0", 65), strings.Repeat("g", 64), strings.Repeat("A", 64)} {
+			cursor := original
+			if field == "query" {
+				cursor.Query = value
+			} else {
+				cursor.View = value
+			}
+			b, err := json.Marshal(cursor)
+			if err != nil {
+				t.Fatal(err)
+			}
+			encoded := base64.RawURLEncoding.EncodeToString(b)
+			if _, err := decodeListCursor(encoded); !errors.Is(err, domain.ErrValidation) {
+				t.Fatalf("decoder accepted malformed %s digest %q: %v", field, value, err)
+			}
+			if _, err := queryItems(items, ListQuery{Limit: 1, Cursor: encoded}, nil); !errors.Is(err, domain.ErrValidation) {
+				t.Fatalf("query misclassified malformed %s digest %q: %v", field, value, err)
+			}
+		}
+	}
+}
+
 type queryResearchReader struct {
 	fakeStore
 	records []LoadedRecord[domain.Research]
