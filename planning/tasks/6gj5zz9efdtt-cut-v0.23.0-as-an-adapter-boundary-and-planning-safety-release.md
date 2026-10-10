@@ -124,12 +124,12 @@ Use repository URLs for these planning links when publishing the GitHub release 
 
 - [x] The version choice and public changes since v0.22.0 are documented, and
   the completed adapter-boundary and audit-safety work is merged on main.
-- [ ] Both just release-validate and just release-validate-container pass on the
+- [x] Both just release-validate and just release-validate-container pass on the
   same recorded clean candidate commit.
 - [ ] A fresh candidate binary passes the bounded CLI contract and
   throwaway-space mutation checks, plus the Thread navigation and refresh TUI
   smoke pass.
-- [ ] Concise release notes link planning evidence, explain the non-additive
+- [x] Concise release notes link planning evidence, explain the non-additive
   machine revision 1.84 upgrade, and retain the Threads preview notice.
 - [ ] The v0.23.0 tag, successful release workflow, four archives, checksums,
   extracted version, and installed binary identify the qualified candidate.
@@ -166,6 +166,19 @@ Use repository URLs for these planning links when publishing the GitHub release 
 
 ## Validation and publication evidence
 
-Pending: clean candidate commit, host/container gate results, fresh-binary CLI/TUI dogfood,
-approved notes, tag/CD/assets/checksums, and installed release version. Earlier PR checks are
-implementation evidence, not completion of these release gates.
+The `v0.23.0` tag resolves to `ee54b930a9bb673c53882622546bd851a2355eae`, including
+the Go 1.26.9 container pin from PR #291. The maintainer reported both host and container
+release gates passing before tagging, after updating local Go to 1.27.2 and the container to
+1.26.9. Earlier PR checks are not substituted for that release qualification.
+
+The [tag-triggered publication run](https://github.com/andy-esch/taskflow/actions/runs/38009486739)
+succeeded. The [release](https://github.com/andy-esch/taskflow/releases/tag/v0.23.0) publishes
+checksums and all four Darwin/Linux amd64/arm64 archives. Fresh downloads passed all four
+published SHA-256 checks. The extracted Darwin arm64 binary reports `tskflwctl 0.23.0`;
+its build metadata records Go 1.26.9 and the tagged commit, with `vcs.modified=false`.
+The generated commit dump was replaced with concise highlights, upgrade notes, and immutable
+planning links matching the v0.22.0 presentation.
+
+Still pending: recorded bounded CLI/TUI dogfood and confirmation of the installed release
+binary. Publication criterion 5 stays unchecked because archive verification is not proof
+of the maintainer's installed version. This task remains in progress.
