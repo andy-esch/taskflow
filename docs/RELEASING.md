@@ -49,6 +49,24 @@ This offline drift check runs in CI and the shared release gate. It checks the m
 Go selectors, latest-patch behavior, and container/linter pins. It does **not** check remote patch
 freshness or replace `govulncheck`; `just vulncheck` uses the same package scan as the release gate.
 
+Renovate proposes minimum/Go-line upgrades behind dashboard approval. Container/toolchain patch
+updates are separate, need no dashboard approval, and bypass the weekly schedule and release-age
+delay; they still require CI and human merge. This does not guarantee an instant bot run or that
+Docker/stdlib advisories appear as GitHub vulnerability alerts. Linter updates coordinate the CI
+selector and container ARG in a separate reviewed group, without forcing a Go-line upgrade.
+
+For changes to these rules, validate `renovate.json` with Renovate's config validator. The optional
+actual-engine regression check uses an installed Renovate package directory (no credentials or
+remote lookups; internal Renovate module layout may need updating across versions):
+
+```sh
+just renovate-toolchain-check /path/to/node_modules/renovate
+```
+
+It exercises real manager extraction and this repository's rule application, not a live hosted
+bot run or inherited-preset resolution. The [coordination task](../planning/tasks/6gd68x5gqkk0-reconcile-go-toolchain-versioning-across-go.mod-ci-linters-and-renovate.md)
+records the rationale and validation evidence.
+
 ## Tagging and publication
 
 Automated validation does not replace a release task's bounded CLI/TUI dogfood. After both are

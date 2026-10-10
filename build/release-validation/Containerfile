@@ -1,5 +1,6 @@
 FROM golang:1.26.9-bookworm
 
+# renovate: datasource=github-releases depName=golangci/golangci-lint
 ARG GOLANGCI_LINT_VERSION=v2.13.0
 ARG GORELEASER_VERSION=v2.16.0
 ARG GOVULNCHECK_VERSION=v1.6.0

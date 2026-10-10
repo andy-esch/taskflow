@@ -106,6 +106,10 @@ release-check:
 toolchain-check:
 	go test ./internal/tools/releasevalidate -run '^TestRepositoryToolchainPolicy$' -count=1 -v
 
+# Optional actual-engine check; pass an installed Renovate package directory.
+renovate-toolchain-check RENOVATE_PACKAGE_DIR:
+	node internal/tools/releasevalidate/renovate_policy_check.mjs "{{RENOVATE_PACKAGE_DIR}}"
+
 # Run the complete automated release-candidate gate from a clean checkout.
 # Generated checks and the snapshot build use disposable outputs so the source
 # tree stays unchanged. Manual CLI/TUI dogfood and publication remain separate.
