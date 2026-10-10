@@ -63,6 +63,32 @@ func TestReleaseValidateSuccessAndFailureBoundaries(t *testing.T) {
 		fixture.requireClean(t)
 	})
 
+	for _, raw := range []string{"devel go1.28-deadbeef", "go1.28rc1", "go1.28.0rc1", "go1.28", "go1.28.08", "unknown"} {
+		t.Run("unsupported raw compiler "+raw, func(t *testing.T) {
+			fixture := newReleaseValidationFixture(t)
+			output, err := fixture.run("FAKE_GO_RAW_VERSION=" + raw)
+			if err == nil || !strings.Contains(output, "a stable Go toolchain with patch version is required") {
+				t.Fatalf("unsupported metadata returned success or unclear refusal: %v\n%s", err, output)
+			}
+			log := fixture.readLog(t)
+			if !strings.Contains(log, "go env GOVERSION") || strings.Contains(log, "go test") || strings.Contains(output, "release validation passed for") {
+				t.Fatalf("unsupported compiler bypassed phase boundary: log=%s\noutput=%s", log, output)
+			}
+			fixture.requireClean(t)
+		})
+	}
+
+	for _, build := range []string{"1.28rc1", "1.28.0rc1", "1.28.08"} {
+		t.Run("unsupported linter compiler "+build, func(t *testing.T) {
+			fixture := newReleaseValidationFixture(t)
+			output, err := fixture.run("FAKE_LINT_GO_VERSION=" + build)
+			if err == nil || strings.Contains(output, "release validation passed for") || strings.Contains(fixture.readLog(t), "go test") {
+				t.Fatalf("unsupported linter compiler was accepted: %v\n%s", err, output)
+			}
+			fixture.requireClean(t)
+		})
+	}
+
 	t.Run("linter compiler older than module minimum", func(t *testing.T) {
 		fixture := newReleaseValidationFixture(t)
 		output, err := fixture.run("FAKE_LINT_GO_VERSION=1.24.9")
@@ -260,7 +286,7 @@ case "${GOCACHE:-}" in
   *) printf 'GOCACHE is not isolated: %s\n' "${GOCACHE:-<unset>}" >&2; exit 43 ;;
 esac
 if [[ "$*" == "env GOVERSION" ]]; then
-	printf 'go%s\n' "${FAKE_GO_VERSION:-1.25.12}"
+	printf '%s\n' "${FAKE_GO_RAW_VERSION:-go${FAKE_GO_VERSION:-1.25.12}}"
 	exit 0
 fi
 if [[ -n "${FAKE_GO_FAIL_MATCH:-}" && "$*" == *"$FAKE_GO_FAIL_MATCH"* ]]; then
