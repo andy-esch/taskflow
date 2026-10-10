@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { spawnSync } from 'node:child_process';
 
 const root = fileURLToPath(new URL('../../../', import.meta.url));
 const renovateRoot = process.argv[2];
@@ -19,6 +20,10 @@ const { extractPackageFile: extractGo } = await load('modules/manager/gomod/extr
 const { extractPackageFile: extractActions } = await load('modules/manager/github-actions/extract.js');
 const { extractPackageFile: extractDocker } = await load('modules/manager/dockerfile/extract.js');
 const { extractPackageFile: extractRegex } = await load('modules/manager/custom/regex/index.js');
+const { get: versioning } = await load('modules/versioning/index.js');
+const { getDefaultVersioning } = await load('modules/datasource/common.js');
+const { getRangeStrategy } = await load('modules/manager/index.js');
+const { generateUpdate } = await load('workers/repository/process/lookup/generate.js');
 const config = JSON.parse(await readFile(path.join(root, 'renovate.json'), 'utf8'));
 const file = async (name) => readFile(path.join(root, name), 'utf8');
 const containerPath = 'build/release-validation/Containerfile';
@@ -70,4 +75,36 @@ for (const [dep, manager] of [[workflowLint, 'github-actions'], [lint, 'custom.r
 const checkout = actions.find((dep) => dep.depName === 'actions/checkout');
 assert(checkout, 'Unrelated action control must exist');
 assert.equal((await policy(checkout, 'github-actions', 'minor')).groupName, 'github actions');
-console.log(`Renovate ${(JSON.parse(await readFile(path.resolve(renovateRoot, 'package.json'), 'utf8'))).version}: extraction and toolchain policy checks passed`);
+
+// Replay local hypothetical releases through Renovate's actual versioning and
+// replacement generation, then test both generated edits against the Go guard.
+// No hosted lookup, source writes, or inherited-preset resolution is involved.
+const [major, minor, patch] = lint.currentValue.replace(/^v/, '').split('.').map(Number);
+const candidates = [
+  { name: 'patch', version: `v${major}.${minor}.${patch + 1}` },
+  { name: 'minor', version: `v${major}.${minor + 1}.0` },
+];
+const releases = [lint.currentValue, ...candidates.map((candidate) => candidate.version)];
+const generated = [];
+for (const candidate of candidates) {
+  const result = { Name: candidate.name };
+  for (const [field, dep, manager] of [['Workflow', workflowLint, 'github-actions'], ['Container', lint, 'custom.regex']]) {
+    const settings = await applyPackageRules({ ...config, ...dep, manager, rangeStrategy: 'auto' }, 'package');
+    const api = versioning(settings.versioning ?? getDefaultVersioning(settings.datasource));
+    const update = await generateUpdate(settings, dep.currentValue, api, getRangeStrategy(settings), lint.currentValue, 'offline replay', { version: candidate.version }, releases);
+    assert.equal(update.updateType, candidate.name, 'Actual linter update classification');
+    assert(update.newValue, 'Actual linter update must produce a replacement');
+    const effective = await applyPackageRules({ ...settings, ...update }, 'update-type');
+    assert.equal(effective.groupName, 'go lint tooling');
+    assert.equal(effective.dependencyDashboardApproval, true);
+    result[field] = update.newValue;
+  }
+  generated.push(result);
+}
+const tested = spawnSync('go', ['test', './internal/tools/releasevalidate', '-run', '^TestToolchainPolicyAcceptsGeneratedLinterPins$', '-count=1'], {
+  cwd: root,
+  env: { ...process.env, TASKFLOW_RENOVATE_LINTER_CASES: JSON.stringify(generated) },
+  encoding: 'utf8',
+});
+assert(!tested.error && tested.status === 0, `Generated linter replacements failed the offline guard:\n${tested.error ?? ''}${tested.stdout ?? ''}${tested.stderr ?? ''}`);
+console.log(`Renovate ${(JSON.parse(await readFile(path.resolve(renovateRoot, 'package.json'), 'utf8'))).version}: extraction, rule, and generated-linter policy checks passed`);

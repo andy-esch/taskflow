@@ -1,6 +1,7 @@
 package releasevalidate
 
 import (
+	"encoding/json"
 	"fmt"
 	"go/version"
 	"os"
@@ -46,6 +47,8 @@ func TestToolchainPolicyRejectsDrift(t *testing.T) {
 		{"linter line", "build/release-validation/Containerfile", "v2.13.0", "v2.12.2", "linter line"},
 		{"floating linter", "build/release-validation/Containerfile", "v2.13.0", "v2.13", "exact linter patch"},
 		{"missing CI linter", ".github/workflows/ci.yml", "golangci/golangci-lint-action@v9", "actions/checkout@v7", "one CI linter selection"},
+		{"prerelease CI linter", ".github/workflows/ci.yml", "version: v2.13", "version: v2.13.1-rc1", "exact stable patch"},
+		{"floating CI linter", ".github/workflows/ci.yml", "version: v2.13", "version: latest", "linter line"},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -62,6 +65,42 @@ func TestToolchainPolicyRejectsDrift(t *testing.T) {
 			_, _, err = checkToolchainPolicy(root)
 			if err == nil || !strings.Contains(err.Error(), test.want) {
 				t.Fatalf("check error = %v; want %q", err, test.want)
+			}
+		})
+	}
+}
+
+func TestToolchainPolicyAcceptsGeneratedLinterPins(t *testing.T) {
+	type update struct {
+		Name, Workflow, Container string
+	}
+	updates := []update{
+		{"patch", "v2.13.1", "v2.13.1"},
+		{"minor", "v2.14.0", "v2.14.0"},
+	}
+	// The optional actual-engine check supplies real generated replacements to
+	// this same production-policy helper without editing repository configuration.
+	if raw, ok := os.LookupEnv("TASKFLOW_RENOVATE_LINTER_CASES"); ok {
+		if err := json.Unmarshal([]byte(raw), &updates); err != nil || len(updates) == 0 {
+			t.Fatalf("invalid generated linter cases: %v", err)
+		}
+	}
+	for _, update := range updates {
+		t.Run(update.Name, func(t *testing.T) {
+			root := toolchainPolicyFixture(t)
+			for file, replacements := range map[string][]string{
+				"build/release-validation/Containerfile": {"v2.13.0", update.Container},
+				".github/workflows/ci.yml":               {"version: v2.13}", "version: " + update.Workflow + "}"},
+			} {
+				path := filepath.Join(root, file)
+				contents, err := os.ReadFile(path)
+				if err != nil {
+					t.Fatal(err)
+				}
+				writeFixtureFile(t, path, strings.Replace(string(contents), replacements[0], replacements[1], 1))
+			}
+			if _, _, err := checkToolchainPolicy(root); err != nil {
+				t.Fatalf("generated coordinated pins rejected: %v", err)
 			}
 		})
 	}
@@ -227,8 +266,9 @@ func checkWorkflowToolchains(root, file, minimumLine, releaseLine, linterLine st
 			}
 			if strings.HasPrefix(step.Uses, "golangci/golangci-lint-action@") {
 				linterCount++
-				if strings.TrimPrefix(step.With.Version, "v") != linterLine {
-					return fmt.Errorf("%s/%s: select linter line v%s to match the container, got %q", file, name, linterLine, step.With.Version)
+				selected := strings.TrimPrefix(step.With.Version, "v")
+				if goLine(selected) != linterLine || (selected != linterLine && !stablePatchPattern.MatchString(selected)) {
+					return fmt.Errorf("%s/%s: select linter line v%s or an exact stable patch on it to match the container, got %q", file, name, linterLine, step.With.Version)
 				}
 			}
 		}
