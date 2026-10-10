@@ -126,6 +126,11 @@ research IDs for canonical source IDs each failed their intended regression test
 code passes. Full `just test` (race), `just lint`, `just build`, generated-doc/schema drift
 checks, planning lint, and `git diff --check` pass.
 
+Independent [Codex](../audits/6gje9v0x5g5d-2026-10-10-bounded-planning-queries-and-identity-recovery-implementation-codex.md)
+and [Antigravity](../audits/6gje9v15sjjm-2026-10-10-bounded-planning-queries-and-identity-recovery-implementation-antigravity.md)
+review briefs are prepared for the combined query/recovery PR. Implementation criteria are met;
+reviews remain pending, not settled evidence.
+
 ## Out of scope
 
 - Claiming keyset pagination avoids a filesystem scan in the local adapter.

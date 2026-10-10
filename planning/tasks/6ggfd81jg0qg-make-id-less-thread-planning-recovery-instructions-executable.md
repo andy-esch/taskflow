@@ -88,6 +88,11 @@ generated CLI/schema drift tests, and planning lint pass. A compiler-valid mutat
 markerless pointer recovery to use `--taskflow-root .` failed the intended nested-target
 regressions; restored production behavior passes.
 
+Independent [Codex](../audits/6gje9v0x5g5d-2026-10-10-bounded-planning-queries-and-identity-recovery-implementation-codex.md)
+and [Antigravity](../audits/6gje9v15sjjm-2026-10-10-bounded-planning-queries-and-identity-recovery-implementation-antigravity.md)
+review briefs cover this fix together with bounded queries. Implementation criteria are met;
+these independent reviews have not yet run.
+
 ## Sequencing and boundaries
 
 A small follow-up in the [CLI contract Thread](../threads/6gbn4v2jpf2m-make-cli-contracts-self-describing-and-bounded.md),
