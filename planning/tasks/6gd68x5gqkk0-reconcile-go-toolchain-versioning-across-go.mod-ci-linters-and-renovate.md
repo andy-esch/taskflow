@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gd68x5gqkk0
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Document Go-version roles, enforce CI/container/linter alignment, and coordinate Renovate line upgrades without delaying toolchain patch updates.
 effort: 2-4 hours
@@ -10,8 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [ci, tooling, go]
 created: "2026-09-24"
-updated_at: "2026-10-09"
+updated_at: "2026-10-10"
 started_at: "2026-10-09"
+completed_at: "2026-10-10"
 ---
 # Reconcile Go toolchain versioning across go.mod, CI linters, and Renovate
 
@@ -102,7 +103,7 @@ machine-contract change. The container linter moves from v2.12.2 to v2.13.0.
 - The package vulnerability scan passes; findings limited to unused modules remain
   informational. Static coordination checks do not certify remote patch freshness.
 
-Independent review is the remaining checkpoint before closing this task:
+Independent reviews:
 [Codex](../audits/6gj70e4p18b3-2026-10-09-go-toolchain-coordination-implementation-codex.md)
 owns compiler/preflight probes;
 [Antigravity](../audits/6gj70e4z9zrg-2026-10-09-go-toolchain-coordination-implementation-antigravity.md)
@@ -114,7 +115,48 @@ extracted all four dependency surfaces and killed both the Renovate ordering and
 active-linter-line mutations. Owner reruns of the focused tests and actual-engine
 check pass. Acceptance is bounded to stable compiler cases, extraction, and supplied
 update-type rule application; remote classification/scheduling are not certified.
-Codex remains pending; the task stays in progress until that checkpoint is handled.
+
+## Review follow-through (2026-10-10)
+
+All four Codex findings were accepted and fixed:
+
+- **M1 — actual compiler selection:** CI, publication, and the container set
+  `GOTOOLCHAIN=local`, including before container tool installation. Policy regressions
+  reject absent/overridden settings; a real Go subprocess confirms that a module
+  `toolchain` suggestion cannot replace the selected compiler.
+- **M2 — generated linter updates:** the guard accepts stable exact CI pins on the
+  container's linter line as well as partial line selectors. The optional Renovate
+  check now uses actual versioning/classification/replacement generation and feeds
+  paired patch/minor edits into the same Go policy helper, without source writes.
+- **M3 — false-success release exits:** unsupported compiler metadata is refused
+  before arithmetic, linter build metadata must be stable, and cleanup preserves the
+  original exit status. Full-script regressions replay development/prerelease and
+  malformed values, requiring nonzero exits and no later qualification phases.
+- **M4 — workflow execution relationships:** protected jobs/setup are unconditional;
+  consumers must follow their compiler setup in the same job, without automatic
+  toolchain overrides. Regressions cover skipped minimum setup, relocated/early lint,
+  publication overrides, and an additional minimum-line job under a newer release line.
+
+Qualification reran the focused/full race suites, host lint/build/tidiness, actual
+Renovate generated-update checks, and the pinned container's real tests/lint with
+a read-only source mount. The release guide was shortened to commands and essential
+policy, leaving detailed review evidence here and in the audits.
+
+### Policy boundaries
+
+- The guard protects the current static `lint`, `test`, and `goreleaser` roles and
+  their setup/consumer ordering. Additional CI setup jobs may use the minimum or
+  release line. It is not a general interpreter for workflow matrices, expressions,
+  arbitrary shell environment changes, or Containerfile syntax; layout changes must
+  extend its projection and regressions deliberately.
+- Developers may use a compatible newer stable compiler without raising the module
+  minimum. Real lint and vulnerability scanning remain required: version agreement
+  alone establishes neither linter support nor security.
+- The optional Renovate check uses local hypothetical release candidates and installed,
+  version-sensitive engine modules. It verifies generated linter replacements, not
+  live lookup, inherited presets, hosted scheduling, or PR orchestration.
+- This is local host/container qualification, not a complete clean-candidate release
+  gate. v0.23.0 publication and remaining manual confirmation belong to its release task.
 
 ## Related
 

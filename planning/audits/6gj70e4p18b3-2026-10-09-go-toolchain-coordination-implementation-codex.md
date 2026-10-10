@@ -1,10 +1,10 @@
 ---
 schema: 1
 id: 6gj70e4p18b3
-bucket: open
+bucket: closed
 area: go-toolchain-coordination-implementation-codex
 date: "2026-10-09"
-updated_at: "2026-10-09"
+updated_at: "2026-10-10"
 ---
 # Audit: Go toolchain and linter coordination — codex — 2026-10-09
 
@@ -242,7 +242,7 @@ Evidence is bounded to the captured sandbox, local production callers, installed
 
 ### Findings
 
-#### M1. A module toolchain directive silently replaces the minimum-line compiler · **Status:** open
+#### M1. A module toolchain directive silently replaces the minimum-line compiler · **Status:** fixed
 
 **File:** internal/tools/releasevalidate/toolchain_policy_test.go:133 | **Component:** tooling
 
@@ -254,7 +254,13 @@ Evidence is bounded to the captured sandbox, local production callers, installed
 
 **Recommendation:** Reject or model module toolchain directives that override coordinated CI/release selection; explicitly enforce the minimum compiler in CI without raising the module minimum, and test actual Go selection.
 
-#### M2. Renovate generates linter pins that the offline guard rejects · **Status:** open
+**Resolution:** CI, release, and container enforce GOTOOLCHAIN=local before
+    tools run; policy rejects missing/overridden settings.
+    TestLocalGoSelectionIgnoresModuleToolchainSuggestion executes real Go and
+    confirms a future module suggestion cannot switch the selected compiler.
+    Focused host and pinned-container tests pass.
+
+#### M2. Renovate generates linter pins that the offline guard rejects · **Status:** fixed
 
 **File:** renovate.json:80 | **Component:** tooling
 
@@ -266,7 +272,13 @@ Evidence is bounded to the captured sandbox, local production callers, installed
 
 **Recommendation:** Choose Renovate versioning that preserves the required workflow line selector, or accept compatible exact workflow pins; validate actual generated replacements against the offline gate.
 
-#### M3. Development compiler metadata can abort the release gate with exit zero · **Status:** open
+**Resolution:** Accept stable exact CI linter pins on the container linter line.
+    TestToolchainPolicyAcceptsGeneratedLinterPins covers paired patch/minor
+    edits; the Renovate check now resolves actual versioning/range strategy,
+    generates replacements, and supplies them to that policy helper. Renovate
+    44.77.0 local replay passes; no hosted lookup is claimed.
+
+#### M3. Development compiler metadata can abort the release gate with exit zero · **Status:** fixed
 
 **File:** scripts/release-validate.sh:13 | **Component:** tooling
 
@@ -280,7 +292,13 @@ Evidence is bounded to the captured sandbox, local production callers, installed
 
 **Recommendation:** Validate or explicitly reject non-stable GOVERSION metadata before arithmetic, preserve failure status through cleanup, and test raw full-script exits for unsupported versions on supported shells.
 
-#### M4. Workflow step counts do not bind lint execution to its Go setup · **Status:** open
+**Resolution:** Validate stable numeric compiler metadata before arithmetic and
+    preserve the original EXIT status through cleanup. Full production-script
+    regressions replay exact development/prerelease/malformed metadata, require
+    nonzero refusal, and prove later gates never run. Host Bash 3.2 and pinned
+    Linux container tests pass.
+
+#### M4. Workflow step counts do not bind lint execution to its Go setup · **Status:** fixed
 
 **File:** internal/tools/releasevalidate/toolchain_policy_test.go:228 | **Component:** tooling
 
@@ -293,6 +311,13 @@ Evidence is bounded to the captured sandbox, local production callers, installed
 **Evidence.** `policy-probes.json` retains each exact YAML edit, output, and exit. The guard still refuses duplicate/competing selectors, so the defect is specifically the lost execution/job relationship, rather than a blanket failure to parse YAML.
 
 **Recommendation:** Require compiler setup in each protected consumer job and reject skipped setup steps; model minimum versus release consumers explicitly, or fail clearly on layouts outside a documented supported shape.
+
+**Resolution:** Bind protected workflow consumers to earlier unconditional setup
+    in the same job and validate inherited/overridden GOTOOLCHAIN settings.
+    Regressions cover skipped minimum setup, relocated or early lint, and
+    publisher conditions/overrides. An additional minimum-line job remains valid
+    under a newer release line. Supported static roles and interpretation limits
+    are documented in the task.
 
 ### Verified consumer inventory
 
@@ -375,3 +400,7 @@ transfer=pending
 All tracked probes are restored to the helper's captured baseline; temporary test files are removed. Only this audit differs, with no staged changes or additional commits. `audit lint 6gj70e4p18b3 --json` reports no issues; finding creation receipts confirm M1–M4 are open. Final helper verification and inspected audit diff are retained as `verify-final.log` and `audit-final.diff` in the evidence directory.
 
 **Guarded transfer result on delivery: `succeeded`.** This is a delivery postcondition, completed only when `scripts/isolated-review-workspace.sh transfer --sandbox <workspace>` emits `transfer=succeeded` and confirms identical source/deliverable bytes. The actual helper receipt is retained at `/private/tmp/taskflow-go-audit.ww4WUN/transfer.log`. If that command refuses, the sandbox report remains incomplete and the refusal is reported instead of writing around the guard. The workspace and evidence remain in place until the owner confirms receipt; no manual copy, sibling edit, push, or additional commit is authorized or performed.
+
+## Owner follow-through (2026-10-10)
+
+Accepted and fixed M1-M4; the original reviewer verdict above records the captured baseline, not the final state. Resolution notes identify the targeted regressions. Qualification passes the full host race suite, lint/build/tidiness, real Renovate 44.77.0 generated-linter replacements, and pinned Linux tests/lint with the checkout mounted read-only. Unsupported raw compiler metadata is exercised through the complete production script on host Bash 3.2 and Linux Bash. Supported static workflow roles and engine-replay limits are documented in the implementing task; hosted execution and a full clean-candidate gate are not claimed.
