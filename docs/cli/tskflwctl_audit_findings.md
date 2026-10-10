@@ -30,7 +30,7 @@ tskflwctl audit findings [audit] [flags]
       --cursor string          resume page.next_cursor with the same filters, sort, and limit; restart if results changed
       --effort strings         filter by effort XS,S,M,L (any-of)
   -h, --help                   help for findings
-      --limit int              maximum returned rows (1-1000; omitted means unbounded)
+      --limit string           maximum returned rows (integer 1-1000; omitted means unbounded)
   -o, --output string          output format: human|json|name|table|csv
   -q, --quiet                  concise command handles, one per line (alias for -o name)
       --search string          case-insensitive substring in list metadata, not full bodies (maximum 256 UTF-8 bytes)

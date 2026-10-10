@@ -24,7 +24,7 @@ tskflwctl task list [flags]
       --cursor string          resume page.next_cursor with the same filters, sort, and limit; restart if results changed
       --epic string            filter by epic
   -h, --help                   help for list
-      --limit int              maximum returned rows (1-1000; omitted means unbounded)
+      --limit string           maximum returned rows (integer 1-1000; omitted means unbounded)
   -o, --output string          output format: human|json|name|table|csv
   -q, --quiet                  concise command handles, one per line (alias for -o name)
       --revisit-due            only deferred tasks whose revisit date has arrived (composes with --epic/--tag/-c)

@@ -3,6 +3,7 @@ package cli
 import (
 	"fmt"
 	"io"
+	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -12,11 +13,14 @@ import (
 	"github.com/andy-esch/taskflow/internal/wire"
 )
 
-type listQueryFlags struct{ core.ListQuery }
+type listQueryFlags struct {
+	core.ListQuery
+	limit string // parse in resolve so malformed numbers retain ErrValidation
+}
 
 func (q *listQueryFlags) bind(cmd *cobra.Command, dated bool) {
 	cmd.Flags().StringVar(&q.Sort, "sort", "", "sort by id|name|created|updated; prefix with - for descending (findings: id|name only)")
-	cmd.Flags().IntVar(&q.Limit, "limit", 0, "maximum returned rows (1-1000; omitted means unbounded)")
+	cmd.Flags().StringVar(&q.limit, "limit", "", "maximum returned rows (integer 1-1000; omitted means unbounded)")
 	cmd.Flags().StringVar(&q.Cursor, "cursor", "", "resume page.next_cursor with the same filters, sort, and limit; restart if results changed")
 	cmd.Flags().StringVar(&q.Search, "search", "", "case-insensitive substring in list metadata, not full bodies (maximum 256 UTF-8 bytes)")
 	dateHelp := "own updated date >= YYYY-MM-DD, falling back to creation; not a complete change feed"
@@ -34,8 +38,12 @@ func (q *listQueryFlags) bind(cmd *cobra.Command, dated bool) {
 }
 
 func (q listQueryFlags) resolve(cmd *cobra.Command) (core.ListQuery, error) {
-	if cmd.Flags().Changed("limit") && q.Limit == 0 {
-		return core.ListQuery{}, fmt.Errorf("%w: explicit limit must be between 1 and %d", domain.ErrValidation, core.MaxListLimit)
+	if cmd.Flags().Changed("limit") {
+		limit, err := strconv.Atoi(q.limit)
+		if err != nil || limit < 1 || limit > core.MaxListLimit {
+			return core.ListQuery{}, fmt.Errorf("%w: explicit limit must be an integer between 1 and %d", domain.ErrValidation, core.MaxListLimit)
+		}
+		q.Limit = limit
 	}
 	for _, name := range []string{"sort", "cursor", "search", "updated-since"} {
 		if cmd.Flags().Changed(name) && cmd.Flags().Lookup(name).Value.String() == "" {

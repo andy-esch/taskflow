@@ -20,7 +20,7 @@ tskflwctl epic list [flags]
   -c, --columns strings        select columns for -o table/csv/json, comma-separated (-o table when no format is pinned); available: id,status,priority,done,total,description,percent,deprecated,location
       --cursor string          resume page.next_cursor with the same filters, sort, and limit; restart if results changed
   -h, --help                   help for list
-      --limit int              maximum returned rows (1-1000; omitted means unbounded)
+      --limit string           maximum returned rows (integer 1-1000; omitted means unbounded)
   -o, --output string          output format: human|json|name|table|csv
   -q, --quiet                  concise command handles, one per line (alias for -o name)
       --search string          case-insensitive substring in list metadata, not full bodies (maximum 256 UTF-8 bytes)

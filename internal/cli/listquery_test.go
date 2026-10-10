@@ -141,6 +141,7 @@ func TestListQueryChangedFilesAndDiagnosticsRefuseContinuation(t *testing.T) {
 func TestListQueryValidationAndUpdatedSinceSemantics(t *testing.T) {
 	root := listQueryFixture(t)
 	for _, flags := range [][]string{
+		{"--limit", "nope"}, {"--limit", "1.5"}, {"--limit", "99999999999999999999999999"},
 		{"--limit", "0"}, {"--limit", "-1"}, {"--limit", "1001"}, {"--sort", "priority"}, {"--sort", ""},
 		{"--cursor", "invalid"}, {"--limit", "1", "--cursor", "invalid"},
 		{"--updated-since", "2026-02-30"}, {"--search", strings.Repeat("x", 257)},
