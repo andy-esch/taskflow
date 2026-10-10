@@ -177,6 +177,16 @@ func renderListWithProblems[T, P, W any](
 	humanFn func(io.Writer, render.Style, []T) error,
 	problemsFn func(io.Writer, render.Style, []P),
 ) error {
+	return renderListWithProblemsAndPage(app, mode, columns, items, problems, nil, listKey, cols, wireProblems, jsonFn, humanFn, problemsFn)
+}
+
+func renderListWithProblemsAndPage[T, P, W any](
+	app *App, mode outputMode, columns []string, items []T, problems []P, page *core.ListPage,
+	listKey string, cols []render.Column[T], wireProblems func([]P) []W,
+	jsonFn func(io.Writer, []T, []P) error,
+	humanFn func(io.Writer, render.Style, []T) error,
+	problemsFn func(io.Writer, render.Style, []P),
+) error {
 	if mode == modeJSON {
 		// `--json -c …` narrows each row to raw string-valued fields while
 		// keeping the schema_version + unreadable envelope. Canonical selectors
@@ -187,7 +197,7 @@ func renderListWithProblems[T, P, W any](
 			if err != nil {
 				return err
 			}
-			return render.ProjectedListJSONWithProblems(app.Out, listKey, sel, items, wireProblems(problems))
+			return render.ProjectedPageJSONWithProblems(app.Out, listKey, sel, items, wireProblems(problems), page)
 		}
 		return jsonFn(app.Out, items, problems)
 	}
@@ -216,6 +226,7 @@ func renderListWithProblems[T, P, W any](
 		}
 	}
 	problemsFn(app.ErrOut, app.Style, problems)
+	listPageNotice(app.ErrOut, page)
 	return nil
 }
 

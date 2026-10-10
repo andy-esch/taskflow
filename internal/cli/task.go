@@ -216,6 +216,7 @@ func newTaskListCmd(app *App) *cobra.Command {
 	var (
 		filter core.TaskFilter
 		lm     listMode
+		query  listQueryFlags
 	)
 	cmd := &cobra.Command{
 		Use:         "list",
@@ -228,18 +229,23 @@ func newTaskListCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			tasks, problems, err := app.Svc.ListTasks(filter)
+			q, err := query.resolve(cmd)
 			if err != nil {
 				return err
 			}
-			if err := renderList(app, mode, lm.columns, tasks, problems,
-				"tasks", render.TaskReadColumns(), render.TasksJSON, render.TasksReadHuman); err != nil {
+			result, problems, err := app.Svc.QueryTasks(filter, q)
+			if err != nil {
+				return err
+			}
+			if err := renderListPage(app, mode, lm.columns, result.Items, problems, result.Page,
+				"tasks", render.TaskReadColumns(), render.TasksPageJSON, render.TasksReadHuman); err != nil {
 				return err
 			}
 			return portableProblemsError("task", problems)
 		},
 	}
 	lm.bind(cmd, render.Specs(render.TaskReadColumns()))
+	query.bind(cmd, true)
 	cmd.Flags().StringVar(&filter.Status, "status", "", "filter by status")
 	cmd.Flags().StringVar(&filter.Epic, "epic", "", "filter by epic")
 	cmd.Flags().StringVar(&filter.Tag, "tag", "", "filter by tag")

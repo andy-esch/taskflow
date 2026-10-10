@@ -728,6 +728,12 @@ will give these decisions a durable authority without duplicating the current ma
   is additive by default, and is explicitly **not** SemVer. The generated JSON
   Schema describes only the typed envelopes and has a revision-qualified `$id`.
 - **The core never touches the fs or cobra.**
+- **Optional list queries belong to core.** `ListQuery`/`ListResult` and the `Service.Query*`
+  use cases compose existing filters with stable ordering, metadata search, date filtering,
+  and continuation before CLI rendering. A zero query preserves legacy results; a bound
+  limits returned rows, not reader I/O. Cursor digests detect changes to the matching view
+  and full diagnostics, not a transactional snapshot or persisted source-set identity.
+  Typed and projected JSON share the wire-owned `ListPageJSON`; see [bounded queries](../README.md#bounded-queries).
 - **Ports live with their consumer.** `core.ConfigurationStore` carries neutral
   configuration entities and is implemented by `configstore.FS`; CLI, focused TUI,
   full TUI, and a future served adapter all call `ConfigurationService` rather than

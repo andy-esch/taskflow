@@ -358,7 +358,11 @@ import (
 // reports non-open audits with unsettled parsed findings. Empty-audit closure,
 // reopening, terminal corrections, and note/candidate-only edits remain available.
 // Resolution-note wrapping preserves prose rather than creating finding headers.
-const SchemaVersion = "1.84"
+// 1.85: ADDITIVE — planning list queries accept optional bounds, sorting, search,
+// updated-since, and versioned continuation; opt-in typed/projected JSON gains
+// page metadata. Opt-in Thread projections also retain repository graph context
+// outside rows. Unbounded default calls retain their existing result shape.
+const SchemaVersion = "1.85"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.
@@ -373,7 +377,7 @@ const (
 	SchemaRevisionClassificationSince = "1.68"
 	// SchemaRevisionCompatibility classifies the current revision. It must agree
 	// with the current changelog entry; wire_changelog_test.go enforces that.
-	SchemaRevisionCompatibility = "not-additive"
+	SchemaRevisionCompatibility = "additive"
 	// SchemaRevisionCompatibilityDefault is policy, not a guarantee: every
 	// revision still declares its own classification.
 	SchemaRevisionCompatibilityDefault = "additive"

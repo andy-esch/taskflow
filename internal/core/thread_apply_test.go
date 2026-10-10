@@ -341,7 +341,7 @@ func TestPrepareThreadApplyRejectsUnsafeOrEditedCreationIdentity(t *testing.T) {
 		{"memberless", "at least one member task", func(_ *ThreadApplySnapshot, p *ThreadApplyPlan) { p.Thread.Tasks = nil }, false},
 		{"unsupported schema", "unsupported Thread apply-plan schema", func(_ *ThreadApplySnapshot, p *ThreadApplyPlan) { p.Schema++ }, false},
 		{"missing planned identity", "apply plan has no planning_repo_id", func(_ *ThreadApplySnapshot, p *ThreadApplyPlan) { p.PlanningRepoID = "" }, false},
-		{"missing current identity", "current planning repository has no durable id", func(s *ThreadApplySnapshot, _ *ThreadApplyPlan) { s.PlanningRepoID = "" }, false},
+		{"missing current identity", "planning repository has no durable id", func(s *ThreadApplySnapshot, _ *ThreadApplyPlan) { s.PlanningRepoID = "" }, false},
 		{"invalid composition date", "apply plan composed_at", func(_ *ThreadApplySnapshot, p *ThreadApplyPlan) { p.ComposedAt = "invalid" }, false},
 		{"advanced planned status", "planned Thread must be unstarted", func(_ *ThreadApplySnapshot, p *ThreadApplyPlan) { p.Thread.Status = domain.ThreadStatusInProgress }, false},
 		{"prerequisite is a slug", "requires exact stable task ids", func(_ *ThreadApplySnapshot, p *ThreadApplyPlan) { p.Dependencies[0].From = gate.Slug }, false},

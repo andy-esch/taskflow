@@ -111,7 +111,7 @@ func ToTaskGraphRepairJSON(receipt core.TaskGraphRepairReceipt, workspace Worksp
 		Operations: make([]TaskGraphRepairOperationJSON, 0, len(receipt.Operations)),
 		Removed:    make([]TaskGraphRepairDeclarationJSON, 0, len(receipt.Removed)),
 		Addressed:  toTaskGraphRepairDefectsJSON(receipt.Addressed), Residual: toTaskGraphRepairDefectsJSON(receipt.Residual),
-		Problems:     toGraphProblemsJSON(receipt.Problems),
+		Problems:     ToGraphProblemsJSON(receipt.Problems),
 		PlannedFiles: append([]string{}, receipt.PlannedFiles...), AppliedFiles: append([]string{}, receipt.AppliedFiles...),
 		RemainingFiles: append([]string{}, receipt.RemainingFiles...),
 		Impacts:        toTaskGraphStateImpactsJSON(receipt.Impacts), ThreadImpacts: toThreadProjectionImpactsJSON(receipt.ThreadImpacts),
@@ -164,7 +164,7 @@ func toTaskGraphRepairDefectsJSON(defects []core.TaskGraphRepairDefect) []TaskGr
 			}
 		}
 		if defect.Problem.Code != "" {
-			problem := toGraphProblemsJSON([]core.GraphProblem{defect.Problem})[0]
+			problem := ToGraphProblemsJSON([]core.GraphProblem{defect.Problem})[0]
 			item.Problem = &problem
 		}
 		out = append(out, item)

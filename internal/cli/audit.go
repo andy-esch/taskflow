@@ -13,7 +13,6 @@ import (
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/editor"
-	"github.com/andy-esch/taskflow/internal/wire"
 )
 
 // auditVerbShort is the one-line help for an audit lifecycle verb, DERIVED from the
@@ -101,6 +100,7 @@ func newAuditListCmd(app *App) *cobra.Command {
 	var (
 		all, closed, deferred bool
 		lm                    listMode
+		query                 listQueryFlags
 	)
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -133,18 +133,23 @@ func newAuditListCmd(app *App) *cobra.Command {
 			case deferred:
 				bucket = string(domain.AuditDeferred)
 			}
-			audits, problems, err := app.Svc.ListAudits(bucket, all)
+			q, err := query.resolve(cmd)
 			if err != nil {
 				return err
 			}
-			if err := renderList(app, mode, lm.columns, audits, problems,
-				"audits", render.AuditReadColumns(), render.AuditsJSON, render.AuditsReadHuman); err != nil {
+			result, problems, err := app.Svc.QueryAudits(bucket, all, q)
+			if err != nil {
+				return err
+			}
+			if err := renderListPage(app, mode, lm.columns, result.Items, problems, result.Page,
+				"audits", render.AuditReadColumns(), render.AuditsPageJSON, render.AuditsReadHuman); err != nil {
 				return err
 			}
 			return portableProblemsError("audit", problems)
 		},
 	}
 	lm.bind(cmd, render.Specs(render.AuditReadColumns()))
+	query.bind(cmd, true)
 	cmd.Flags().BoolVar(&all, "all", false, "all buckets")
 	cmd.Flags().BoolVar(&closed, "closed", false, "closed audits only")
 	cmd.Flags().BoolVar(&deferred, "deferred", false, "deferred audits only")
@@ -157,6 +162,7 @@ func newAuditFindingsCmd(app *App) *cobra.Command {
 		status, effort, urgency []string
 		component               string
 		lm                      listMode
+		query                   listQueryFlags
 	)
 	cmd := &cobra.Command{
 		Use:   "findings [audit]",
@@ -181,19 +187,23 @@ func newAuditFindingsCmd(app *App) *cobra.Command {
 			if len(args) == 1 {
 				f.Audit = args[0]
 			}
-			findings, problems, err := app.Svc.QueryFindings(f)
+			q, err := query.resolve(cmd)
 			if err != nil {
 				return err
 			}
-			if err := renderListWithProblems(app, mode, lm.columns, findings, problems,
-				"findings", render.FindingColumns(), wire.ToLintLoadProblemsJSON,
-				render.FindingsJSON, render.FindingsHuman, render.LintProblemsHuman); err != nil {
+			result, problems, err := app.Svc.QueryFindingPage(f, q)
+			if err != nil {
+				return err
+			}
+			if err := renderListPage(app, mode, lm.columns, result.Items, problems, result.Page,
+				"findings", render.FindingColumns(), render.FindingsPageJSON, render.FindingsHuman); err != nil {
 				return err
 			}
 			return portableProblemsError("audit", problems)
 		},
 	}
 	lm.bind(cmd, render.Specs(render.FindingColumns()))
+	query.bind(cmd, false)
 	cmd.Flags().StringSliceVar(&status, "status", nil, "filter by finding status (comma-separated, any-of)")
 	cmd.Flags().StringSliceVar(&effort, "effort", nil, "filter by effort XS,S,M,L (any-of)")
 	cmd.Flags().StringSliceVar(&urgency, "urgency", nil, "filter by urgency acute,soon,eventually (any-of)")

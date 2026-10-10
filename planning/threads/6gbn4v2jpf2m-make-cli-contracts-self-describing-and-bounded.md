@@ -6,8 +6,8 @@ description: Turn the v0.22 machine-contract foundation into complete discovery 
 goal: Agents discover safe commands and exit behavior, retain durable Thread handles, and page large planning corpora without prose scraping.
 created: "2026-09-19"
 tags: [cli, agents, json, contract]
-tasks: [6g63hhk3eddf, 6gbn4g1bb7wr, 6gbn4g1eypzs, 6gbn4g1j40pj, 6ggfd81jg0qg, 6ggjmtmdd54w]
-updated_at: "2026-10-04"
+tasks: [6g63hhk3eddf, 6gbn4g1bb7wr, 6gbn4g1eypzs, 6gbn4g1j40pj, 6ggfd81jg0qg, 6ggjmtmdd54w, 6gjdgpq17sr6]
+updated_at: "2026-10-10"
 started_at: "2026-09-20"
 ---
 
@@ -50,3 +50,18 @@ to honor or reject bootstrap selectors, pin no-write refusal for unsupported or
 conflicting targets, and keep fresh initialization independent of existing-repo
 discovery. This follows the completed configuration lifecycle foundation and is
 independent of the other open members; it is not an adapter-neutral closeout blocker.
+
+## Delivery and remaining gap (2026-10-10)
+
+The original four product gaps and both recovery/bootstrap follow-ups are implemented.
+Bounded queries now share a portable application contract, opt-in continuation, and metadata
+search; the ID-less repair commands preserve existing tree layout and pointer bindings.
+Independent reviews confirmed recovery behavior and prompted two bounded-query corrections:
+compact Thread output retains repository graph context, and malformed cursor digests receive
+validation rather than changed-view advice. Neither changes legacy unbounded output.
+
+Self-review found one additional pre-existing identity mismatch, tracked in
+[data-directory pointer parity](../tasks/6gjdgpq17sr6-preserve-planning-identity-for-pointers-addressing-data-subdirectories.md).
+It follows the completed recovery task; list-query delivery is independent. The Thread remains
+open for this bounded follow-up, not for the completed adapter-neutral refactor.
+Use `tskflwctl thread frontier make-cli-contracts-self-describing-and-bounded` to inspect it.
