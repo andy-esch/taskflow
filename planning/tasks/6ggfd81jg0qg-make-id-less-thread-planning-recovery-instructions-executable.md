@@ -60,6 +60,9 @@ task's recovery evidence; no repair is claimed implemented and no refactor prere
 
 ## Implementation
 
+Delivery: [PR #293](https://github.com/andy-esch/taskflow/pull/293), bundled with bounded
+planning queries and their independent review fixes.
+
 Portable compose, preparation, and the apply writer now share honest conditional guidance:
 `config migrate` for an existing marker, or explicit `init --path <planning-repo>
 --taskflow-root <existing-tree> --no-register` for a markerless tree. The explicit layout
@@ -90,8 +93,12 @@ regressions; restored production behavior passes.
 
 Independent [Codex](../audits/6gje9v0x5g5d-2026-10-10-bounded-planning-queries-and-identity-recovery-implementation-codex.md)
 and [Antigravity](../audits/6gje9v15sjjm-2026-10-10-bounded-planning-queries-and-identity-recovery-implementation-antigravity.md)
-review briefs cover this fix together with bounded queries. Implementation criteria are met;
-these independent reviews have not yet run.
+reviews cover this fix together with bounded queries. Both independently replayed recovery
+and found no recovery defect: target layout and unknown configuration survive, opted-in
+pointers do not silently rebind, and mismatched old plans remain refused. Codex also verified
+fresh recomposition/apply and idempotent retry. Query-specific findings are resolved in the
+[bounded-query task](6gbn4g1j40pj-bound-and-page-agent-facing-list-queries.md); the separately
+tracked data-directory alias gap remains open.
 
 ## Sequencing and boundaries
 

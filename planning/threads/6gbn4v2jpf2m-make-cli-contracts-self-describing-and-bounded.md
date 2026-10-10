@@ -56,6 +56,9 @@ independent of the other open members; it is not an adapter-neutral closeout blo
 The original four product gaps and both recovery/bootstrap follow-ups are implemented.
 Bounded queries now share a portable application contract, opt-in continuation, and metadata
 search; the ID-less repair commands preserve existing tree layout and pointer bindings.
+Independent reviews confirmed recovery behavior and prompted two bounded-query corrections:
+compact Thread output retains repository graph context, and malformed cursor digests receive
+validation rather than changed-view advice. Neither changes legacy unbounded output.
 
 Self-review found one additional pre-existing identity mismatch, tracked in
 [data-directory pointer parity](../tasks/6gjdgpq17sr6-preserve-planning-identity-for-pointers-addressing-data-subdirectories.md).

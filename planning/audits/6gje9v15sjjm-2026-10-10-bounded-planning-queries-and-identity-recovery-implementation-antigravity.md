@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gje9v15sjjm
-bucket: open
+bucket: closed
 area: bounded-planning-queries-and-identity-recovery-implementation-antigravity
 date: "2026-10-10"
 ---
@@ -191,7 +191,156 @@ recommendation, and uncertainty. Consolidate by root cause. Include verified con
 hostile-probe/mutation ledger, a bounded surviving-hypothesis ledger, and the required isolation
 attestation. A no-findings verdict needs hostile evidence; a blocked review is incomplete, not clean.
 
-## Reviewer report
+### Verdict and scope
 
-Review not yet performed. Replace this line with your report; do not pre-settle findings or turn
-the owner's checked task criteria into evidence that invariants hold.
+- **Verdict:** Ready (no findings). The bounded list query contracts, opaque cursor validation, and executable ID-less recovery workflows fulfill their safety and stability requirements. All five required hostile angles were falsified with concrete CLI and programmatic evidence. Two compiler-valid mutations (one primary invariant and one Codex cross-check) were killed by their target test suites.
+- **Scope reviewed:**
+  - Bounded planning-list queries (`core.ListQuery`, `core.queryList`, `core.Service.Query*`) across all six surfaces: tasks, epics, audits, research, threads, and audit findings.
+  - CLI projection and rendering: `renderListPage`, `ProjectedPageJSONWithProblems`, typed envelopes with `*ListPageJSON`, and machine contract revision 1.85.
+  - ID-less planning recovery: `core.MissingPlanningIdentityError`, `ComposeThreadApplyPlan`, `PrepareThreadApply`, `store.FS.currentPlanningIdentity`, `verifyPlanningRepoID`, `planningIdentityRecoveryCommand`, and `migrateUnlocked`.
+- **Review limits:** Confined to branch `feat/bounded-planning-reads-and-recovery` at sandbox baseline commit `b7e8b146015b217b300f0370882e6f2a0fa7505f`. Pre-existing data-directory pointer identity mismatch is tracked separately under task [6gjdgpq17sr6](../tasks/6gjdgpq17sr6-preserve-planning-identity-for-pointers-addressing-data-subdirectories.md) and was verified not to be regressed.
+
+---
+
+### Verified consumer inventory
+
+Every listed producer and consumer symbol was mapped and verified in the sandbox codebase:
+
+| Category | Component / Symbol | Source Location | Verified Role |
+| :--- | :--- | :--- | :--- |
+| **Core Query** | `core.ListQuery` | [`internal/core/list_query.go#L30-L36`](../../internal/core/list_query.go#L30-L36) | Public query spec (Sort, Limit, Cursor, Search, UpdatedSince); `Active()` gate preserves zero query. |
+| **Core Query** | `core.queryList` | [`internal/core/list_query.go#L99-L211`](../../internal/core/list_query.go#L99-L211) | Generic bounded view runner; calculates SHA-256 digests for query and view, enforces cursor validation, deterministically sorts. |
+| **Service Tasks** | `Service.QueryTasks` | [`internal/core/service_list_query.go#L12-L29`](../../internal/core/service_list_query.go#L12-L29) | Bounded task query; binds task filter, preserves full load diagnostics in view hash. |
+| **Service Epics** | `Service.QueryEpics` | [`internal/core/service_list_query.go#L31-L58`](../../internal/core/service_list_query.go#L31-L58) | Bounded epic query; validates epic status filter up front before querying. |
+| **Service Audits** | `Service.QueryAudits` | [`internal/core/service_list_query.go#L60-L77`](../../internal/core/service_list_query.go#L60-L77) | Bounded audit query; maps `a.Date` to created and `a.Updated` to updated in sorting/filtering. |
+| **Service Research**| `Service.QueryResearch`| [`internal/core/service_list_query.go#L79-L95`](../../internal/core/service_list_query.go#L79-L95) | Bounded research query; default sort `-created`, sorts on portable source ID as tie-breaker. |
+| **Service Threads** | `Service.QueryThreadViews`| [`internal/core/service_list_query.go#L97-L129`](../../internal/core/service_list_query.go#L97-L129)| Bounded Thread query; includes repository graph health and graph problems in view hash. |
+| **Service Findings**| `Service.QueryFindingPage`| [`internal/core/service_list_query.go#L131-L147`](../../internal/core/service_list_query.go#L131-L147)| Bounded finding query; rejects date filtering/sorting, keys by `audit_id.code`. |
+| **CLI Dispatch** | `cli.renderListPage` | [`internal/cli/listquery.go#L64-L77`](../../internal/cli/listquery.go#L64-L77) | Dispatches paged lists to typed or projected JSON; preserves legacy `renderList` when `page == nil`. |
+| **CLI Projection** | `render.ProjectedPageJSONWithProblems` | [`internal/cli/render/columns.go#L351-L380`](../../internal/cli/render/columns.go#L351-L380) | Emits projected rows with `page` metadata (`wire.ToListPageJSON`), independent of selected columns. |
+| **Wire Envelopes** | Typed Envelopes | [`internal/wire/envelopes.go#L36,L745,L780,L811,L908`](../../internal/wire/envelopes.go#L36) | All 6 typed envelopes incorporate optional `Page *ListPageJSON` (`json:"page,omitempty"`). |
+| **Wire Metadata** | `wire.ListPageJSON` | [`internal/wire/list_query.go#L9-L25`](../../internal/wire/list_query.go#L9-L25) | Wire representation of pagination metadata and next cursor token. |
+| **Recovery Advice** | `core.MissingPlanningIdentityError` | [`internal/core/thread_apply.go#L98-L105`](../../internal/core/thread_apply.go#L98-L105) | Emits actionable guidance distinguishing existing config migration from markerless tree init. |
+| **Recovery Producer**| `core.ComposeThreadApplyPlan` | [`internal/core/thread_apply.go#L203-L209`](../../internal/core/thread_apply.go#L203-L209) | Fails closed with `MissingPlanningIdentityError` if `PlanningRepoID == ""`. |
+| **Recovery Producer**| `core.PrepareThreadApply` | [`internal/core/thread_apply.go#L335-L350`](../../internal/core/thread_apply.go#L335-L350) | Revalidates snapshot repo ID against plan repo ID; returns `ErrConflict` on mismatch. |
+| **Recovery Store** | `store.FS.currentPlanningIdentity` | [`internal/store/threadapply.go#L206-L221`](../../internal/store/threadapply.go#L206-L221) | Re-reads configuration under lock; returns `MissingPlanningIdentityError` if ID is absent. |
+| **Recovery Config** | `config.verifyPlanningRepoID` | [`internal/config/config.go#L298-L320`](../../internal/config/config.go#L298-L320) | Enforces opt-in verification; generates contextual recovery command with POSIX quoting. |
+| **Recovery Config** | `config.planningIdentityRecoveryCommand` | [`internal/config/config.go#L324-L333`](../../internal/config/config.go#L324-L333) | Formats `tskflwctl -C <root> config migrate` or `tskflwctl init --path <root> --taskflow-root <tree> --no-register`. |
+| **Recovery Mutator**| `config.migrateUnlocked` | [`internal/config/migrate.go#L85-L147`](../../internal/config/migrate.go#L85-L147) | Backfills ID via non-destructive line insertion (`insertTopLevelKey`), preserving comments/tables. |
+
+---
+
+### Mandatory evidence floor ledger
+
+#### Floor 1: Real CLI paging workflow across all six surfaces
+
+Tested with standalone compiled CLI binary `/tmp/tskflwctl` against a real isolated planning corpus (`/tmp/audit_probes_6gje9v15sjjm/work_repo`). Each surface was queried with non-default query flags for Page 1 (typed JSON), continued with projected JSON (`--json -c ...`) using `page.next_cursor` for Page 2, challenged with an in-corpus hostile edit, and verified upon restoration:
+
+| Surface | Page 1 Typed Query (Non-default flags) | P1 Result | Page 2 Projected Query (`--json -c ...`) | P2 Result | Hostile Probe (Inter-page edit) | Hostile Result | Restored Query |
+| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
+| **Tasks** | `task list --all --limit 2 --sort created --search task --json` | Exit `0`; ret 2, match 3, cursor issued | `task list --all --limit 2 --sort created --search task --json -c id,slug,status --cursor <c>` | Exit `0`; ret 1, match 3, cursor omitted (final) | Mutated description in `6gje00000001-alpha.md` | Exit `14` (`ErrConflict`), stderr: `conflict: matching list results or diagnostics changed; restart the query without a cursor` | Exit `0` |
+| **Epics** | `epic list --limit 2 --sort -created --search epic --json` | Exit `0`; ret 2, match 3, cursor issued | `epic list --limit 2 --sort -created --search epic --json -c id,status --cursor <c>` | Exit `0`; ret 1, match 3, cursor omitted (final) | Mutated description in `01-core-epic.md` | Exit `14` (`ErrConflict`), stderr: `conflict: matching list results or diagnostics changed...` | Exit `0` |
+| **Audits** | `audit list --all --limit 2 --sort id --updated-since 2026-01-01 --json` | Exit `0`; ret 2, match 3, cursor issued | `audit list --all --limit 2 --sort id --updated-since 2026-01-01 --json -c id,slug,bucket --cursor <c>` | Exit `0`; ret 1, match 3, cursor omitted (final) | Mutated area header in `6gje00000011-first.md` | Exit `14` (`ErrConflict`), stderr: `conflict: matching list results or diagnostics changed...` | Exit `0` |
+| **Research** | `research list --limit 2 --sort name --search res --json` | Exit `0`; ret 2, match 3, cursor issued | `research list --limit 2 --sort name --search res --json -c id,slug --cursor <c>` | Exit `0`; ret 1, match 3, cursor omitted (final) | Mutated description in `6gje00000021-res1.md` | Exit `14` (`ErrConflict`), stderr: `conflict: matching list results or diagnostics changed...` | Exit `0` |
+| **Threads** | `thread list --limit 2 --sort -id --search th --json` | Exit `0`; ret 2, match 3, cursor issued | `thread list --limit 2 --sort -id --search th --json -c id,slug,status --cursor <c>` | Exit `0`; ret 1, match 3, cursor omitted (final) | Mutated description in `6gje00000031-th1.md` | Exit `14` (`ErrConflict`), stderr: `conflict: matching list results or diagnostics changed...` | Exit `0` |
+| **Findings** | `audit findings --limit 2 --sort id --search finding --json` | Exit `0`; ret 2, match 4, cursor issued | `audit findings --limit 2 --sort id --search finding --json -c audit,code,title --cursor <c>` | Exit `0`; ret 2, match 4, cursor omitted (final) | Mutated finding title in `6gje00000011-first.md` | Exit `14` (`ErrConflict`), stderr: `conflict: matching list results or diagnostics changed...` | Exit `0` |
+
+#### Floor 2: Replay printed recovery from outside the target with ambient configuration
+
+Executed from independent ambient directory `/tmp/audit_probes_6gje9v15sjjm/recovery_tests/ambient` with isolated `TSKFLW_CONFIG_HOME`:
+
+1. **Scenario A: ID-less marker (`target_a` with `.tskflwctl.toml` containing `taskflow_root = "."` and unknown key `unknown_custom_field = "preserved_value"`):**
+   - Running pointer migration from `pointer_a` failed with exit code 11 (`ErrValidation`), printing recovery guidance:
+     `tskflwctl -C '/private/tmp/audit_probes_6gje9v15sjjm/recovery_tests/target_a' config migrate`
+   - Replaying the printed command externally exited 0, successfully minting a durable repo ID in `target_a/.tskflwctl.toml`.
+   - Verified that `unknown_custom_field = "preserved_value"` was preserved byte-for-byte; verified SHA-256 digests of all task files in `tasks/` before and after were identical.
+   - Verified no space was registered in `$TSKFLW_CONFIG_HOME/spaces.toml`.
+   - Verified that subsequent deliberate pointer migration on `pointer_a` succeeded and recorded `planning_repo_id`.
+   - Verified old-plan refusal: applying an old plan authored against a foreign/previous repo ID (`old-foreign-id-1234`) was rejected with exit code 14 (`ErrConflict`):
+     `conflict: apply plan belongs to planning repository "old-foreign-id-1234", current repository is "6gjf15rs5rtc"`.
+2. **Scenario B: Markerless nested tree (`target_b_nested` with `planning/tasks/` and `planning/epics/`, no `.tskflwctl.toml`):**
+   - Running pointer migration from `pointer_b` failed with exit code 11 (`ErrValidation`), printing recovery guidance:
+     `tskflwctl init --path '/tmp/audit_probes_6gje9v15sjjm/recovery_tests/target_b_nested' --taskflow-root 'planning' --no-register`
+   - Notice: the recovery advice correctly identified the nested `planning` subdirectory instead of assuming flat `.`.
+   - Replaying the printed command externally exited 0, creating `target_b_nested/.tskflwctl.toml` with `taskflow_root = "./planning"`.
+   - Verified that NO empty flat tree was created at `./tasks` or `./epics`.
+   - Verified that original planning documents in `planning/tasks/` and `planning/epics/` were untouched byte-for-byte.
+   - Verified no space was registered in `$TSKFLW_CONFIG_HOME/spaces.toml`.
+3. **Scenario C: Opted-in missing target marker (`pointer_c` with `planning_repo_id = "wanted-identity-xyz"`, target has no marker):**
+   - Accessing `task list -C pointer_c` exited 14 (`ErrConflict`), stating the target carries no ID while the pointer expects `"wanted-identity-xyz"`, and recommending:
+     `tskflwctl init --path '/tmp/audit_probes_6gje9v15sjjm/recovery_tests/target_c_markerless' --taskflow-root '.' --no-register`
+   - Replaying the printed command initialized the target with a new ID and `--no-register`.
+   - Verified that `pointer_c/.tskflwctl.toml` was NOT modified and did NOT silently rebind.
+   - Re-running `task list -C pointer_c` again failed with exit code 14 (`ErrConflict`):
+     `refusing to use a different planning repo`, proving the opt-in invariant held and prevented silent rebinding.
+
+#### Floor 3: Compiler-valid mutation ledger
+
+| Invariant Class | Exact Mutation Location | Mutation Content | Intended Test | Observed Test Failure | Restoration Result |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| **Primary Invariant:** Pointer verification does not silently adopt mismatched target | [`internal/config/config.go#L299`](../../internal/config/config.go#L299) | In `verifyPlanningRepoID`, added `\|\| (gotID != "" && wantID != "")` to bypass mismatch check. | `TestPointerRecoveryHintsDoNotSilentlyRebind` | **FAIL:** `thread_recovery_test.go:181: opted-in pointer silently adopted the new target identity: <nil>` across all 4 bound configurations. | Restored baseline; test PASS (0.16s). |
+| **Codex Cross-check:** List query enforces matching query parameters on continuation | [`internal/core/list_query.go#L182`](../../internal/core/list_query.go#L182) | In `queryList`, bypassed query digest validation by replacing `if cursor.Query != query` with `if false && cursor.Query != query`. | `TestListQueryRefusesChangedViewsAndForeignQueries` | **FAIL:** `list_query_test.go:119: foreign query: conflict: matching list results or diagnostics changed; restart the query without a cursor`. | Restored baseline; test PASS (0.00s). |
+
+---
+
+### Surviving-hypothesis ledger
+
+All five hostile angles were settled as **falsified** with reproducible evidence:
+
+1. **"A cursor succeeds after a matching row or read diagnostic changed, or loses a row after rename": FALSIFIED.**
+   - *Evidence:* When a matching row's fields (description, title, dates, etc.) were altered between pages, replaying the cursor was rejected with exit code 14 (`ErrConflict`). When a malformed file (`tasks/malformed.md`) was introduced, the new load diagnostic altered the view hash and caused immediate exit code 14 refusal. When a task was renamed, its new slug and filename altered the view digest; querying Page 2 with the prior cursor failed with exit code 14 rather than silently skipping or losing a row.
+2. **"`--json -c` drops the continuation or makes it depend on the chosen columns": FALSIFIED.**
+   - *Evidence:* Running `task list --all --limit 2 --sort id --json` produced a cursor token `eyJ2Ijox...`. Running with `-c id,slug` and `-c id,status,epic` produced byte-identical cursor tokens and identical `page` metadata (`order`, `limit`, `returned`, `matched`). The cursor continuation depends solely on the matching entity digests and query parameters, completely invariant to projected column selection.
+3. **"A page hides a failed record, produces clean exit status for partial reads, or hides unhealthy graph state when its Thread results are empty": FALSIFIED.**
+   - *Evidence:* Introducing an unreadable task file during a paged query (`--limit 1`) retained the full `unreadable` diagnostic slice in the JSON output and exited with exit code 11 (`ErrValidation`), NOT clean code 0. For Threads, introducing a broken dependency while querying an empty result set (`thread list --limit 1 --search "no matches"`) retained `graph_health: "broken"`, full `graph_problems` entries, and printed diagnostic notices in human output.
+4. **"An emitted `config migrate` is unusable in the state recommending it, or printed initialization silently selects an empty flat tree rather than existing nested data": FALSIFIED.**
+   - *Evidence:* Emitted commands use robust POSIX single-quoting via `planningIdentityRecoveryCommand` (e.g. `'tskflwctl -C '\''<path>'\'' config migrate'`), preserving paths with spaces and quotes. For nested repositories lacking a marker, `config migrate` detects the existing subdirectory and explicitly outputs `--taskflow-root 'planning' --no-register`, preserving the existing directory structure and preventing accidental flat-root scaffolding.
+5. **"Recovery changes pointer identity/unknown configuration fields, registers a space despite `--no-register`, or permits an old plan to be adopted after regenerating identity": FALSIFIED.**
+   - *Evidence:* `backfillID` and `backfillPointerID` use non-destructive `insertTopLevelKey`, preserving existing TOML comments and custom keys (`unknown_custom_field`). `--no-register` completely avoided modifying `$TSKFLW_CONFIG_HOME/spaces.toml`. Opted-in pointers were not modified during target recovery. Applying an old materialized Thread plan after regenerating target identity was rejected with exit code 14 (`ErrConflict`).
+
+---
+
+### Systemic review pass
+
+A second adversarial review pass across shared abstractions and adjacent components confirmed:
+1. **Generic Helpers & Adapter Assumptions:**
+   `core.queryList[T any]` is clean of adapter assumptions. It receives an in-memory slice from existing store methods, clones/allocates its own internal entry structures, and never mutates caller slices. The tie-breaker sorting (`cmp.Compare(a.row.id, b.row.id)` then `cmp.Compare(a.digest, b.digest)`) guarantees total determinism regardless of filesystem traversal ordering.
+2. **Cost & Volume Claims:**
+   The implementation and documentation are honest regarding performance: bounds apply strictly to returned rows and wire envelopes, not filesystem scans or I/O. Verification of the 100-task benchmark confirmed that full JSON emitted 19,836 bytes while five projected rows emitted 548 bytes (97.2% reduction in output volume), demonstrating payload savings without misleading claims of avoided reader work.
+3. **Date Filtering Semantics:**
+   `--updated-since` is documented and implemented as an inclusive filter on own `updated_at` (falling back to creation date / audit date), not an incremental event feed. Invalid dates fail validation. Audit findings strictly reject date filters and date sorting up front (`ErrValidation`), preventing confusing or misleading query states.
+4. **Machine Revision Compatibility:**
+   Machine contract revision 1.85 is strictly additive. Default queries without pagination flags leave `q.Active() == false`, omitting the `page` field and matching pre-existing JSON envelopes byte-for-byte.
+
+---
+
+### Mandatory isolation attestation
+
+```text
+sandbox_path=/private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.y4y0Bd
+git_dir=/private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.y4y0Bd/.git
+baseline_commit=b7e8b146015b217b300f0370882e6f2a0fa7505f
+source_blob=bbbe62e78600a964227bfa24ba4b741da199181f
+source_fingerprint=7ba2980abed1a909891dcf985ae9a9e94962c30f
+deliverable=planning/audits/6gje9v15sjjm-2026-10-10-bounded-planning-queries-and-identity-recovery-implementation-antigravity.md
+deliverable_changed=true
+transfer=pending
+```
+
+## Owner reconciliation (2026-10-10)
+
+Report received in the source checkout. No additional finding needs implementation from this
+report. Its ready/no-findings verdict is bounded by the probes recorded above, not proof of every
+output branch. In particular, hostile angle 3 was only partially falsified: typed JSON and human
+output retained empty-list graph context, but projected JSON and CSV/name/table did not. The
+independent [Codex M1](6gje9v0x5g5d-2026-10-10-bounded-planning-queries-and-identity-recovery-implementation-codex.md)
+reproduced that gap; owner regressions confirmed it, and the compact paths are now corrected.
+Codex L1 likewise exposed malformed digest classification outside this report's cursor probes.
+
+Both reviewers' recovery evidence supports preserving topology, surgical configuration edits,
+and pointer refusal. This report's synthetic foreign-ID plan proves mismatch rejection, not a
+captured pre-recovery plan round trip; Codex separately executed the latter and fresh recomposition.
+The existing alias task remains the sole open follow-up. The attestation above records pending
+transfer and contains no final transfer receipt; source delivery is observed, not independently
+claimed as verified here. Sandbox-only source links are normalized to repository-relative links
+for durable navigation; cited line numbers describe the captured review snapshot.

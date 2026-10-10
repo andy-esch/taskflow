@@ -1,9 +1,10 @@
 ---
 schema: 1
 id: 6gje9v0x5g5d
-bucket: open
+bucket: closed
 area: bounded-planning-queries-and-identity-recovery-implementation-codex
 date: "2026-10-10"
+updated_at: "2026-10-10"
 ---
 # Audit: Bounded planning queries and identity recovery — codex — 2026-10-10
 
@@ -193,5 +194,151 @@ attestation. A no-findings verdict needs hostile evidence; a blocked review is i
 
 ## Reviewer report
 
-Review not yet performed. Replace this line with your report; do not pre-settle findings or turn
-the owner's checked task criteria into evidence that invariants hold.
+Verdict: **changes requested**. Both independent passes are complete. M1 (medium) and L1 (low) remain **open** for owner triage. The primary pass covered deterministic queries, real paging on all six surfaces, optional wire metadata, and executable recovery. The separate systemic pass challenged shared projection/rendering, malformed cursor classification, duplicate/permuted portable records, and recovery state before and after action. No implementation fixes were made.
+
+Evidence is the captured independent sandbox, a freshly built binary, focused tests, real subprocess stdout/stderr/exits, and disposable fixtures outside the Git tree. Owner race/lint/build/drift/planning evidence is inherited only where stated. No sibling report was read.
+
+### Findings
+
+#### M1. Empty bounded Thread projections hide the repository graph verdict · **Status:** fixed (PR #293)
+
+**File:** internal/cli/thread.go:237 | **Component:** cli-render
+
+**Root cause and production path.** `QueryThreadViews` preserves repository-global `GraphHealth` and `GraphProblems` in `ThreadListView` (`service_list_query.go:97–128`). The typed Thread renderer maps them into the envelope (`wire/thread.go:146`), but the projected caller passes only rows, Thread read problems, and page metadata to `ProjectedPageJSONWithProblems` (`cli/thread.go:237–239`). That shared helper has no repository-context input (`render/columns.go:351–371`). When a valid query removes every row, even requesting `graph_health` cannot publish the global verdict. Row-oriented CSV/name paths likewise render no graph context (`cli/thread.go:245–269`). The healthy-read exit remains 0, so neither stdout nor stderr tells those consumers the graph is broken.
+
+**Exact reproduction.** In the retained three-task/three-Thread real CLI fixture, add `depends_on: [6gje9v0x5j00]` to the task `6gje9v0x5g00-alpha.md`, where that dependency does not exist. Run the fresh binary with `-C <fixture> thread list --json --limit 1 --search 'no matches'`. It exits 0 and returns `threads: []`, `page.matched: 0`, `graph_health: "broken"`, and a `missing-dependency` graph problem. Repeat with `-c id,graph_health,projection_health`: exit 0, stdout contains only schema version, empty Threads, and page; stderr is empty. `-o csv -c id,graph_health` emits only its header and `-o name` emits nothing, again with empty stderr. The ordinary human renderer still reports the missing dependency. The task edit was restored.
+
+**Consequence and bound.** Agents using the advertised compact projected path lose the explicitly promised unhealthy-empty-query context and cannot distinguish this result from the healthy empty projection. This is an opt-in query-contract gap, not a claimed change to the legacy default shape or a request to make every broken-graph read fail. The existing `TestThreadQueryKeepsUnhealthyGraphVisibleOnEmptyPage` regression at `cli/listquery_test.go:182` exercises typed JSON only. Raw process outputs are retained as `empty-broken-thread-{typed,projected,human,csv,names}.{stdout,stderr}`; exact argv and exit values are in `hostile-probes.json`.
+
+**Recommendation:** Preserve repository graph context outside projected Thread rows for opt-in queries and render global diagnostics on stderr for row streams; add empty broken-graph coverage for projected JSON and CSV/name output.
+
+**Resolution:** Query-enabled Thread projections now retain graph_health and
+    canonical graph_problems outside selected rows; name/table/CSV graph
+    warnings use stderr. Real adapter tests cover empty/nonempty pages, healthy
+    context, clean streams, read-only behavior, and unchanged legacy
+    projections. The regression failed on the reviewed implementation and passes
+    after the fix.
+
+#### L1. Malformed view digests are classified as changed-view conflicts · **Status:** fixed (PR #293)
+
+**File:** internal/core/list_query.go:233 | **Component:** core-query
+
+**Root cause and consequence.** `decodeListCursor` validates digest length but never verifies the hexadecimal SHA-256 encoding emitted by `listDigest` (`list_query.go:213–219`, `:233–236`). A valid query digest plus a 64-byte non-hex view string passes decoding; `queryList` then reports a changed matching view (`:185–186`) instead of malformed input. This violates the explicit cursor-v1 validation classification: clients see conflict/restart exit 14 for corrupt input rather than validation exit 11. Continuation is still refused; the issue is classification and misleading recovery advice.
+
+**Exact reproduction.** Obtain a valid cursor from the real fixture using `task list --json --limit 1 --sort name --search bike`. Base64url-decode its JSON, preserve `v`, `q`, and `o`, replace `s` with `"g"` repeated 64 times, and encode it again. Submit that token with identical query arguments. The fresh binary exits **14** with error code `conflict` and message `matching list results or diagnostics changed; restart the query without a cursor`. The corpus did not change. The analogous non-hex `q` returns 11 only because the foreign-query comparison catches it, rather than malformed decoding. Unsupported versions, oversized tokens, unknown fields, and invalid offsets do return 11.
+
+**Evidence.** `hostile-nonhex-view.stdout`, `.stderr`, and `hostile-probes.json` retain the exact payload-producing script, argv, raw error, and process classification; `hostile_probes.py` is the executable reproduction. This is a bounded format-validation defect, not evidence of accepted stale pages.
+
+**Recommendation:** Validate both cursor digests as the expected 32-byte hexadecimal values before query/view comparisons, and add a malformed-digest process-exit regression.
+
+**Resolution:** Cursor decoding now requires canonical lowercase SHA-256 hex for
+    both query and view digests before comparison. Pure decoder/query tests and
+    actual subprocess tests cover non-hex, wrong-length, and noncanonical
+    values, requiring exit 11 with a validation error rather than exit 14.
+    Issued cursor v1 encoding is unchanged.
+
+### Verified consumer inventory
+
+The sandbox baseline captures base `8c1a86e29a6b4406b1e3fcea0d3ca6a263313fb8`, implementation checkpoint `883ff2386c82a20c1bd8c5c38e73d79ba281909e`, and the current review/planning overlay. Shipped symbols below were read in that snapshot; planning task criteria were not treated as proof.
+
+| Consumer / location | Verified boundary |
+| --- | --- |
+| `internal/core/list_query.go:30`, `:45`, `:55`, `:71`, `:99`, `:213`, `:222` | `ListQuery`, `ListPage`, `ListResult`, validation, `queryList`, full-value/view digesting, and versioned cursor decoder. Zero query bypasses query sorting/page metadata. Limits/search/cursor byte bounds are at `:17`. |
+| `internal/core/service_list_query.go:12`, `:31`, `:60`, `:79`, `:97`, `:131` | `Service.QueryTasks`, `QueryEpics`, `QueryAudits`, `QueryResearch`, `QueryThreadViews`, `QueryFindingPage` compose existing entity filters. Row IDs use `RecordSource.ID`; findings use `AuditID.Code`; filters retain their supplied representation. |
+| `internal/core/entity_read.go:29`, `:37`; `internal/core/finding.go:131`, `:154`; `internal/core/lint_source.go:64` | Source-aware loaded records, audit source identity, and canonical diagnostic-set ordering. No query helper discovers filesystem paths. |
+| `internal/cli/task.go:236`, `epic.go:294`, `audit.go:140`, `audit.go:194`, `research.go:269`, `thread.go:223` | All six production command paths call the query boundary. `internal/cli/listquery.go:21`, `:40`, `:64` bind flags, classify explicit invalid inputs, and implement `renderListPage`. |
+| `internal/cli/render/list_query.go:11–46`; `render/columns.go:351`; `cli/listmode.go` | Typed page renderers and shared projected renderer attach the optional page; normal row formats emit truncation notices on stderr. Thread's extra context has the M1 seam. |
+| `internal/wire/list_query.go:9`, `:19`; `wire/envelopes.go:36`, `:745`, `:780`, `:811`, `:908`; `wire/thread.go:133` | `ListPageJSON` and mapper expose order/limit/returned/matched/search/updated_since/next_cursor; six typed envelopes have `page,omitempty`. Typed Threads also preserve global graph context at `wire/thread.go:146`. |
+| `internal/tui/commands.go:75`, `:156`, `:241`, `:369`; `tui/thread_projection.go:26` | Existing TUI callers still call unbounded `ListTasks/ListEpics/ListAudits/ListResearch/ListThreadViews`; none of these TUI files is changed by this implementation. |
+| `internal/core/thread_apply.go:98`, `:203`, `:208`, `:335`, `:346`; `store/threadapply.go:206`, `:218` | `MissingPlanningIdentityError` shared by `ComposeThreadApplyPlan`, `PrepareThreadApply`, and `FS.currentPlanningIdentity`; durable-ID and guarded-root refusal remain separate from path discovery. |
+| `internal/config/config.go:281`, `:298`, `:324`; `config/migrate.go:85`, `:122–140` | Pointer target anchoring, `verifyPlanningRepoID`, shell-quoted `planningIdentityRecoveryCommand`, and `migrateUnlocked` use actual marker/layout evidence. Recovery targets the planning configuration, not an implementation pointer. |
+| `internal/core/list_query_test.go:97`, `:165`, `:203`; `cli/listquery_test.go:58`, `:112`, `:141`, `:182`, `:200`; `cli/thread_recovery_test.go:87`, `:141`, `:196` | The named query, duplicate/source-identity, real-adapter, unhealthy-empty, output-continuation, Thread recovery, pointer non-rebinding, and governing-marker tests exist and execute in focused packages. M1's test covers typed empty output only. |
+| `internal/wire/list_query_test.go:14`; `wire/wire.go:360–364` | Nondefault page semantic validation for all six typed list definitions; machine revision **1.85 ADDITIVE** declares opt-in additions and preserved defaults. |
+
+### Hostile-probe and mutation ledger
+
+Fresh binary: `/private/tmp/taskflow-planning-audit.gmpGg6/tskflwctl`, built from the captured sandbox with `go build -buildvcs=false -o <binary> ./cmd/tskflwctl`. Evidence, fixtures, isolated module/build/temp caches, and an isolated `TSKFLW_CONFIG_HOME` for real CLI processes are under `/private/tmp/taskflow-planning-audit.gmpGg6`. CLI processes run from its `outside/` directory with the **real registered unrelated `ambient` space** selected. Explicit target arguments, not cwd, select the tested repositories.
+
+| Probe | Raw outcome / disposition |
+| --- | --- |
+| `go test ./internal/core ./internal/config ./internal/cli ./internal/wire -count=1` | Exit 0 initially and after probe restoration (`focused.log`, `focused-restored.log`). Broader owner race/lint/drift/planning gates were inherited, not independently rerun. |
+| Real paging on tasks, epics, audits, research, Threads, and findings | Each three-row corpus: legacy JSON has no page; query `--limit 1 --sort name --search '  BiKe  '` plus inclusive `--updated-since 2026-10-08` where supported returns one row, normalized `bike`, matched=3, and a token. Typed first → projected second with different selected fields → typed final all exit 0 and cover all three occurrences; final has no token. Human/table/CSV/name remain row streams with truncation notices on stderr. Exact argv/stdout/stderr/exit are in `cli-probes.json` and per-command stream files. |
+| Matching value edit before offset on **each** surface; then a new malformed-record diagnostic | Every changed-view and new-diagnostic continuation exits **14**. Restoring record bytes permits continuation. Restarted partial page and projected partial continuation both preserve `unreadable` and exit **11** on each surface; no falsely healthy partial result. Failed input diagnostic is the deliberately malformed YAML fixture. |
+| Search membership removal, matching-file rename, output-format/columns change, restored ABA, query kind/sort/limit changes | Membership/rename refuse 14; restored ABA and trim/lowercase-normalized search resume 0. Kind/sort/limit mismatch refuses 11. These are actual subprocess results in `hostile-probes.json`. |
+| Empty/exact-boundary/final/sort-only-unbounded pages, 2049-byte cursor, 258-byte UTF-8 search, findings date filter | Empty/exact/final have no token; sort-only page limit is 0. Oversized cursor/search and findings date request refuse 11. Unsupported version, unknown payload field, zero/final offset refuse 11. Non-hex view digest returns 14 (L1). |
+| Same-source-ID duplicates and all six input permutations through `Service.QueryResearch` | Reviewer-only portable reader uses opaque `db://` locations and conflicting declarations. Three occurrences retained, identical first page/cursor across permutations, no caller value/list mutation. A hidden matching tag edit refuses conflict; an unchanged nonmatching addition resumes. `portable-hostile.log` records success; temporary test is archived as `reviewer_query_probe_test.go` outside Git and removed. Shipped portable source-ID assertions at `core/list_query_test.go:203` also pass. |
+| Nondefault optional wire page branch | `go test ./internal/wire -run '^TestListPageMetadataIsOptionalAndValidatesOnAllTypedLists$' -count=1 -v` exits 0. Schema validators test all six envelopes with order/limit=7/returned=7/matched=19/search/date/token; limit 1001 is rejected and removing page validates legacy shape (`wire-semantic-pages.log`). This is semantic validation, not only in-process shape inspection. |
+| Own-date versus activity counterexample | Remove the epic's own updated_at (created 2026-10-08); update a member task to 2026-10-10; `epic list --json --sort updated --search alpha --updated-since 2026-10-09` returns no epic, exit 0. Rollup activity does not substitute for the own date (`own-date-versus-rollup.json`). |
+| Empty broken-graph query in typed/projected/human/CSV/name output | Typed JSON and human retain global graph evidence. Projected JSON, CSV, and name hide it, exit 0 with empty stderr (M1). Task edit restored; exact raw streams retained. |
+| **Primary compiler-valid mutation:** `list_query.go` digest initializer `{scope, q.Sort, q.Limit, q.Search, q.UpdatedSince}` → `{scope, q.Sort, 0, q.Search, q.UpdatedSince}` | `go test ./internal/core -run '^TestListQueryRefusesChangedViewsAndForeignQueries$' -count=1 -v` compiles and exits 1 at `list_query_test.go:123`, `changed limit: <nil>`. **Killed by the intended query-binding assertion.** Restore exact baseline bytes; same command exits 0 (`limit-binding-{mutation,restored}.log`). This independently challenges a route distinct from the owner's disabled-view-guard mutation. |
+| **Cross-lens compiler-valid mutation:** only in `planningIdentityRecoveryCommand`, `if tree == ""` → `if tree != "."`, forcing a supplied nested tree to flat | `go test ./internal/cli -run '^TestPointerRecoveryHintsDoNotSilentlyRebind$' -count=1 -v` compiles and exits 1 at `thread_recovery_test.go:172`: nested markerless bound/unbound recovery selects the wrong tree. **Killed by intended topology assertion**, not a syntax/build failure. Restore baseline bytes; same test exits 0 (`nested-recovery-{mutation,restored}.log`). This independently reproduces the critical route rather than claiming the owner's probe as mine. |
+
+### Executed recovery and state preservation
+
+`recovery_probes.py` executes printed commands through POSIX argv parsing and the fresh binary, substituting the core's explicit placeholders only when the message is deliberately conditional. Targets contain spaces, double quotes, and apostrophes. Before action, it independently snapshots SHA-256 document bytes and directory topology in all five entity trees, implementation-pointer bytes, and home registry bytes. The registered ambient repository is proven distinct by a control read returning no tasks.
+
+| Reachable producer/state | Executed printed advice and proof |
+| --- | --- |
+| Direct ID-less marker, nested `planning/` | Apply refuses 11; printed target `config migrate` executes 0. Marker comments, unknown key/comment, and taskflow_root survive. Document bytes/topology and home remain identical. |
+| Direct markerless nested tree | Apply refuses 11; printed explicit `init --path <target> --taskflow-root planning --no-register` executes 0. No flat tasks/ tree is created; existing documents and registration remain unchanged. |
+| Opted-in pointer, missing target marker | Compose refuses 14; actual configuration-local init hint executes 0. Target topology preserved, pointer bytes unchanged, no registration. The opted-in pointer continues refusing the new identity with 14. |
+| Opted-in pointer, target marker lacks ID | Compose refuses 14; printed target migration executes 0. Unknown marker fields survive; pointer remains byte-identical and still refuses regenerated identity. |
+| Legacy pointer, markerless nested target | Pointer `config migrate` refuses 11; emitted init hint executes 0 without pointer changes. Only a subsequent **deliberate** pointer migration adds the new expectation; pointer comments/unknown field survive, next discovery/read succeeds. |
+| Direct ID-less custom `data notes/` layout | Printed target migration executes 0 and retains the custom tree, semantic bytes, unknown keys, and home registration. |
+
+For **all six cases**, recovery changes the durable identity, old materialized plan apply refuses **14**, fresh recomposition/apply succeeds **0**. A separate byte-snapshot replay verifies old-plan refusal writes no semantic documents and retrying the fresh applied plan is idempotent (`recovery-old-plan-no-write.json`). Exact commands, raw streams, initial snapshots, and identity receipts are in `recovery-probes.json`, `*-before.json`, and `recovery-summary.json`; useful-looking messages were not accepted as recovery proof.
+
+The known data-directory alias mismatch remains pre-existing and separately tracked by task `6gjdgpq17sr6`. Independent alias probe confirms new advice names the **existing governing configuration** and offers no second-marker init. Following that advice by changing only the pointer address to the governing directory (keeping expected ID) succeeds, creates no second marker, and deliberately leaves alias identity parity unfixed (`alias-advice-replay.json`). It is not a new finding here.
+
+### Systemic conclusion and surviving hypotheses
+
+The primary query guards withstand hostile full-value edits, diagnostics, renames, foreign queries, duplicates, and permutations. Recovery survives unrelated ambient context and explicit state-preservation checks. The systemic seam is the split between complete `ThreadListView` context and a generic rows/problems/page renderer (M1): a correct core value can become misleading output. Malformed cursor field validation also stops short of its public classification promise (L1). Shipped typed-only empty-graph and length-only malformed-cursor tests explain these gaps; they are separate from the demonstrated reachable defects.
+
+- **Falsified in the captured implementation:** successful continuation after a matching loaded-value/diagnostic change; hidden selected-column edits escaping binding; source declaration replacing canonical sorting identity; duplicate occurrence loss or permutation-dependent order; query reordering/mutating its caller list; a higher member activity date making an old epic match; registry/pointer mutation as a side effect of tested recovery; adoption of an old plan after regenerated identity.
+- **Compatibility/cost bound:** zero-query legacy shapes pass focused/golden tests and real six-surface reads. TUI callers remain on original List methods. Independent 100-task fixture measures full JSON **20,036 bytes** versus five projected rows with continuation **693 bytes**, **96.54% smaller**. This verifies output volume; it does not measure tokenization or avoided reader work. The owner's 19,836/548 byte fixture is separate evidence, not my exact reproduction. Query services still perform the original corpus read before bounding returned rows.
+- **Intentional surviving behavior:** output columns/format do not bind continuation; existing filter representation must be repeated; unchanged nonmatching edits and restored ABA views may resume; cursors carry no write authority and do not lock a snapshot; own-date filtering is not a complete edit feed.
+- **Unresolved limits:** exhaustive backend/internal-data variants, races during an independent read/render, all possible filesystem/symlink/worktree recovery layouts, and transport behavior beyond the local CLI. These are not claimed tested. The already tracked alias bug remains open outside this audit.
+- **Inherited owner evidence:** checkpoint full race suite, lint/build, CLI/schema drift, and planning lint. No new retrospective publication smoke pass or equality with published archive bytes is claimed by this review.
+
+### Isolation attestation and guarded delivery
+
+The helper created an independent `--no-hardlinks` clone before implementation inspection and captured the complete current source. All inspection, builds, tests, report edits, and mutations took place in that sandbox; fixtures/logs/caches are outside its Git tree. Both temporary production mutations are restored to baseline bytes, and the reviewer-only test file is removed. No additional reviewer commit or staging was performed. Only this assigned audit differs; the sibling report was not read.
+
+Observed helper verification (`verify-initial.log`):
+
+```text
+sandbox_path=/private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.Bry1hL
+git_dir=/private/var/folders/16/5bk6wc255gn_1jpwz4qpyn_c0000gn/T/isolated-review.Bry1hL/.git
+baseline_commit=721ee1a58558766855b8faca636adff53f955019
+source_blob=d548d7de747c2082ab897df7e3fa72adb238df8e
+source_fingerprint=7ba2980abed1a909891dcf985ae9a9e94962c30f
+deliverable=planning/audits/6gje9v0x5g5d-2026-10-10-bounded-planning-queries-and-identity-recovery-implementation-codex.md
+deliverable_changed=true
+transfer=pending
+```
+
+Final audit lint, helper verification, and inspected one-file diff are retained as `audit-lint.json`, `verify-final.log`, and `audit-final.diff` in the evidence directory. Tool-owned creation receipts show M1 and L1 both open. The baseline above, resolved in-tree Git directory, and captured source fingerprints are the helper's attestation, not a reviewer-created worktree claim.
+
+**Guarded transfer result on delivery: `succeeded`.** This delivery postcondition is completed only when `scripts/isolated-review-workspace.sh transfer --sandbox <workspace>` emits `transfer=succeeded` and confirms byte equality with the assigned source audit. Its actual receipt is retained at `/private/tmp/taskflow-planning-audit.gmpGg6/transfer.log`. On refusal, this sandbox report remains incomplete and the conflict is reported instead of bypassing the guard. Sandbox and evidence remain in place until the owner confirms receipt; transfer copies only this audit and no implementation changes.
+
+## Owner triage (2026-10-10)
+
+Report received. Both findings reproduced against the reviewed implementation using new
+regressions; both warranted in-scope fixes. The verdict above describes the original snapshot,
+not the post-triage implementation; tool-owned finding dispositions record the resolutions.
+
+- M1: Query-enabled Thread projections now carry repository graph health/problems outside
+  selected rows, using the canonical wire diagnostic mapper. CSV/name/table warnings go to
+  stderr; human and typed output retain their existing context. Tests cover empty and nonempty
+  matching pages, clean stdout, healthy graph context, and unchanged legacy projections/streams.
+- L1: Both digests must be canonical lowercase SHA-256 hex before query/view comparison.
+  Decoder/query and real subprocess tests cover non-hex, wrong-length, and noncanonical encodings,
+  requiring validation (exit 11), not a changed-view conflict. Issued cursor v1 tokens are unchanged.
+
+Antigravity reported no additional findings. Its unhealthy-empty probes did not cover compact
+output and therefore do not falsify M1. Both reviewers' executed recovery evidence is consistent;
+the pre-existing alias mismatch remains tracked by task `6gjdgpq17sr6`, not folded into these fixes.
+
+Post-triage validation: `just test` (race), `just lint`, `just build`, `just docs-check`,
+planning/audit lint, and `git diff --check` pass. The rebuilt binary also reports empty
+broken-graph context in projected JSON and sends CSV diagnostics to stderr in a disposable space.

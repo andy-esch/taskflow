@@ -84,7 +84,8 @@ or Markdown details.
   does not bind the cursor: a client can resume a typed page using projected JSON. Existing
   entity filters retain their supplied representation; repeat them rather than substituting
   an equivalent alias or reordered any-of list.
-- Cursor version 1 is opaque base64url containing query/view digests and an offset. It holds
+- Cursor version 1 is opaque base64url containing canonical lowercase SHA-256 query/view
+  digests and an offset. It holds
   no plaintext IDs, paths, bodies, authorization, source revision, or persisted source-set
   witness. Unsupported versions/oversized/malformed/foreign tokens refuse with validation
   (exit 11); tokens are not authenticated capabilities. Changing the continuation encoding
@@ -100,11 +101,17 @@ or Markdown details.
   Empty/final/exact-boundary pages have no cursor; empty lists stay `[]`. Typed and projected
   JSON share metadata. Human/name/table/CSV streams remain rows; stderr notes truncation and
   directs callers to JSON for continuation. All read diagnostics remain on every page and
-  preserve partial-result exit behavior. An unhealthy empty Thread list retains graph health.
+  preserve partial-result exit behavior. Query-enabled Thread JSON, including `-c`, retains
+  repository `graph_health`/`graph_problems` outside rows even when no Threads match; row
+  streams report graph diagnostics on stderr. Graph health remains informational (exit 0
+  if the read succeeds); use `lint` for validation status. Legacy projections stay unchanged.
 - Machine revision 1.85 is **ADDITIVE**: new optional query flags and `page`, no changed default
   fields, order, or scope. Bounded returned projections do not avoid a local corpus scan.
 
 ## Implementation and validation
+
+Delivery: [PR #293](https://github.com/andy-esch/taskflow/pull/293), bundled with executable
+ID-less recovery and its independent review fixes.
 
 All six CLI surfaces call the shared query use cases and expose the same optional flags.
 Typed and projected JSON share continuation metadata; existing unbounded golden outputs
@@ -128,8 +135,17 @@ checks, planning lint, and `git diff --check` pass.
 
 Independent [Codex](../audits/6gje9v0x5g5d-2026-10-10-bounded-planning-queries-and-identity-recovery-implementation-codex.md)
 and [Antigravity](../audits/6gje9v15sjjm-2026-10-10-bounded-planning-queries-and-identity-recovery-implementation-antigravity.md)
-review briefs are prepared for the combined query/recovery PR. Implementation criteria are met;
-reviews remain pending, not settled evidence.
+reviews are delivered for the combined query/recovery PR. Codex reproduced two defects:
+empty projected/row-stream Thread queries hid repository graph context, and non-hex view
+digests reported a corpus conflict rather than malformed input. Both are corrected, with
+regressions that first failed against the reviewed implementation and now pass. Typed and
+projected empty/nonempty queries, all row streams, unchanged legacy output, healthy context,
+and corrupt query/view digest classification are covered. Cursor v1 encoding and ordering are
+unchanged; malformed encodings now fail validation before comparison.
+
+Antigravity found no additional defects; its empty-graph probes covered typed/human output,
+not the compact paths Codex found broken. Treat the no-findings verdict as bounded evidence,
+not corroboration of those omitted branches. The recovery probes from both reviewers passed.
 
 ## Out of scope
 
