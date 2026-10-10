@@ -130,6 +130,7 @@ type ThreadsEnvelope struct {
 	GraphProblems []GraphProblemJSON      `json:"graph_problems"`
 	Threads       []ThreadViewJSON        `json:"threads"`
 	Unreadable    []ThreadReadProblemJSON `json:"unreadable"`
+	Page          *ListPageJSON           `json:"page,omitempty"`
 }
 
 // ThreadReadProblemJSON is an adapter-neutral failed-record diagnostic. Identity

@@ -197,6 +197,7 @@ func newThreadListCmd(app *App) *cobra.Command {
 	var (
 		status string
 		lm     listMode
+		query  listQueryFlags
 	)
 	cols := render.ThreadColumns()
 	cmd := &cobra.Command{
@@ -215,22 +216,17 @@ func newThreadListCmd(app *App) *cobra.Command {
 					return err
 				}
 			}
-			list, problems, err := app.Svc.ListThreadViews()
+			q, err := query.resolve(cmd)
 			if err != nil {
 				return err
 			}
-			if status != "" {
-				filtered := list.Threads[:0]
-				for _, view := range list.Threads {
-					if string(view.Thread.Status) == status {
-						filtered = append(filtered, view)
-					}
-				}
-				list.Threads = filtered
+			list, page, problems, err := app.Svc.QueryThreadViews(status, q)
+			if err != nil {
+				return err
 			}
 			if mode == modeJSON {
 				if len(lm.columns) == 0 {
-					if err := render.ThreadsJSON(app.Out, list, problems); err != nil {
+					if err := render.ThreadsPageJSON(app.Out, list, problems, page); err != nil {
 						return err
 					}
 				} else {
@@ -238,8 +234,8 @@ func newThreadListCmd(app *App) *cobra.Command {
 					if err != nil {
 						return err
 					}
-					if err := render.ProjectedListJSONWithProblems(
-						app.Out, "threads", selected, list.Threads, wire.ToThreadReadProblemsJSON(problems),
+					if err := render.ProjectedPageJSONWithProblems(
+						app.Out, "threads", selected, list.Threads, wire.ToThreadReadProblemsJSON(problems), page,
 					); err != nil {
 						return err
 					}
@@ -270,11 +266,13 @@ func newThreadListCmd(app *App) *cobra.Command {
 					}
 				}
 				render.ThreadProblemsHuman(app.ErrOut, app.Style, problems)
+				listPageNotice(app.ErrOut, page)
 			}
 			return threadProblemsError(problems)
 		},
 	}
 	lm.bind(cmd, render.Specs(cols))
+	query.bind(cmd, true)
 	cmd.Flags().StringVar(&status, "status", "", "filter by Thread status")
 	_ = cmd.RegisterFlagCompletionFunc("status", completeThreadStatusValues)
 	return cmd

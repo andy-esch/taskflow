@@ -24,11 +24,16 @@ tskflwctl research list [flags]
 ### Options
 
 ```
-  -c, --columns strings   select columns for -o table/csv/json, comma-separated (-o table when no format is pinned); available: slug,created,description,tags,updated_at,id,location
-  -h, --help              help for list
-  -o, --output string     output format: human|json|name|table|csv
-  -q, --quiet             concise command handles, one per line (alias for -o name)
-      --tag string        only docs carrying this tag
+  -c, --columns strings        select columns for -o table/csv/json, comma-separated (-o table when no format is pinned); available: slug,created,description,tags,updated_at,id,location
+      --cursor string          resume page.next_cursor with the same filters, sort, and limit; restart if results changed
+  -h, --help                   help for list
+      --limit int              maximum returned rows (1-1000; omitted means unbounded)
+  -o, --output string          output format: human|json|name|table|csv
+  -q, --quiet                  concise command handles, one per line (alias for -o name)
+      --search string          case-insensitive substring in list metadata, not full bodies (maximum 256 UTF-8 bytes)
+      --sort string            sort by id|name|created|updated; prefix with - for descending (findings: id|name only)
+      --tag string             only docs carrying this tag
+      --updated-since string   own updated date >= YYYY-MM-DD, falling back to creation; not a complete change feed
 ```
 
 ### Options inherited from parent commands

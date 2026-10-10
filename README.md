@@ -438,6 +438,32 @@ tskflwctl thread list --json -c id,slug,status,done,total,frontier,projection_he
 tskflwctl task list --status in-progress -o json | jq -r '.tasks[].slug'
 ```
 
+#### Bounded queries
+
+These six query surfaces also accept `--limit 1..1000`, `--sort id|name|created|updated`
+(prefix with `-` for descending), and `--search` (case-insensitive metadata substring,
+at most 256 UTF-8 bytes—not full-body search). No query flags means the existing unbounded
+view. With query flags, ordering defaults to source ID, or newest-created for research;
+ties use source ID and a value digest. Findings support only `id`/`name` sorting.
+
+```bash
+tskflwctl task list --tag tui --limit 10 --sort=-updated --json -c id,slug,status
+# Repeat the same filters, sort, and limit, adding --cursor '<page.next_cursor>'.
+```
+
+Typed and projected JSON include `page` with applied `order`, `returned`, `matched`,
+`limit` (0 means unbounded), and `next_cursor` when more rows remain. Changed matching
+values or diagnostics refuse continuation with exit 14: restart without the cursor.
+Malformed/foreign cursors fail validation (11). Cursors are opaque, versioned read tokens,
+not write authority; paging bounds output, not the filesystem scan. Diagnostics remain
+complete on every page and still cause the usual partial-read failure.
+
+`--updated-since YYYY-MM-DD` is inclusive and uses the document's own update date,
+falling back to creation (audit: `date`); missing/invalid dates do not match. It is not a
+change feed—manual edits and some lifecycle operations do not stamp updates. Findings
+have no own date and reject this filter. See the [query contract](planning/tasks/6gbn4g1j40pj-bound-and-page-agent-facing-list-queries.md#query-contract)
+for searchable fields and continuation details.
+
 **stdout is data, stderr is diagnostics** — per-item transition failures,
 file-read problems, and prompts go to stderr, so a partial `… | xargs` never
 interleaves errors into the data stream.

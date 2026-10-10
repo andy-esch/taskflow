@@ -33,6 +33,7 @@ type TasksEnvelope struct {
 	SchemaVersion string                `json:"schema_version"`
 	Tasks         []TaskJSON            `json:"tasks"`
 	Unreadable    []LintLoadProblemJSON `json:"unreadable,omitempty"`
+	Page          *ListPageJSON         `json:"page,omitempty"`
 }
 
 // ToTasksEnvelope builds the `task list --json` envelope value, including any
@@ -741,6 +742,7 @@ type EpicsEnvelope struct {
 	SchemaVersion string                `json:"schema_version"`
 	Epics         []EpicJSON            `json:"epics"`
 	Unreadable    []LintLoadProblemJSON `json:"unreadable,omitempty"`
+	Page          *ListPageJSON         `json:"page,omitempty"`
 }
 
 // ToEpicsEnvelope builds the `epic list --json` envelope value with rollup,
@@ -775,6 +777,7 @@ type AuditsEnvelope struct {
 	SchemaVersion string                `json:"schema_version"`
 	Audits        []AuditJSON           `json:"audits"`
 	Unreadable    []LintLoadProblemJSON `json:"unreadable,omitempty"`
+	Page          *ListPageJSON         `json:"page,omitempty"`
 }
 
 // ToAuditsEnvelope builds the `audit list --json` envelope value, including any
@@ -805,6 +808,7 @@ type ResearchListEnvelope struct {
 	SchemaVersion string                `json:"schema_version"`
 	Research      []ResearchJSON        `json:"research"`
 	Unreadable    []LintLoadProblemJSON `json:"unreadable,omitempty"`
+	Page          *ListPageJSON         `json:"page,omitempty"`
 }
 
 // ToResearchListEnvelope builds the `research list --json` envelope value, including
@@ -901,6 +905,7 @@ type FindingsEnvelope struct {
 	SchemaVersion string                `json:"schema_version"`
 	Findings      []FindingJSON         `json:"findings"`
 	Unreadable    []LintLoadProblemJSON `json:"unreadable,omitempty"`
+	Page          *ListPageJSON         `json:"page,omitempty"`
 }
 
 // ToFindingsEnvelope builds the `audit findings --json` envelope value: each parsed

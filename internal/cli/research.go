@@ -244,8 +244,9 @@ func newResearchNewCmd(app *App) *cobra.Command {
 
 func newResearchListCmd(app *App) *cobra.Command {
 	var (
-		tag string
-		lm  listMode
+		tag   string
+		lm    listMode
+		query listQueryFlags
 	)
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -261,18 +262,23 @@ func newResearchListCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			docs, problems, err := app.Svc.ListResearch(tag)
+			q, err := query.resolve(cmd)
 			if err != nil {
 				return err
 			}
-			if err := renderList(app, mode, lm.columns, docs, problems,
-				"research", render.ResearchReadColumns(), render.ResearchJSON, render.ResearchReadHuman); err != nil {
+			result, problems, err := app.Svc.QueryResearch(tag, q)
+			if err != nil {
+				return err
+			}
+			if err := renderListPage(app, mode, lm.columns, result.Items, problems, result.Page,
+				"research", render.ResearchReadColumns(), render.ResearchPageJSON, render.ResearchReadHuman); err != nil {
 				return err
 			}
 			return portableProblemsError("research", problems)
 		},
 	}
 	lm.bind(cmd, render.Specs(render.ResearchReadColumns()))
+	query.bind(cmd, true)
 	cmd.Flags().StringVar(&tag, "tag", "", "only docs carrying this tag")
 	return cmd
 }

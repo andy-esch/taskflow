@@ -10,6 +10,7 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/wire"
 )
 
 // Column is one projectable field shared by the list formats. Name and Extract
@@ -342,6 +343,12 @@ func ProjectedListJSON[T any](w io.Writer, listKey string, cols []Column[T], ite
 // lets both retain their public diagnostic shape without teaching the shared
 // projection renderer about either adapter.
 func ProjectedListJSONWithProblems[T, P any](w io.Writer, listKey string, cols []Column[T], items []T, problems []P) error {
+	return ProjectedPageJSONWithProblems(w, listKey, cols, items, problems, nil)
+}
+
+// ProjectedPageJSONWithProblems keeps continuation independent of selected row
+// columns, using the same metadata as the typed envelope.
+func ProjectedPageJSONWithProblems[T, P any](w io.Writer, listKey string, cols []Column[T], items []T, problems []P, page *core.ListPage) error {
 	rows := make([]projectedRow, 0, len(items))
 	for _, it := range items {
 		row := make(projectedRow, len(cols))
@@ -359,6 +366,9 @@ func ProjectedListJSONWithProblems[T, P any](w io.Writer, listKey string, cols [
 	}
 	if len(problems) > 0 {
 		fields = append(fields, orderedField{"unreadable", problems})
+	}
+	if page != nil {
+		fields = append(fields, orderedField{"page", wire.ToListPageJSON(page)})
 	}
 	b, err := marshalOrderedObject(fields)
 	if err != nil {

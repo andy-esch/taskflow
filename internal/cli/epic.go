@@ -265,6 +265,7 @@ func newEpicListCmd(app *App) *cobra.Command {
 	var (
 		lm           listMode
 		statusFilter string
+		query        listQueryFlags
 	)
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -286,42 +287,29 @@ func newEpicListCmd(app *App) *cobra.Command {
 					return err
 				}
 			}
-			epics, problems, err := app.Svc.ListEpics()
+			q, err := query.resolve(cmd)
 			if err != nil {
 				return err
 			}
-			epics = filterEpicsByStatus(epics, statusFilter)
-			if err := renderList(app, mode, lm.columns, epics, problems,
-				"epics", render.EpicColumns(), render.EpicsJSON, render.EpicsHuman); err != nil {
+			result, problems, err := app.Svc.QueryEpics(statusFilter, q)
+			if err != nil {
+				return err
+			}
+			if err := renderListPage(app, mode, lm.columns, result.Items, problems, result.Page,
+				"epics", render.EpicColumns(), render.EpicsPageJSON, render.EpicsHuman); err != nil {
 				return err
 			}
 			return portableProblemsError("epic or task", problems)
 		},
 	}
 	lm.bind(cmd, render.Specs(render.EpicColumns()))
+	query.bind(cmd, true)
 	cmd.Flags().StringVar(&statusFilter, "status", "", "filter by epic status (active|retired|deprecated)")
 	_ = cmd.RegisterFlagCompletionFunc("status",
 		func(*cobra.Command, []string, string) ([]string, cobra.ShellCompDirective) {
 			return domain.AllEpicStatuses(), cobra.ShellCompDirectiveNoFileComp
 		})
 	return cmd
-}
-
-// filterEpicsByStatus narrows the rollup list to a single epic status; an empty
-// status keeps all. The cheap "don't pay for all epics" triage filter the other
-// list commands already offer — done CLI-side since core.ListEpics has several
-// callers and this is a small in-memory narrow, not a store query.
-func filterEpicsByStatus(epics []core.EpicSummary, status string) []core.EpicSummary {
-	if status == "" {
-		return epics
-	}
-	var out []core.EpicSummary
-	for _, e := range epics {
-		if e.Epic.Status == status {
-			out = append(out, e)
-		}
-	}
-	return out
 }
 
 func newEpicShowCmd(app *App) *cobra.Command {
