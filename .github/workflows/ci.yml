@@ -23,6 +23,7 @@ jobs:
         uses: extractions/setup-just@v4
 
       - name: Set up Go
+        id: go
         uses: actions/setup-go@v7
         with:
           go-version: "1.26"
@@ -37,6 +38,9 @@ jobs:
 
       - name: Download dependencies
         run: go mod download
+
+      - name: Check Go toolchain coordination
+        run: just toolchain-check
 
       - name: Verify Go module is tidy
         run: just tidy-check
@@ -53,14 +57,9 @@ jobs:
             exit 1
           fi
 
-      # .golangci.yml is v2-schema (`version: "2"`) — v1.x binaries cannot
-      # parse it. The version must ALSO be built with a Go ≥ go.mod's target:
-      # the action downloads prebuilt binaries, and golangci-lint refuses a
-      # repo targeting a newer Go than it was compiled with. v2.4.0 is the
-      # first release built with go1.25 (go.mod says 1.25.x).
-      # Action @v9 runs on Node 24 (v8 ran on the now-deprecated Node 20, and
-      # pulled in a Node-20 actions/github-script transitively); v9 needs
-      # golangci-lint ≥ v2.1, satisfied by v2.4.
+      # Match the container's linter release line (just toolchain-check).
+      # The downloaded binary must also be built with Go >= go.mod's minimum;
+      # the release gate verifies that for the actual installed linter.
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v9
         with:
@@ -71,7 +70,7 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/go/bin/govulncheck
-          key: govulncheck-${{ runner.os }}-go-1.26
+          key: govulncheck-${{ runner.os }}-${{ steps.go.outputs.go-version }}
 
       - name: Install govulncheck
         if: steps.cache-govulncheck.outputs.cache-hit != 'true'

@@ -59,9 +59,9 @@ test:
 lint:
 	golangci-lint run ./...
 
-# Scan dependencies + stdlib usage for known vulnerabilities
+# Use the same conservative package scan as CI and release validation.
 vulncheck:
-	govulncheck ./...
+	govulncheck -scan package ./...
 
 # Format Go sources + tidy lint formatting
 fmt:
@@ -101,6 +101,10 @@ release-snapshot:
 # Validate .goreleaser.yml without building.
 release-check:
 	goreleaser check
+
+# Offline policy check: module minimum, workflow Go line, container and linter pins.
+toolchain-check:
+	go test ./internal/tools/releasevalidate -run '^TestRepositoryToolchainPolicy$' -count=1 -v
 
 # Run the complete automated release-candidate gate from a clean checkout.
 # Generated checks and the snapshot build use disposable outputs so the source

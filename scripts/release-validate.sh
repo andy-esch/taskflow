@@ -44,10 +44,11 @@ check_clean() {
 }
 
 check_tools() {
-	local required_go actual_go lint_version release_version
+	local required_go actual_go actual_go_line lint_version release_version
 	required_go=$(awk '$1 == "go" { print $2; exit }' go.mod)
 	[[ -n "$required_go" ]] || fail "go.mod does not declare a Go version"
 	actual_go=$(go env GOVERSION)
+	actual_go_line=${actual_go%.*}
 	version_at_least "$actual_go" "$required_go" ||
 		fail "Go $required_go or newer is required; found ${actual_go#go}"
 
@@ -57,6 +58,10 @@ check_tools() {
 	if [[ "$lint_version" =~ built[[:space:]]+with[[:space:]]+go([0-9]+\.[0-9]+(\.[0-9]+)?) ]]; then
 		version_at_least "${BASH_REMATCH[1]}" "$required_go" ||
 			fail "golangci-lint must be built with Go $required_go or newer"
+		version_at_least "${BASH_REMATCH[1]}" "$actual_go_line" ||
+			fail "golangci-lint must be built with Go ${actual_go_line#go} or newer to analyze the active Go toolchain; upgrade golangci-lint or use a supported Go line"
+	else
+		fail "cannot determine golangci-lint's build Go; install an official or Go-built v2 binary"
 	fi
 
 	release_version=$(goreleaser --version 2>&1)
@@ -131,6 +136,7 @@ export GOLANGCI_LINT_CACHE="$validation_tmp/golangci-lint-cache"
 mkdir -p "$GOCACHE" "$GOLANGCI_LINT_CACHE"
 
 run_phase "toolchain compatibility" check_tools
+run_phase "Go toolchain policy" go test ./internal/tools/releasevalidate -run '^TestRepositoryToolchainPolicy$' -count=1
 run_phase "focused package tests" go test ./internal/core ./internal/store ./internal/cli ./internal/tui ./internal/wire
 run_phase "full race suite" go test -race ./...
 run_phase "Go formatting" check_formatting

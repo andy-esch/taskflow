@@ -26,8 +26,30 @@ pins Go and the release tools in
 Linux execution plus the same Darwin/Linux snapshot matrix, but is not a bit-for-bit reproducible
 build claim. A devcontainer may wrap this image later; it must not become a second release gate.
 
-The image pins the release compiler independently of the minimum Go version in `go.mod`: release
-tools may require a newer toolchain, and GitHub Actions uses the same newer Go release line.
+## Go and linter version policy
+
+`go.mod` owns the minimum supported Go version; the CI test job tracks its newest patch.
+The release workflow owns the publication compiler line, which the CI lint job also uses
+(`go-version: "1.26"`, `check-latest: true` today). The container pins an exact patch on that
+release line, at least as new as the module minimum. A newer release/local compiler does not
+automatically raise the supported minimum; a Go-line change must retain minimum-line test coverage.
+
+CI selects a golangci-lint release line; the container pins a patch on that linter line. Go and
+linter version numbers are independent. The release preflight checks the actual linter binary's
+build Go against the module minimum and active compiler line, not its exact patch; successful
+lint remains necessary to prove compatibility.
+When changing Go lines, select a supporting linter and run both host and container qualification.
+Do not infer support for a future Go release from a linter's version number alone.
+
+```sh
+just toolchain-check
+```
+
+This offline drift check runs in CI and the shared release gate. It checks the module, CI/release
+Go selectors, latest-patch behavior, and container/linter pins. It does **not** check remote patch
+freshness or replace `govulncheck`; `just vulncheck` uses the same package scan as the release gate.
+
+## Tagging and publication
 
 Automated validation does not replace a release task's bounded CLI/TUI dogfood. After both are
 recorded on one immutable candidate, tag that exact commit. The tag-triggered
