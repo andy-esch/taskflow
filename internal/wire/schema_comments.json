@@ -263,6 +263,7 @@
   "github.com/andy-esch/taskflow/internal/wire.ThreadRollupJSON": "",
   "github.com/andy-esch/taskflow/internal/wire.ThreadShowEnvelope": "ThreadShowEnvelope is `thread show --json`.",
   "github.com/andy-esch/taskflow/internal/wire.ThreadTaskJSON": "ThreadTaskJSON is one task in a Thread projection, with an explicit member or external-gate role and the shared repository graph state.",
+  "github.com/andy-esch/taskflow/internal/wire.ThreadTaskPlanningJSON": "ThreadTaskPlanningJSON carries recorded decision context, not a scheduler score.",
   "github.com/andy-esch/taskflow/internal/wire.ThreadUpdateEnvelope": "ThreadUpdateEnvelope is a successful existing-Thread mutation receipt.",
   "github.com/andy-esch/taskflow/internal/wire.ThreadUpdateJSON": "ThreadUpdateJSON is the existing-Thread membership/lifecycle mutation receipt.",
   "github.com/andy-esch/taskflow/internal/wire.ThreadViewJSON": "ThreadViewJSON is the shared runtime projection consumed by list, show, and frontier adapters.",

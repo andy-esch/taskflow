@@ -42,9 +42,19 @@ func nonNilSortedStrings(values []string) []string {
 // ThreadTaskJSON is one task in a Thread projection, with an explicit member or
 // external-gate role and the shared repository graph state.
 type ThreadTaskJSON struct {
-	Role  string             `json:"role" jsonschema:"description=member|external-gate"`
-	Task  GraphTaskJSON      `json:"task"`
-	State TaskGraphStateJSON `json:"state"`
+	Role     string                 `json:"role" jsonschema:"description=member|external-gate"`
+	Task     GraphTaskJSON          `json:"task"`
+	State    TaskGraphStateJSON     `json:"state"`
+	Planning ThreadTaskPlanningJSON `json:"planning"`
+}
+
+// ThreadTaskPlanningJSON carries recorded decision context, not a scheduler
+// score. Raw values are retained even when missing; readers need not infer
+// planning attributes from task identity, lifecycle, or graph state.
+type ThreadTaskPlanningJSON struct {
+	Priority string `json:"priority" jsonschema:"description=recorded priority (normally high|medium|low); empty when unset"`
+	Tier     int    `json:"tier" jsonschema:"description=recorded importance tier (normally 1 highest through 5 lowest); 0 when unset"`
+	Effort   string `json:"effort" jsonschema:"description=free-form recorded effort; literal Unknown is retained and empty means unset"`
 }
 
 // ThreadExternalGateJSON marks whether a direct outside prerequisite is still
@@ -120,6 +130,7 @@ func ToThreadViewJSON(view core.ThreadView) ThreadViewJSON {
 func toThreadTaskJSON(item core.ThreadTaskView) ThreadTaskJSON {
 	return ThreadTaskJSON{
 		Role: string(item.Role), Task: toGraphTaskJSON(item.State.TaskID, item.Task), State: toTaskGraphStateJSON(item.State),
+		Planning: ThreadTaskPlanningJSON{Priority: item.Task.Priority, Tier: item.Task.Tier, Effort: item.Task.Effort},
 	}
 }
 
