@@ -642,9 +642,16 @@ will give these decisions a durable authority without duplicating the current ma
   into the repo's committed config; a `planning_repo` pointer that records
   `planning_repo_id` **verifies it after resolving**, so a mismatch — or a target with
   no id — is `ErrConflict` rather than a silent bind to whatever sat at that relative
-  path. Which side of the repo boundary a config path points at decides what it resolves
-  against: `taskflow_root` is in-tree and anchors to the config file's own dir, while
-  `planning_repo`/`tracked_repos` point outward and anchor to the **canonical checkout**,
+  path. For a tree governed by one scaffold marker, config-directory and configured-data-directory
+  addresses resolve the same physical tree and identity. Discovery, pointer initialization
+  and migration share one target-resolution observation; ancestor identity is usable only
+  for an exact, containment-checked `taskflow_root` match, stopping at the nearest
+  marker or Git boundary and never following pointer ancestors. Direct data-directory
+  discovery retains that marker's preferences; missing-ID repair migrates it rather
+  than minting a second marker. Which side of the repo boundary a config path points at
+  decides what it resolves against: `taskflow_root` is in-tree and anchors to the config
+  file's own dir, while `planning_repo`/`tracked_repos` point outward and anchor to the
+  **canonical checkout**,
   so a committed relative path means the same thing from every git worktree
   (`worktree.go`).
   `init` only bootstraps a new topology. Its typed `InitResult` reports whether this call

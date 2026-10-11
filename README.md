@@ -320,6 +320,12 @@ For a legacy pointer whose planning target also lacks an `id`, migrate the targe
 then the implementation repo. Relative `planning_repo` spelling, comments, unknown keys,
 and key order are preserved.
 
+With one governing marker, a planning repo's config directory and its configured data
+directory (for example, `plan/` and `plan/planning/`) address the same space and durable
+ID, including through `planning_repo` pointers. Missing-ID recovery migrates the
+governing config; it does not initialize another marker inside the data directory
+or silently rebind a pointer.
+
 `config show` keeps the raw repository and user scopes separate, then prints the effective
 theme and pager values with their provenance. Theme precedence is `--theme` →
 `TSKFLW_THEME` → repository config → user config → built-in default. Pager-command
