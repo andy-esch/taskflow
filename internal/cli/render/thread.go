@@ -42,11 +42,11 @@ func ThreadProblemsHuman(w io.Writer, st Style, problems []core.ThreadReadProble
 // ThreadListGraphProblemsHuman keeps unhealthy repository context on stderr for
 // opt-in row streams, even when the selected page contains no affected Thread.
 func ThreadListGraphProblemsHuman(w io.Writer, st Style, list core.ThreadListView) {
-	if (list.GraphHealth == "" || list.GraphHealth == core.GraphHealthy) && len(list.GraphProblems) == 0 {
+	if (list.GraphHealth == "" || list.GraphHealth == core.GraphHealthy) && len(list.GraphProblems) == 0 && len(list.GraphLegacy) == 0 {
 		return
 	}
 	fmt.Fprintf(w, "%s  repository graph: %s\n", st.Bold("Diagnostics"), list.GraphHealth)
-	graphDiagnosticsHuman(w, st, list.GraphProblems, nil)
+	graphDiagnosticsHuman(w, st, list.GraphProblems, list.GraphLegacy)
 }
 
 func ThreadShowJSON(w io.Writer, view core.ThreadView, body string) error {
@@ -141,15 +141,15 @@ func ThreadsHuman(w io.Writer, st Style, list core.ThreadListView) error {
 		}, rows)
 	}
 	for _, view := range list.Threads {
-		if len(view.Problems) == 0 && len(view.GraphProblems) == 0 {
+		if len(view.Problems) == 0 && len(view.GraphProblems) == 0 && len(view.GraphLegacy) == 0 {
 			continue
 		}
 		fmt.Fprintf(w, "\n%s  %s\n", st.Bold("Diagnostics"), view.Thread.Slug)
 		threadDiagnosticsHuman(w, st, view)
 	}
-	if len(list.GraphProblems) > 0 {
+	if len(list.GraphProblems) > 0 || len(list.GraphLegacy) > 0 {
 		fmt.Fprintf(w, "\n%s  repository graph\n", st.Bold("Diagnostics"))
-		graphDiagnosticsHuman(w, st, list.GraphProblems, nil)
+		graphDiagnosticsHuman(w, st, list.GraphProblems, list.GraphLegacy)
 	}
 	return nil
 }
@@ -243,6 +243,14 @@ func ThreadFrontierHuman(w io.Writer, st Style, view core.ThreadView) error {
 
 // Keep free-form metadata on one terminal-safe line; the core/wire values stay raw.
 func threadPlanningLabel(value string) string {
+	value = singleLineText(value)
+	if value == "" {
+		return "unset"
+	}
+	return value
+}
+
+func singleLineText(value string) string {
 	value = strings.Join(strings.Fields(ansi.Strip(value)), " ")
 	value = strings.Map(func(r rune) rune {
 		if unicode.IsControl(r) {
@@ -250,9 +258,6 @@ func threadPlanningLabel(value string) string {
 		}
 		return r
 	}, value)
-	if value == "" {
-		return "unset"
-	}
 	return value
 }
 
@@ -381,5 +386,5 @@ func threadDiagnosticsHuman(w io.Writer, st Style, view core.ThreadView) {
 	for _, problem := range view.Problems {
 		fmt.Fprintf(w, "%s %s: %s\n", st.Warn("⚠"), problem.Code, problem.Message)
 	}
-	graphDiagnosticsHuman(w, st, view.GraphProblems, nil)
+	graphDiagnosticsHuman(w, st, view.GraphProblems, view.GraphLegacy)
 }

@@ -109,16 +109,27 @@ func TestTaskGraphRepairHumanAttributesNonRepairableDeclaration(t *testing.T) {
 func TestGraphDiagnosticsHumanOnlyOffersMigrationForSafeLegacyFields(t *testing.T) {
 	legacy := []core.LegacyDependencyDiagnostic{
 		{TaskID: "safe", Field: "blocked_by", References: []core.LegacyReference{{Resolution: core.LegacyResolved}}},
-		{TaskID: "broken", Field: "dependencies", References: []core.LegacyReference{{Resolution: core.LegacyMissing}}},
+		{TaskID: "broken", Field: "dependencies", References: []core.LegacyReference{{Value: "gone", Resolution: core.LegacyMissing}}},
 	}
 	var out bytes.Buffer
 	graphDiagnosticsHuman(&out, NewStyle(false), nil, legacy)
 	for _, want := range []string{
 		"legacy blocked_by on safe; run task depend migrate",
-		"legacy dependencies on broken; run task depend repair, then task depend migrate",
+		"legacy dependencies on broken (\"gone\": missing); run task depend repair, then task depend migrate",
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("diagnostics missing %q:\n%s", want, out.String())
 		}
+	}
+}
+
+func TestGraphLegacyDiagnosticsHumanKeepOpaqueContextOnOneSafeLine(t *testing.T) {
+	location := "\x1b]0;fake title\adb://tasks/outside\nFORGED\x1b[31m"
+	legacy := core.LegacyDependencyDiagnostic{TaskID: "source-id", Field: "blocks", Location: location}
+	var out bytes.Buffer
+	graphDiagnosticsHuman(&out, NewStyle(false), nil, []core.LegacyDependencyDiagnostic{legacy})
+	want := "⚠ legacy blocks on source-id (empty field); run task depend migrate (location: db://tasks/outside FORGED)\n"
+	if out.String() != want || legacy.Location != location {
+		t.Fatalf("new legacy context was not safely presented without rewriting it: %q", out.String())
 	}
 }
