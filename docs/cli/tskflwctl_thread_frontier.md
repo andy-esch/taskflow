@@ -4,7 +4,7 @@ Show active work and graph-clear pending members
 
 ### Synopsis
 
-Show in-flight members for context, followed by next-up and ready-to-start members whose dependency gates are clear in the shared task-graph projection. In-flight work is not part of the frontier. An unhealthy projection returns no dispatchable tasks and retains its diagnosis.
+Show in-flight context, then graph-clear next-up and ready-to-start members. Candidates show status, priority, tier, and effort; order stays by stable ID, not priority. Missing values display as unset; --json retains raw planning values (empty strings or tier 0). Literal Unknown effort is preserved. In-flight work is not frontier membership. Unhealthy projections suppress dispatchable tasks and retain diagnostics.
 
 ```
 tskflwctl thread frontier <thread> [flags]

@@ -5,6 +5,7 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"slices"
@@ -112,6 +113,101 @@ func TestThreadNewListShowPathAndFrontier(t *testing.T) {
 	gotPath := strings.TrimSpace(runRoot(t, "-C", root, "thread", "path", "delivery"))
 	if filepath.Base(gotPath) != filepath.Base(threadPath(t, root, "delivery")) {
 		t.Fatalf("path = %q", gotPath)
+	}
+}
+
+func TestThreadFrontierPlanningContextAcrossRealAdapter(t *testing.T) {
+	repo := testutil.NewRepo(t)
+	for _, task := range []struct {
+		slug, planning, dependency string
+		status                     domain.Status
+	}{
+		{"small", "priority: low\ntier: 5\neffort: XS\n", "", domain.StatusNextUp},
+		{"unknown", "priority: high\ntier: 1\neffort: Unknown\n", "", domain.StatusReadyToStart},
+		{"unset", "", "", domain.StatusNextUp},
+		{"active", "priority: medium\ntier: 3\neffort: L\n", "depends_on: [" + testutil.TaskID("external") + "]\n", domain.StatusInProgress},
+		{"external", "priority: high\ntier: 1\neffort: XL\n", "", domain.StatusNextUp},
+	} {
+		repo.Task(string(task.status), task.slug+".md", fmt.Sprintf("---\nid: %s\ndescription: %s\n%s%s---\n# %s\n",
+			testutil.TaskID(task.slug), task.slug, task.planning, task.dependency, task.slug))
+	}
+	members := []string{testutil.TaskID("small"), testutil.TaskID("unknown"), testutil.TaskID("unset"), testutil.TaskID("active")}
+	slices.Sort(members)
+	repo.File("threads/"+testutil.TaskID("planning-context")+"-planning-context.md", fmt.Sprintf(
+		"---\nid: %s\nstatus: in-progress\ndescription: Choose independent work\ngoal: Context not ranking\ncreated: '2026-10-11'\ntasks: [%s]\n---\n# Planning context\n",
+		testutil.TaskID("planning-context"), strings.Join(members, ", ")))
+
+	out, errOut, err := runIn(t, repo.Root, "thread", "frontier", "planning-context", "--json")
+	if err != nil || errOut != "" {
+		t.Fatalf("frontier: %v\nstdout=%s\nstderr=%s", err, out, errOut)
+	}
+	var envelope wire.ThreadFrontierEnvelope
+	if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+		t.Fatal(err)
+	}
+	view := envelope.View
+	if len(view.Frontier) != 3 || len(view.ExternalGates) != 1 || view.ExternalGates[0].Task.TaskID != testutil.TaskID("external") {
+		t.Fatalf("frontier or external prerequisites changed: %+v", view)
+	}
+	want := map[string]wire.ThreadTaskPlanningJSON{
+		"small":   {Priority: "low", Tier: 5, Effort: "XS"},
+		"unknown": {Priority: "high", Tier: 1, Effort: "Unknown"},
+		"unset":   {},
+	}
+	ids := make([]string, 0, len(view.Frontier))
+	for _, item := range view.Frontier {
+		planning, present := want[item.Task.Slug]
+		if !present || item.Planning != planning || !item.State.Eligible || item.Role != "member" {
+			t.Fatalf("candidate lost metadata or became ineligible: %+v", item)
+		}
+		ids = append(ids, item.Task.TaskID)
+	}
+	if !slices.IsSorted(ids) {
+		t.Fatalf("metadata reordered candidates: %v", ids)
+	}
+	assertGolden(t, "thread_frontier_planning_json", out)
+	human := runRoot(t, "-C", repo.Root, "thread", "frontier", "planning-context")
+	assertGolden(t, "thread_frontier_planning_human", human)
+	for _, line := range []string{
+		"next-up · priority low · tier 5 · effort XS",
+		"ready-to-start · priority high · tier 1 · effort Unknown",
+		"next-up · priority unset · tier unset · effort unset",
+		"in-flight/blocked",
+	} {
+		if !strings.Contains(human, line) {
+			t.Fatalf("human frontier missing %q:\n%s", line, human)
+		}
+	}
+	if strings.Contains(human, "✔ active") || strings.Contains(human, "✔ external") || strings.Index(human, "▶ active") > strings.Index(human, "✔") {
+		t.Fatalf("human frontier promoted or misplaced active/external work:\n%s", human)
+	}
+
+	for _, unhealthy := range []struct {
+		name, declaration, health string
+	}{
+		{"degraded", "blocked_by: [external]\n", "degraded"},
+		{"broken", "depends_on: [" + testutil.TaskID("missing") + "]\n", "broken"},
+	} {
+		t.Run(unhealthy.name, func(t *testing.T) {
+			repo.Task("next-up", "legacy.md", "---\nid: "+testutil.TaskID("legacy")+"\ndescription: Bad graph evidence\n"+unhealthy.declaration+"---\n# Legacy\n")
+			out, errOut, err := runIn(t, repo.Root, "thread", "frontier", "planning-context", "--json")
+			if err != nil || errOut != "" {
+				t.Fatalf("unhealthy frontier: %v stdout=%s stderr=%s", err, out, errOut)
+			}
+			if err := json.Unmarshal([]byte(out), &envelope); err != nil {
+				t.Fatal(err)
+			}
+			if envelope.View.GraphHealth != unhealthy.health || envelope.View.ProjectionHealth != unhealthy.health || len(envelope.View.Frontier) != 0 {
+				t.Fatalf("planning metadata overrode fail-closed health: %+v", envelope.View)
+			}
+			if unhealthy.health == "broken" && len(envelope.View.GraphProblems) == 0 {
+				t.Fatal("broken graph lost its existing diagnostics")
+			}
+			human := runRoot(t, "-C", repo.Root, "thread", "frontier", "planning-context")
+			if strings.Contains(human, "✔") || !strings.Contains(human, "▶ active") || !strings.Contains(human, "no additional dispatchable member tasks") {
+				t.Fatalf("unhealthy human frontier lost active context or dispatched work:\n%s", human)
+			}
+		})
 	}
 }
 

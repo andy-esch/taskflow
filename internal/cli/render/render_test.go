@@ -972,8 +972,8 @@ func TestThreadFrontierHumanShowsInFlightBeforeEligibleMembers(t *testing.T) {
 			{Task: domain.Task{ID: "6g0000000001", Slug: "active-clear"}, State: core.TaskGraphState{TaskID: "6g0000000001", Role: core.RoleInFlight, Gate: core.GateClear}},
 		},
 		Frontier: []core.ThreadTaskView{
-			{Task: domain.Task{ID: "6g0000000005", Slug: "eligible-later"}, State: core.TaskGraphState{TaskID: "6g0000000005", Role: core.RoleCandidate, Gate: core.GateClear}},
-			{Task: domain.Task{ID: "6g0000000004", Slug: "eligible-first"}, State: core.TaskGraphState{TaskID: "6g0000000004", Role: core.RoleQueued, Gate: core.GateClear}},
+			{Task: domain.Task{ID: "6g0000000005", Slug: "eligible-later", Status: domain.StatusReadyToStart, Priority: "high", Tier: 1, Effort: "Unknown"}, State: core.TaskGraphState{TaskID: "6g0000000005", Role: core.RoleCandidate, Gate: core.GateClear}},
+			{Task: domain.Task{ID: "6g0000000004", Slug: "eligible-first", Status: domain.StatusNextUp, Priority: "low", Tier: 5, Effort: "XS"}, State: core.TaskGraphState{TaskID: "6g0000000004", Role: core.RoleQueued, Gate: core.GateClear}},
 		},
 	}
 	var out bytes.Buffer
@@ -985,9 +985,50 @@ func TestThreadFrontierHumanShowsInFlightBeforeEligibleMembers(t *testing.T) {
 		"▶ active-clear  6g0000000001  in-flight/clear\n" +
 		"▶ active-blocked  6g0000000003  in-flight/blocked\n" +
 		"✔ eligible-first  6g0000000004\n" +
-		"✔ eligible-later  6g0000000005\n"
+		"  next-up · priority low · tier 5 · effort XS\n" +
+		"✔ eligible-later  6g0000000005\n" +
+		"  ready-to-start · priority high · tier 1 · effort Unknown\n"
 	if got := out.String(); got != want {
 		t.Fatalf("frontier output:\n%s\nwant:\n%s", got, want)
+	}
+	if view.Frontier[0].Task.ID != "6g0000000005" {
+		t.Fatal("renderer reordered the caller's frontier slice")
+	}
+}
+
+func TestThreadFrontierHumanKeepsContextOnItsOwnSafeLine(t *testing.T) {
+	name := strings.Repeat("long-slug-", 12)
+	view := core.ThreadView{Frontier: []core.ThreadTaskView{{
+		Task:  domain.Task{ID: "6g0000000001", Slug: name, Status: domain.StatusNextUp},
+		State: core.TaskGraphState{TaskID: "6g0000000001", Role: core.RoleQueued, Gate: core.GateClear},
+	}}}
+	for _, test := range []struct{ name, effort, want string }{
+		{"unset", "", "unset"},
+		{"unknown", "Unknown", "Unknown"},
+		{"controls", "\x1b[31mS\x1b[0m\n\twith estimate\a", "S with estimate"},
+		{"osc-bell", "\x1b]0;forged title\aS", "S"},
+		{"osc-st", "\x1b]0;forged title\x1b\\S", "S"},
+		{"forged-row", "S\n✔ forged  6g0000000002", "S ✔ forged 6g0000000002"},
+		{"carriage-return", "S\rreplacement", "S replacement"},
+		{"whitespace", " \n\t\r ", "unset"},
+		{"unicode", "予定 🧭 café", "予定 🧭 café"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			view.Frontier[0].Task.Effort = test.effort
+			var out bytes.Buffer
+			// Streaming output retains complete handles even on narrow terminals;
+			// planning context goes on its own line instead of widening identity rows.
+			if err := ThreadFrontierHuman(&out, NewStyle(false).WithWidth(40), view); err != nil {
+				t.Fatal(err)
+			}
+			want := "✔ " + name + "  6g0000000001\n  next-up · priority unset · tier unset · effort " + test.want + "\n"
+			if !strings.HasSuffix(out.String(), want) {
+				t.Fatalf("frontier lost identity or multiline-safe planning context:\n%q\nwant suffix %q", out.String(), want)
+			}
+			if view.Frontier[0].Task.Effort != test.effort {
+				t.Fatal("presentation rewrote the raw effort")
+			}
+		})
 	}
 }
 

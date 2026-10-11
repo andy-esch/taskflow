@@ -440,6 +440,11 @@ tskflwctl audit list --all -o table -c slug,open_findings | awk -F'\t' 'NR>1 && 
 # compact Thread health/progress without loading its full topology envelope
 tskflwctl thread list --json -c id,slug,status,done,total,frontier,projection_health
 
+# compare independent candidates: lifecycle, priority, tier, effort (not a ranking)
+tskflwctl thread frontier <thread>
+# JSON preserves raw planning values; empty strings / tier 0 mean unset
+tskflwctl thread frontier <thread> --json | jq '.view.frontier[] | {task, planning}'
+
 # in-progress slugs via jq
 tskflwctl task list --status in-progress -o json | jq -r '.tasks[].slug'
 ```

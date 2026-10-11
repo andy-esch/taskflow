@@ -4,10 +4,13 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/wire"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func ThreadsJSON(w io.Writer, list core.ThreadListView, problems []core.ThreadReadProblem) error {
@@ -219,6 +222,13 @@ func ThreadFrontierHuman(w io.Writer, st Style, view core.ThreadView) error {
 	for _, member := range frontier {
 		name, taskID := threadTaskIdentity(member)
 		fmt.Fprintf(w, "%s %s  %s\n", st.Green("✔"), st.Bold(name), taskID)
+		tier := "unset"
+		if member.Task.Tier != 0 {
+			tier = strconv.Itoa(member.Task.Tier)
+		}
+		fmt.Fprintf(w, "  %s · priority %s · tier %s · effort %s\n",
+			threadPlanningLabel(string(member.Task.Status)), threadPlanningLabel(member.Task.Priority),
+			tier, threadPlanningLabel(member.Task.Effort))
 	}
 	if len(frontier) == 0 {
 		message := "no dispatchable member tasks"
@@ -229,6 +239,21 @@ func ThreadFrontierHuman(w io.Writer, st Style, view core.ThreadView) error {
 	}
 	threadDiagnosticsHuman(w, st, view)
 	return nil
+}
+
+// Keep free-form metadata on one terminal-safe line; the core/wire values stay raw.
+func threadPlanningLabel(value string) string {
+	value = strings.Join(strings.Fields(ansi.Strip(value)), " ")
+	value = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, value)
+	if value == "" {
+		return "unset"
+	}
+	return value
 }
 
 func sortThreadTaskViews(tasks []core.ThreadTaskView) {
