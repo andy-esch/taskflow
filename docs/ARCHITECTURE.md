@@ -529,7 +529,10 @@ will give these decisions a durable authority without duplicating the current ma
   `ThreadProjectionImpact.NewlyInconsistent` own warning decisions; adapters must not
   rederive them from gate strings or inconsistency pairs. Dependency and lifecycle
   receipts share task-impact recovery guidance, with separate Thread/override advice
-  where applicable. Wire revision 1.81 copies those decisions as `newly_unsafe` and
+  where applicable. TUI lifecycle feedback renders task impacts, Thread impacts and the
+  exact core remedy independently; zero downstream tasks must not hide Thread-only
+  recovery. Committed cleanup failures retain their warning and still trigger a reload.
+  Wire revision 1.81 copies those decisions as `newly_unsafe` and
   `newly_inconsistent` and dependency receipts expose optional `remedy`. Impacts describe
   the complete proposed before/after plan, even on refusal or partial failure; consumers
   must inspect `dry_run`, lifecycle `committed`, and dependency applied/remaining IDs
