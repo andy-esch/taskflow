@@ -609,6 +609,7 @@ func TestServiceGraphReadsRejectTypedNilCapabilities(t *testing.T) {
 
 func TestServiceThreadViewsReadThreadsBeforeTasks(t *testing.T) {
 	task := graphRecord("ordered-member", domain.StatusReadyToStart)
+	task.Priority, task.Tier, task.Effort = "high", 1, "Unknown"
 	thread := domain.Thread{
 		ID: "6g3q4rtmv4ak", Slug: "ordered-thread", Status: domain.ThreadStatusUnstarted,
 		Description: "Ordered reads", Goal: "Pin the compatibility contract", Created: "2026-08-31",
@@ -625,14 +626,24 @@ func TestServiceThreadViewsReadThreadsBeforeTasks(t *testing.T) {
 				onGet:  func() { calls = append(calls, "threads") },
 			}
 			svc := MustNewService(nil, WithTaskGraphSource(graphs), WithThreadStore(threads))
+			var view ThreadView
 			var err error
 			if operation == "show" {
-				_, _, err = svc.ShowThread(thread.ID)
+				view, _, err = svc.ShowThread(thread.ID)
 			} else {
-				_, _, err = svc.ListThreadViews()
+				var list ThreadListView
+				list, _, err = svc.ListThreadViews()
+				if len(list.Threads) == 1 {
+					view = list.Threads[0]
+				}
 			}
 			if err != nil || !slices.Equal(calls, []string{"threads", "tasks"}) {
 				t.Fatalf("calls = %v, err = %v", calls, err)
+			}
+			// No aggregate store or local paths: planning context must come from
+			// that one graph read, not an extra per-task metadata lookup.
+			if len(view.Frontier) != 1 || view.Frontier[0].Task.Priority != "high" || view.Frontier[0].Task.Tier != 1 || view.Frontier[0].Task.Effort != "Unknown" {
+				t.Fatalf("pathless projection lost planning context: %+v", view.Frontier)
 			}
 		})
 	}

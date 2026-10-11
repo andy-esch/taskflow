@@ -1,6 +1,7 @@
 package wire
 
 import (
+	"bytes"
 	"encoding/json"
 	"slices"
 	"strings"
@@ -8,7 +9,115 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/santhosh-tekuri/jsonschema/v6"
 )
+
+func TestThreadViewPlanningContextPreservesRawValuesAndCanonicalIdentity(t *testing.T) {
+	items := []core.ThreadTaskView{
+		{Role: core.ThreadTaskMember, Task: domain.Task{ID: "declared-drift", Slug: "small", Status: domain.StatusNextUp, Priority: "low", Tier: 5, Effort: "XS"}, State: core.TaskGraphState{TaskID: "6g0000000001"}},
+		{Role: core.ThreadTaskMember, Task: domain.Task{ID: "6g0000000002", Slug: "unknown", Status: domain.StatusReadyToStart, Priority: "high", Tier: 1, Effort: "Unknown"}, State: core.TaskGraphState{TaskID: "6g0000000002"}},
+		{Role: core.ThreadTaskMember, Task: domain.Task{ID: "6g0000000003", Slug: "unset", Status: domain.StatusNextUp}, State: core.TaskGraphState{TaskID: "6g0000000003"}},
+	}
+	gate := core.ThreadExternalGate{ThreadTaskView: core.ThreadTaskView{
+		Role:  core.ThreadTaskExternalGate,
+		Task:  domain.Task{ID: "6g0000000004", Priority: "medium", Tier: 3, Effort: "  raw\nestimate\x1b[31m"},
+		State: core.TaskGraphState{TaskID: "6g0000000004"},
+	}, Outstanding: true}
+	view := core.ThreadView{Members: items, Frontier: items, ExternalGates: []core.ThreadExternalGate{gate}}
+	update := ToThreadUpdateEnvelope(core.ThreadMutationReceipt{Before: view, After: view}, "", WorkspaceJSON{})
+	impacts := toThreadProjectionImpactsJSON([]core.ThreadProjectionImpact{{Before: view, After: view}})
+	for name, payload := range map[string]ThreadViewJSON{
+		"list":                 ToThreadsEnvelope(core.ThreadListView{Threads: []core.ThreadView{view}}, nil).Threads[0],
+		"show":                 ToThreadShowEnvelope(view, "body").View,
+		"frontier":             ToThreadFrontierEnvelope(view).View,
+		"graph":                ToThreadGraphEnvelope(core.ThreadGraphProjection{View: view}).Projection.View,
+		"plan":                 ToThreadPlanEnvelope(core.ThreadGraphProjection{View: view}).Projection.View,
+		"thread-update-before": update.Before,
+		"thread-update-after":  update.After,
+		"task-impact-before":   impacts[0].Before,
+		"task-impact-after":    impacts[0].After,
+	} {
+		t.Run(name, func(t *testing.T) {
+			for _, members := range [][]ThreadTaskJSON{payload.Members, payload.Frontier} {
+				if len(members) != len(items) {
+					t.Fatalf("lost tasks: %+v", members)
+				}
+				for i, item := range members {
+					task := items[i].Task
+					want := ThreadTaskPlanningJSON{Priority: task.Priority, Tier: task.Tier, Effort: task.Effort}
+					if item.Planning != want || item.Task.TaskID != items[i].State.TaskID || item.Task.Status != string(task.Status) {
+						t.Fatalf("task[%d] lost metadata, identity, or order: %+v want planning %+v", i, item, want)
+					}
+				}
+			}
+			if len(payload.ExternalGates) != 1 || !payload.ExternalGates[0].Outstanding || payload.ExternalGates[0].Role != "external-gate" ||
+				payload.ExternalGates[0].Planning != (ThreadTaskPlanningJSON{Priority: "medium", Tier: 3, Effort: gate.Task.Effort}) {
+				t.Fatalf("lost raw external prerequisite context: %+v", payload.ExternalGates)
+			}
+		})
+	}
+}
+
+func TestThreadPlanningJSONSchemaAndUnsetRepresentation(t *testing.T) {
+	schemaBytes, err := JSONSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(schemaBytes))
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := doc.(map[string]any)["$id"].(string)
+	compiler := jsonschema.NewCompiler()
+	if err := compiler.AddResource(id, doc); err != nil {
+		t.Fatal(err)
+	}
+	schema, err := compiler.Compile(id + "#/$defs/ThreadFrontierEnvelope")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []ThreadTaskPlanningJSON{
+		{Priority: "high", Tier: 1, Effort: "Unknown"},
+		{Priority: "low", Tier: 5, Effort: "XS"},
+		{},
+	} {
+		t.Run(want.Effort+want.Priority, func(t *testing.T) {
+			item := core.ThreadTaskView{Role: core.ThreadTaskMember,
+				Task:  domain.Task{ID: "6g0000000001", Status: domain.StatusNextUp, Priority: want.Priority, Tier: want.Tier, Effort: want.Effort},
+				State: core.TaskGraphState{TaskID: "6g0000000001", Role: core.RoleQueued, Gate: core.GateClear, Eligible: true},
+			}
+			encoded, err := json.Marshal(ToThreadFrontierEnvelope(core.ThreadView{
+				Thread:      domain.Thread{ID: "6g0000000000", Slug: "thread", Status: domain.ThreadStatusUnstarted},
+				GraphHealth: core.GraphHealthy, ProjectionHealth: core.GraphHealthy,
+				Members: []core.ThreadTaskView{item}, Frontier: []core.ThreadTaskView{item},
+			}))
+			if err != nil {
+				t.Fatal(err)
+			}
+			var instance map[string]any
+			if err := json.Unmarshal(encoded, &instance); err != nil {
+				t.Fatal(err)
+			}
+			if err := schema.Validate(instance); err != nil {
+				t.Fatalf("Thread envelope violates published schema: %v", err)
+			}
+			frontier := instance["view"].(map[string]any)["frontier"].([]any)
+			planning := frontier[0].(map[string]any)["planning"].(map[string]any)
+			if len(planning) != 3 || planning["priority"] != want.Priority || planning["tier"] != float64(want.Tier) || planning["effort"] != want.Effort {
+				t.Fatalf("wire defaulted or omitted metadata: %+v want %+v", planning, want)
+			}
+			planning["tier"] = "1"
+			if err := schema.Validate(instance); err == nil {
+				t.Fatal("schema accepted a string-valued planning tier")
+			}
+			planning["tier"] = float64(want.Tier)
+			delete(planning, "effort")
+			if err := schema.Validate(instance); err == nil {
+				t.Fatal("schema accepted omitted planning effort")
+			}
+		})
+	}
+}
 
 func TestToThreadJSONPreservesTagOrderAndCanonicalizesMembership(t *testing.T) {
 	payload := ToThreadJSON(domain.Thread{

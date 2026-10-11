@@ -362,7 +362,11 @@ import (
 // updated-since, and versioned continuation; opt-in typed/projected JSON gains
 // page metadata. Opt-in Thread projections also retain repository graph context
 // outside rows. Unbounded default calls retain their existing result shape.
-const SchemaVersion = "1.85"
+// 1.86: ADDITIVE — Thread task views gain a typed planning object containing
+// raw priority, tier, and effort, including explicit unset values. Members,
+// external prerequisites, and frontier share this context; identity, eligibility,
+// ordering, and the compact dependency-query task shape are unchanged.
+const SchemaVersion = "1.86"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.

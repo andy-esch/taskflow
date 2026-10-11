@@ -1,6 +1,7 @@
 package core
 
 import (
+	"reflect"
 	"slices"
 	"sort"
 	"testing"
@@ -96,6 +97,58 @@ func TestProjectThreadFrontierUsesSharedEligibility(t *testing.T) {
 	sort.Strings(want)
 	if !slices.Equal(got, want) {
 		t.Fatalf("frontier IDs = %v, want %v", got, want)
+	}
+}
+
+func TestThreadPlanningContextDoesNotScheduleWork(t *testing.T) {
+	queued := graphRecord("queued", domain.StatusNextUp)
+	ready := graphRecord("ready", domain.StatusReadyToStart)
+	unknown := graphRecord("unknown", domain.StatusNextUp)
+	external := graphRecord("external", domain.StatusNextUp)
+	active := graphRecord("active", domain.StatusInProgress, external.ID)
+	tasks := []domain.Task{ready, active, external, unknown, queued}
+	thread := threadRecord(domain.ThreadStatusInProgress, queued.ID, ready.ID, unknown.ID, active.ID)
+	before := ProjectThread(thread, NewTaskGraph(tasks, nil))
+	tasks[0].Priority, tasks[0].Tier, tasks[0].Effort = "low", 5, "XS"
+	tasks[1].Priority, tasks[1].Tier, tasks[1].Effort = "high", 1, "L"
+	tasks[2].Priority, tasks[2].Tier, tasks[2].Effort = "high", 1, "XL"
+	tasks[3].Effort = "Unknown"
+	tasks[4].Priority, tasks[4].Tier, tasks[4].Effort = "high", 1, "M"
+	after := ProjectThread(thread, NewTaskGraph(tasks, nil))
+
+	byID := make(map[string]domain.Task)
+	for _, task := range tasks {
+		byID[task.ID] = task
+	}
+	assertViews := func(name string, before, after []ThreadTaskView) {
+		t.Helper()
+		if len(before) != len(after) {
+			t.Fatalf("%s membership changed: before=%+v after=%+v", name, before, after)
+		}
+		for i, item := range after {
+			if item.Role != before[i].Role || !reflect.DeepEqual(item.State, before[i].State) {
+				t.Fatalf("%s[%d] metadata changed ordering/graph state: before=%+v after=%+v", name, i, before[i], item)
+			}
+			want := byID[item.State.TaskID]
+			if item.Task.Priority != want.Priority || item.Task.Tier != want.Tier || item.Task.Effort != want.Effort {
+				t.Fatalf("%s[%d] lost planning context: task=%+v want=%+v", name, i, item.Task, want)
+			}
+		}
+	}
+	assertViews("members", before.Members, after.Members)
+	assertViews("frontier", before.Frontier, after.Frontier)
+	if len(after.Frontier) != 3 || len(after.ExternalGates) != 1 || !after.ExternalGates[0].Outstanding {
+		t.Fatalf("active or external task became a candidate: %+v", after)
+	}
+	assertViews("external gates", []ThreadTaskView{before.ExternalGates[0].ThreadTaskView}, []ThreadTaskView{after.ExternalGates[0].ThreadTaskView})
+	if after.GraphHealth != before.GraphHealth || after.ProjectionHealth != before.ProjectionHealth || after.Rollup != before.Rollup {
+		t.Fatalf("planning context changed health/rollup: before=%+v after=%+v", before, after)
+	}
+	thread.Tasks = append(thread.Tasks, testutil.TaskID("missing"))
+	slices.Sort(thread.Tasks)
+	broken := ProjectThread(thread, NewTaskGraph(tasks, nil))
+	if broken.ProjectionHealth != GraphBroken || len(broken.Frontier) != 0 || !hasThreadProblem(broken.Problems, ThreadProblemMissingMember) || hasThreadProblem(broken.Problems, ThreadProblemInvalidDocument) {
+		t.Fatalf("metadata must not override fail-closed projection: %+v", broken)
 	}
 }
 

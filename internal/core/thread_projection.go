@@ -40,6 +40,8 @@ type ThreadProblem struct {
 	Message  string
 }
 
+// ThreadTaskView retains the task's raw planning context for every adapter.
+// Priority, tier, and effort are explanatory metadata, never dispatch policy.
 type ThreadTaskView struct {
 	Role  ThreadTaskRole
 	Task  domain.Task
