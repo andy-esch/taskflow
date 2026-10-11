@@ -119,7 +119,8 @@ func (s *Service) QueryThreadViews(status string, q ListQuery) (ThreadListView, 
 		Problems      []ThreadReadProblem
 		GraphHealth   GraphHealth
 		GraphProblems []GraphProblem
-	}{problems, list.GraphHealth, list.GraphProblems},
+		GraphLegacy   []LegacyDependencyDiagnostic
+	}{problems, list.GraphHealth, list.GraphProblems, list.GraphLegacy},
 		func(r ThreadView) listRow {
 			t := r.Thread
 			return listRow{r.Source.ID, t.Slug, t.Created, t.Updated, strings.Join([]string{t.Slug, t.Description, t.Goal, strings.Join(t.Tags, " ")}, "\n")}

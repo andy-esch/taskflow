@@ -366,7 +366,11 @@ import (
 // raw priority, tier, and effort, including explicit unset values. Members,
 // external prerequisites, and frontier share this context; identity, eligibility,
 // ordering, and the compact dependency-query task shape are unchanged.
-const SchemaVersion = "1.86"
+// 1.87: ADDITIVE — Thread projections carry repository-global graph_legacy
+// occurrences, hoisted once in typed and opt-in projected lists. Shared legacy
+// diagnostics also retain optional opaque source locations. Eligibility,
+// diagnostic severity, and durable document/plan formats are unchanged.
+const SchemaVersion = "1.87"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.

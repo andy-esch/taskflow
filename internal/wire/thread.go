@@ -92,6 +92,7 @@ type ThreadViewJSON struct {
 	Frontier         []ThreadTaskJSON         `json:"frontier" jsonschema:"description=next-up and ready-to-start Thread members with clear dependency gates; empty unless both graph_health and projection_health are healthy"`
 	Problems         []ThreadProblemJSON      `json:"problems"`
 	GraphProblems    []GraphProblemJSON       `json:"graph_problems"`
+	GraphLegacy      []LegacyDependencyJSON   `json:"graph_legacy" jsonschema:"description=repository-global legacy field occurrences; resolvable or empty fields still suppress dispatch until migration"`
 }
 
 func ToThreadViewJSON(view core.ThreadView) ThreadViewJSON {
@@ -106,6 +107,7 @@ func ToThreadViewJSON(view core.ThreadView) ThreadViewJSON {
 		Frontier:      make([]ThreadTaskJSON, 0, len(view.Frontier)),
 		Problems:      make([]ThreadProblemJSON, 0, len(view.Problems)),
 		GraphProblems: ToGraphProblemsJSON(view.GraphProblems),
+		GraphLegacy:   ToLegacyDependenciesJSON(view.GraphLegacy),
 	}
 	for _, member := range view.Members {
 		payload.Members = append(payload.Members, toThreadTaskJSON(member))
@@ -139,6 +141,7 @@ type ThreadsEnvelope struct {
 	SchemaVersion string                  `json:"schema_version"`
 	GraphHealth   string                  `json:"graph_health" jsonschema:"description=repository task-DAG verdict: healthy|degraded|broken"`
 	GraphProblems []GraphProblemJSON      `json:"graph_problems"`
+	GraphLegacy   []LegacyDependencyJSON  `json:"graph_legacy"`
 	Threads       []ThreadViewJSON        `json:"threads"`
 	Unreadable    []ThreadReadProblemJSON `json:"unreadable"`
 	Page          *ListPageJSON           `json:"page,omitempty"`
@@ -157,7 +160,8 @@ type ThreadReadProblemJSON struct {
 func ToThreadsEnvelope(list core.ThreadListView, problems []core.ThreadReadProblem) ThreadsEnvelope {
 	payload := ThreadsEnvelope{
 		SchemaVersion: SchemaVersion, GraphHealth: string(list.GraphHealth), GraphProblems: ToGraphProblemsJSON(list.GraphProblems),
-		Threads: make([]ThreadViewJSON, 0, len(list.Threads)), Unreadable: ToThreadReadProblemsJSON(problems),
+		GraphLegacy: ToLegacyDependenciesJSON(list.GraphLegacy),
+		Threads:     make([]ThreadViewJSON, 0, len(list.Threads)), Unreadable: ToThreadReadProblemsJSON(problems),
 	}
 	for _, view := range list.Threads {
 		payload.Threads = append(payload.Threads, ToThreadViewJSON(view))

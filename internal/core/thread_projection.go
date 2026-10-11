@@ -72,17 +72,19 @@ type ThreadView struct {
 	GraphHealth      GraphHealth
 	ProjectionHealth GraphHealth
 	GraphProblems    []GraphProblem
+	GraphLegacy      []LegacyDependencyDiagnostic
 	Problems         []ThreadProblem
 	Inconsistent     bool
 }
 
-// ThreadListView hoists repository-global graph diagnostics out of individual
-// Thread rows. A list may therefore report a broken empty repository without
-// repeating the same graph-problem set once per Thread.
+// ThreadListView hoists repository-global structural and legacy diagnostics out
+// of individual Thread rows, even for empty/filtered lists. Legacy occurrences
+// explain degraded health but never authorize dispatch or migration themselves.
 type ThreadListView struct {
 	Threads       []ThreadView
 	GraphHealth   GraphHealth
 	GraphProblems []GraphProblem
+	GraphLegacy   []LegacyDependencyDiagnostic
 }
 
 // ProjectThread joins one persisted membership set to the immutable repository
@@ -190,6 +192,7 @@ func projectThread(thread domain.Thread, source RecordSource, graph *TaskGraph) 
 		})
 	}
 	view.GraphProblems = graph.Problems()
+	view.GraphLegacy = graph.LegacyDiagnostics()
 	if err := domain.ValidateThreadDocument(thread); err != nil {
 		view.ProjectionHealth = GraphBroken
 		view.Problems = append(view.Problems, ThreadProblem{
