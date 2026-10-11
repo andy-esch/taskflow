@@ -125,18 +125,18 @@ func Discover(start string) (*Config, error) {
 			if err != nil {
 				return nil, err // malformed TOML is loud, never a silent default
 			}
-			root, err := resolveRoot(dir, cf)
+			root, repoID, err := resolveRootIdentity(dir, cf)
 			if err != nil {
 				return nil, err // loud, never a silently empty/forked tree
 			}
-			// resolveRoot already followed/validated planning_repo into Root; the
+			// Resolution already followed/validated planning_repo into Root; the
 			// raw planning_repo + tracked_repos ride along for the linkback checks.
 			return &Config{
 				Root: root,
 				Dir:  dir,
 				// The id of the tree we RESOLVED to: this repo's own when in-tree, the
 				// pointed-at repo's when following a pointer.
-				ID:           resolvedID(cf, root),
+				ID:           repoID,
 				PlanningRepo: cf.PlanningRepo,
 				TrackedRepos: cf.TrackedRepos,
 				Pager:        PagerConfig{Enabled: cf.Pager.Enabled, Command: cf.Pager.Command},
@@ -144,10 +144,10 @@ func Discover(start string) (*Config, error) {
 			}, nil
 		}
 		if isDir(filepath.Join(dir, domain.TasksDir)) {
-			return &Config{Root: dir}, nil
+			return discoverDataRoot(dir)
 		}
 		if isDir(filepath.Join(dir, defaultSubdirRoot, domain.TasksDir)) {
-			return &Config{Root: filepath.Join(dir, defaultSubdirRoot)}, nil
+			return discoverDataRoot(filepath.Join(dir, defaultSubdirRoot))
 		}
 		parent := filepath.Dir(dir)
 		// .git is the climb boundary whether it's a directory OR a file — in a
@@ -160,6 +160,20 @@ func Discover(start string) (*Config, error) {
 		}
 		dir = parent
 	}
+}
+
+// A bare-looking data directory may have an ancestor scaffold marker. Only an
+// exact, physical taskflow_root match can supply its identity and preferences.
+func discoverDataRoot(root string) (*Config, error) {
+	dir, cf, err := governingConfig(root)
+	if err != nil {
+		return nil, err
+	}
+	return &Config{
+		Root: evalOr(root), Dir: dir, ID: cf.ID, TrackedRepos: cf.TrackedRepos,
+		Pager: PagerConfig{Enabled: cf.Pager.Enabled, Command: cf.Pager.Command},
+		Theme: ThemeConfig{Name: cf.Theme.Name},
+	}, nil
 }
 
 // configuredRoot resolves the planning root from dir, honoring the already-parsed
@@ -188,26 +202,30 @@ func configuredRoot(dir, rel string) (string, error) {
 	return root, nil
 }
 
-// resolveRoot picks the planning root from a parsed config. planning_repo, when
-// set, is the sanctioned out-of-tree escape and wins; taskflow_root is the
+// resolveRootIdentity picks the planning root and its identity from a parsed
+// config. planning_repo is the sanctioned out-of-tree escape; taskflow_root is the
 // in-tree (containment-checked) default. Setting both to different roots is a
 // conflict, not a silent override — taskflow_root "" / "." is the only value
 // that coexists with planning_repo (it just means "the default in-tree root",
 // which planning_repo overrides).
-func resolveRoot(dir string, cf configFile) (string, error) {
+// Capture the identity with its root; don't re-walk after validation and
+// accidentally describe a different target observation.
+func resolveRootIdentity(dir string, cf configFile) (string, string, error) {
 	if cf.PlanningRepo == "" {
-		return configuredRoot(dir, cf.TaskflowRoot)
+		root, err := configuredRoot(dir, cf.TaskflowRoot)
+		return root, cf.ID, err
 	}
 	// Only a default-equivalent taskflow_root coexists with planning_repo; anything
 	// else names a SECOND root, which is a conflict, not a silent override.
 	// Normalize first so "./", " . ", "./." — all the in-tree root — aren't
 	// mistaken for a different root than ".".
 	if tr := strings.TrimSpace(cf.TaskflowRoot); tr != "" && filepath.Clean(filepath.FromSlash(tr)) != "." {
-		return "", fmt.Errorf(
+		return "", "", fmt.Errorf(
 			"%w: %s sets both planning_repo (%q) and taskflow_root (%q), which name different roots — keep one",
 			domain.ErrConflict, ConfigFile, cf.PlanningRepo, cf.TaskflowRoot)
 	}
-	return resolvePlanningRepo(dir, cf.PlanningRepo, cf.PlanningRepoID)
+	target, err := resolvePlanningTarget(dir, cf.PlanningRepo, cf.PlanningRepoID)
+	return target.root, target.config.ID, err
 }
 
 // resolvePlanningRepo resolves planning_repo relative to the config dir (an
@@ -223,57 +241,70 @@ func resolveRoot(dir string, cf configFile) (string, error) {
 // checkTrackedRepo already accepts. A target that is neither is a loud error (the
 // "require + validate" contract), never a clean empty tree.
 func resolvePlanningRepo(dir, planningRepo, wantID string) (string, error) {
+	target, err := resolvePlanningTarget(dir, planningRepo, wantID)
+	return target.root, err
+}
+
+// planningTarget is one local resolution observation shared by discovery,
+// initialization and migration. No second marker or identity lookup is needed
+// just because the caller addressed a scaffold's configured data directory.
+type planningTarget struct {
+	root, configDir, recoveryDir, tree string
+	config                             configFile
+}
+
+func resolvePlanningTarget(dir, planningRepo, wantID string) (planningTarget, error) {
 	root := planningRepoDirectory(dir, planningRepo)
+	target := planningTarget{recoveryDir: root, tree: "."}
 	if cfgPath := filepath.Join(root, ConfigFile); fileExists(cfgPath) {
 		cf, err := readConfigFile(cfgPath)
 		if err != nil {
-			return "", err
+			return planningTarget{}, err
 		}
 		// A target that is ITSELF a pointer is a chain: not followed, because it
 		// would need loop detection and leaves "where does my data live" unanswerable
 		// from one config. Loud, naming the real target so the fix is mechanical.
 		if cf.PlanningRepo != "" {
-			return "", fmt.Errorf(
+			return planningTarget{}, fmt.Errorf(
 				"%w: planning_repo %q points at %s, which is itself a pointer (planning_repo = %q) — chains aren't followed; point at the planning repo directly",
 				domain.ErrValidation, planningRepo, root, cf.PlanningRepo)
 		}
-		target, err := configuredRoot(root, cf.TaskflowRoot)
+		dataRoot, err := configuredRoot(root, cf.TaskflowRoot)
 		if err != nil {
-			return "", fmt.Errorf("planning_repo %q: %w", planningRepo, err)
+			return planningTarget{}, fmt.Errorf("planning_repo %q: %w", planningRepo, err)
 		}
-		if err := verifyPlanningRepoID(planningRepo, root, wantID, cf.ID, true, cf.TaskflowRoot); err != nil {
-			return "", err
+		target.root, target.configDir, target.config = evalOr(dataRoot), root, cf
+		target.tree = cf.TaskflowRoot
+	} else {
+		// Same ladder Discover climbs, in the same order: a config-less repo is a planning repo
+		// if it has tasks/ OR planning/tasks/. Checking only tasks/ broke the invariant stated
+		// above — a directory with planning/tasks/ resolved fine with `-C <target>` but was
+		// rejected when a pointer named it, so the two spellings disagreed about the same tree.
+		dataRoot := root
+		switch {
+		case isDir(filepath.Join(root, domain.TasksDir)):
+		case isDir(filepath.Join(root, defaultSubdirRoot, domain.TasksDir)):
+			dataRoot = filepath.Join(root, defaultSubdirRoot)
+			target.tree = defaultSubdirRoot
+		default:
+			return planningTarget{}, fmt.Errorf(
+				"%w: planning_repo %q points at %s, which is not a planning repo — expected %s/ or %s/%s/ there, or a %s naming the root via taskflow_root. Fix the pointer, run `tskflwctl init` there, or use `-C <planning repo>` to work in it directly",
+				domain.ErrValidation, planningRepo, root, domain.TasksDir, defaultSubdirRoot, domain.TasksDir, ConfigFile)
 		}
-		return evalOr(target), nil
+		target.root = evalOr(dataRoot)
+		markerDir, cf, err := governingConfig(target.root)
+		if err != nil {
+			return planningTarget{}, fmt.Errorf("planning_repo %q: %w", planningRepo, err)
+		}
+		if markerDir != "" {
+			target.configDir, target.config = markerDir, cf
+			target.recoveryDir, target.tree = markerDir, cf.TaskflowRoot
+		}
 	}
-	// Same ladder Discover climbs, in the same order: a config-less repo is a planning repo
-	// if it has tasks/ OR planning/tasks/. Checking only tasks/ broke the invariant stated
-	// above — a directory with planning/tasks/ resolved fine with `-C <target>` but was
-	// rejected when a pointer named it, so the two spellings disagreed about the same tree.
-	target := root
-	switch {
-	case isDir(filepath.Join(root, domain.TasksDir)):
-	case isDir(filepath.Join(root, defaultSubdirRoot, domain.TasksDir)):
-		target = filepath.Join(root, defaultSubdirRoot)
-	default:
-		return "", fmt.Errorf(
-			"%w: planning_repo %q points at %s, which is not a planning repo — expected %s/ or %s/%s/ there, or a %s naming the root via taskflow_root. Fix the pointer, run `tskflwctl init` there, or use `-C <planning repo>` to work in it directly",
-			domain.ErrValidation, planningRepo, root, domain.TasksDir, defaultSubdirRoot, domain.TasksDir, ConfigFile)
+	if err := verifyPlanningRepoID(planningRepo, target.recoveryDir, wantID, target.config.ID, target.configDir != "", target.tree); err != nil {
+		return planningTarget{}, err
 	}
-	// A config-less planning repo (bare tasks/ dir) carries no id, so an opted-in pointer
-	// must fail here for the same reason it fails on a mismatch — see verifyPlanningRepoID.
-	tree := "."
-	if target != root {
-		tree = defaultSubdirRoot
-	}
-	if err := verifyPlanningRepoID(planningRepo, root, wantID, "", false, tree); err != nil {
-		return "", err
-	}
-	// Resolve symlinks so Root is PHYSICAL, matching the in-tree branch (Discover
-	// evalOr's dir, which configuredRoot inherits). The linkback work compares
-	// physical paths, so a symlinked external planning repo must not leave Root
-	// logical here. evalOr falls back to the lexical path if it can't resolve.
-	return evalOr(target), nil
+	return target, nil
 }
 
 // Pointer targets are anchored at the canonical checkout, not its worktree.
@@ -300,13 +331,6 @@ func verifyPlanningRepoID(planningRepo, root, wantID, gotID string, hasMarker bo
 		return nil
 	}
 	if gotID == "" {
-		if !hasMarker {
-			if markerDir, _, ok := configForRoot(root); ok && evalOr(markerDir) != evalOr(root) {
-				return fmt.Errorf("%w: planning_repo %q resolved to data tree %s, which carries no id at this pointer address; "+
-					"its governing configuration lives at %s — point planning_repo at that directory rather than initializing a second marker here; "+
-					"the expected identity %q and pointer binding are unchanged", domain.ErrConflict, planningRepo, root, markerDir, wantID)
-			}
-		}
 		return fmt.Errorf(
 			"%w: planning_repo %q resolved to %s, which carries no id — this pointer expects %q; "+
 				"restore the original configuration to retain that identity, or recover the target directly with `%s`; "+
@@ -332,25 +356,6 @@ func planningIdentityRecoveryCommand(root string, hasMarker bool, tree string) s
 	return "tskflwctl init --path " + quote(root) + " --taskflow-root " + quote(tree) + " --no-register"
 }
 
-// resolvedID is the durable id of the tree a config resolved to: its own for an in-tree
-// layout, the target's when the config is a pointer.
-func resolvedID(cf configFile, root string) string {
-	if cf.PlanningRepo == "" {
-		return cf.ID
-	}
-	return planningRepoID(root)
-}
-
-// planningRepoID returns the durable id of the planning repo governing root, or "" when it
-// has no config or no id yet. Never an error: absence is legal everywhere.
-func planningRepoID(root string) string {
-	_, cf, ok := configForRoot(root)
-	if !ok {
-		return ""
-	}
-	return cf.ID
-}
-
 // configForRoot finds the .tskflwctl.toml that GOVERNS the planning root at
 // `root` — i.e. the config whose taskflow_root resolves back to `root` — and
 // returns its directory + parsed contents. Usually that's `root` itself
@@ -359,21 +364,40 @@ func planningRepoID(root string) string {
 // root/.tskflwctl.toml lookup would miss it and falsely report a broken link.
 // ok is false when no config governs the root (a config-less or unrelated tree).
 func configForRoot(root string) (dir string, cf configFile, ok bool) {
+	dir, cf, err := governingConfig(root)
+	return dir, cf, err == nil && dir != ""
+}
+
+// governingConfig never follows pointers or crosses a physical Git boundary.
+// A nearest marker shadows ancestors but owns this root only when its in-tree
+// taskflow_root matches exactly. Unlike link diagnostics' boolean wrapper, callers
+// binding identities must not silently treat malformed governing TOML as absent.
+func governingConfig(root string) (dir string, cf configFile, err error) {
 	root = evalOr(root)
 	for d := root; ; {
 		if p := filepath.Join(d, ConfigFile); fileExists(p) {
 			c, err := readConfigFile(p)
 			if err != nil {
-				return "", configFile{}, false
+				return "", configFile{}, err
 			}
-			if r, err := resolveRoot(d, c); err == nil && evalOr(r) == root {
-				return d, c, true
+			if c.PlanningRepo != "" {
+				return "", configFile{}, nil // a pointer is never scaffold authority
 			}
-			return "", configFile{}, false // a config here governs a different root
+			rel := c.TaskflowRoot
+			if rel == "" {
+				rel = "."
+			}
+			if evalOr(filepath.Join(d, filepath.FromSlash(rel))) != root {
+				return "", configFile{}, nil // a config here governs a different root
+			}
+			if _, err := configuredRoot(d, c.TaskflowRoot); err != nil {
+				return "", configFile{}, err
+			}
+			return d, c, nil
 		}
 		parent := filepath.Dir(d)
 		if parent == d || exists(filepath.Join(d, ".git")) {
-			return "", configFile{}, false
+			return "", configFile{}, nil
 		}
 		d = parent
 	}
@@ -839,13 +863,13 @@ func InitPointer(dir, planningRepo string, dryRun bool) (InitResult, error) {
 		return result, fmt.Errorf("%w: planning_repo path is required", domain.ErrValidation)
 	}
 	// No expectation yet — this is where one gets established. Resolve first (the
-	// "require + validate" contract), then read the target's id so the pointer we write
-	// opts into verification from its first use.
-	planningRoot, err := resolvePlanningRepo(dir, planningRepo, "")
+	// "require + validate" contract), capturing the target's id in that same lookup
+	// so the pointer we write opts into verification from its first use.
+	target, err := resolvePlanningTarget(dir, planningRepo, "")
 	if err != nil {
 		return result, err // not a planning root → loud, nothing written
 	}
-	targetID := planningRepoID(planningRoot)
+	targetID := target.config.ID
 	result.PlanningID = targetID
 	cfg := filepath.Join(dir, ConfigFile)
 	// An existing config: same target → idempotent no-op; a DIFFERENT target (a
@@ -863,6 +887,9 @@ func InitPointer(dir, planningRepo string, dryRun bool) (InitResult, error) {
 		}
 		// Same target is an idempotent no-op. Durable-id backfills are deliberately
 		// owned by Migrate rather than hidden inside a bootstrap command.
+		if err := verifyPlanningRepoID(planningRepo, target.recoveryDir, existing.PlanningRepoID, targetID, target.configDir != "", target.tree); err != nil {
+			return result, err
+		}
 		return result, nil
 	}
 	if dryRun {

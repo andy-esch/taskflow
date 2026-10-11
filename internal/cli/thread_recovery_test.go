@@ -193,7 +193,7 @@ func TestPointerRecoveryHintsDoNotSilentlyRebind(t *testing.T) {
 	}
 }
 
-func TestPointerRecoveryDoesNotInitializeInsideGoverningMarker(t *testing.T) {
+func TestPointerDataDirectoryIdentityRecoveryUsesGoverningMarker(t *testing.T) {
 	repo, impl := t.TempDir(), t.TempDir()
 	result, err := config.Init(repo, "planning", false)
 	if err != nil {
@@ -202,11 +202,66 @@ func TestPointerRecoveryDoesNotInitializeInsideGoverningMarker(t *testing.T) {
 	pointer := fmt.Sprintf("planning_repo = %q\nplanning_repo_id = %q\n", filepath.ToSlash(filepath.Join(repo, "planning")), result.PlanningID)
 	mustWrite(t, filepath.Join(impl, config.ConfigFile), pointer)
 	before := testutil.SnapshotTree(t, repo)
+	runRoot(t, "-C", impl, "thread", "list", "--json")
+	if !reflect.DeepEqual(before, testutil.SnapshotTree(t, repo)) {
+		t.Fatal("healthy data-directory discovery changed the planning target")
+	}
+	// Lose the target identity, but retain its governing marker. The repair must
+	// migrate that marker, not initialize a second one inside the data directory.
+	mustWrite(t, filepath.Join(repo, config.ConfigFile), "# retain topology\ntaskflow_root = \"planning\"\nunknown = \"keep\"\n")
+	beforeDocuments := recoveryDocuments(t, filepath.Join(repo, "planning"))
 	_, err = runRootRC(t, "-C", impl, "thread", "list")
-	if !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "governing configuration") || strings.Contains(err.Error(), "tskflwctl init") {
+	if !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), "config migrate") || strings.Contains(err.Error(), "tskflwctl init") {
 		t.Fatalf("data-directory alias should direct recovery to the existing marker, not mint inside it: %v", err)
 	}
-	if !reflect.DeepEqual(before, testutil.SnapshotTree(t, repo)) {
-		t.Fatal("refusal changed the planning target")
+	runRecoveryHint(t, err.Error(), repo, "planning", true)
+	if !reflect.DeepEqual(beforeDocuments, recoveryDocuments(t, filepath.Join(repo, "planning"))) {
+		t.Fatal("recovery changed data-directory documents or created a marker there")
+	}
+	b, err := os.ReadFile(filepath.Join(impl, config.ConfigFile))
+	if err != nil || string(b) != pointer {
+		t.Fatalf("recovery rebound pointer: %s, %v", b, err)
+	}
+	if _, err := runRootRC(t, "-C", impl, "thread", "list"); !errors.Is(err, domain.ErrConflict) {
+		t.Fatalf("regenerated identity silently adopted: %v", err)
+	}
+}
+
+func TestPointerDataDirectoryBindingCLI(t *testing.T) {
+	for _, tree := range []string{"planning", "docs/work"} {
+		for _, mode := range []string{"init", "migrate"} {
+			t.Run(tree+"/"+mode, func(t *testing.T) {
+				home, repo, impl := t.TempDir(), t.TempDir(), t.TempDir()
+				t.Setenv(userconfig.DirEnv, home)
+				result, err := config.Init(repo, tree, false)
+				if err != nil {
+					t.Fatal(err)
+				}
+				data := filepath.Join(repo, tree)
+				member := writeThreadApplyCLITask(t, data, "alias-member", domain.StatusNextUp)
+				before := testutil.SnapshotTree(t, repo)
+				beforeHome := testutil.SnapshotTree(t, home)
+				if mode == "init" {
+					runRoot(t, "init", "--path", impl, "--planning-repo", data, "--no-register", "--no-link-back", "--json")
+				} else {
+					mustWrite(t, filepath.Join(impl, config.ConfigFile), fmt.Sprintf("# keep pointer\nplanning_repo = %q\n", filepath.ToSlash(data)))
+					runRoot(t, "-C", impl, "config", "migrate", "--json")
+				}
+				if !reflect.DeepEqual(before, testutil.SnapshotTree(t, repo)) || !reflect.DeepEqual(beforeHome, testutil.SnapshotTree(t, home)) {
+					t.Fatal("binding changed target documents/topology or registered a local space")
+				}
+				cfg, err := config.Discover(impl)
+				if err != nil || cfg.ID != result.PlanningID {
+					t.Fatalf("binding discovery = %+v, %v", cfg, err)
+				}
+				manifest, plan := filepath.Join(impl, "manifest.yml"), filepath.Join(impl, "plan.yml")
+				mustWrite(t, manifest, "thread:\n  title: Alias binding\n  description: Physical identity parity\n  goal: Same source\nnodes:\n  - key: member\n    task_id: "+member+"\n")
+				// Compose through the alias and apply through the governing repo
+				// address: the persisted plan must identify the very same source.
+				runRoot(t, "-C", impl, "thread", "compose", "--from", manifest, "--out", plan, "--json")
+				runRoot(t, "-C", repo, "thread", "apply", plan, "--json")
+				runRoot(t, "-C", data, "thread", "list", "--json")
+			})
+		}
 	}
 }
