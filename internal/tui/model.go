@@ -469,8 +469,24 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.revisit != "" {
 			m.flash += fmt.Sprintf(" (revisit %s)", msg.revisit)
 		}
-		if msg.lifecycle != nil && len(msg.lifecycle.Impacts) > 0 {
-			m.flash += fmt.Sprintf("; %d downstream task(s) changed derived state", len(msg.lifecycle.Impacts))
+		if msg.lifecycle != nil {
+			if len(msg.lifecycle.Impacts) > 0 {
+				m.flash += fmt.Sprintf("; %d downstream task(s) changed derived state", len(msg.lifecycle.Impacts))
+			}
+			if len(msg.lifecycle.ThreadImpacts) > 0 {
+				m.flash += fmt.Sprintf("; %d Thread projection(s) changed", len(msg.lifecycle.ThreadImpacts))
+				newlyInconsistent := 0
+				for _, impact := range msg.lifecycle.ThreadImpacts {
+					if impact.NewlyInconsistent() {
+						newlyInconsistent++
+					}
+				}
+				if newlyInconsistent > 0 {
+					m.flash += fmt.Sprintf("; WARNING: %d Thread(s) newly inconsistent", newlyInconsistent)
+				}
+			}
+			// Recovery belongs to the whole receipt, not just downstream tasks:
+			// a sole-member reopen can invalidate a Thread with no task impacts.
 			if msg.lifecycle.Remedy != "" {
 				m.flash += "; " + msg.lifecycle.Remedy
 			}

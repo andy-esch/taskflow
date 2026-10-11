@@ -10,7 +10,7 @@ priority: high
 autonomy_level: 2
 tags: [tui, ux, navigation, information-architecture, research, design]
 created: "2026-09-10"
-updated_at: "2026-09-12"
+updated_at: "2026-10-10"
 depends_on: [6g86c7y6hn41]
 ---
 # Reassess TUI navigation and information architecture at current scale
@@ -87,3 +87,9 @@ terms before they can answer what is active, what blocks it, and what it unlocks
 - Coordinate with the
   [large-Thread graph navigation investigation](6g8vxbv3d4xn-explore-progressive-disclosure-and-navigation-for-large-thread-graphs.md).
 - Thread [Refine Thread and TUI navigation](../threads/6g90h4pg0q7n-refine-thread-and-tui-navigation.md)
+
+## Lifecycle feedback evidence (2026-10-10)
+
+The Thread-only lifecycle feedback fix (6ggkdbg0816h) retains the exact core remedy, independently summarizes task and Thread impacts, and preserves committed-cleanup warnings and reloads. The existing footer still truncates the entire flash to one terminal row and clears it on the next key: at 120 columns, a sole-member reopen can hide part of the recovery text, and long task labels or cleanup errors consume more of the budget. This is a presentation limitation, not a missing core receipt or a failed transition.
+
+Include consequential mutation feedback in the navigation/help design: make committed versus refused outcomes, warning severity, and complete core recovery instructions discoverable on narrow terminals. Compare a bounded expandable result/help surface with other approaches before choosing a persistent notification system; do not invent adapter-owned repair advice. The small receipt-rendering fix does not claim to solve this layout problem.
