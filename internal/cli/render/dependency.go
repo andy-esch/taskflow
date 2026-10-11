@@ -343,9 +343,9 @@ func graphDiagnosticsHuman(w io.Writer, st Style, problems []core.GraphProblem, 
 		}
 		seen[key] = true
 		if location != "" {
-			fmt.Fprintf(w, "%s %s: %s (location: %s)\n", st.Warn("⚠"), problem.Code, problem.Message, location)
+			fmt.Fprintf(w, "%s %s: %s (location: %s)\n", st.Warn("⚠"), problem.Code, singleLineText(problem.Message), singleLineText(location))
 		} else {
-			fmt.Fprintf(w, "%s %s: %s\n", st.Warn("⚠"), problem.Code, problem.Message)
+			fmt.Fprintf(w, "%s %s: %s\n", st.Warn("⚠"), problem.Code, singleLineText(problem.Message))
 		}
 	}
 	for _, diagnostic := range legacy {
