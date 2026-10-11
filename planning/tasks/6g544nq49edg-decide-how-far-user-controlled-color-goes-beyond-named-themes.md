@@ -10,7 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [design, palette]
 created: "2026-08-30"
-updated_at: "2026-08-30"
+updated_at: "2026-10-11"
+audited: "2026-10-11"
+audit_sources: [2026-10-11-weekly-task-sweep]
 ---
 # Decide how far user-controlled color goes beyond named themes
 
@@ -112,3 +114,44 @@ points at.
 - Epic [25-design-system-coherent-palette-and-selectable-themes](../epics/25-design-system-coherent-palette-and-selectable-themes.md)
 - Research [color-palette-and-theming-overhaul](../research/6fgq1n001pwm-color-palette-and-theming-overhaul.md) — the base16 decision this would extend or contradict.
 - Raised while reviewing `route-fang-chrome-through-the-resolved-theme-and-fix-codeblock-contrast`, which supplied the load-time-validation argument.
+
+## Sweep refresh (2026-10-11)
+
+2026-10-11: automated weekly sweep — a third theme shipped since filing, which sharpens
+the A-vs-C argument; every structural claim and all four test-time guards re-verified.
+
+**Drift found — three themes ship now, not two.** The Objective says "Two themes ship:
+`neon` and `catppuccin`." `miami-vice` was added on 2026-09-16 (`dd766fe`,
+`internal/design/theme.go:135-209`) and `tskflwctl theme list` reports
+`catppuccin`, `miami-vice`, `neon (default, active)`.
+
+This is not just a counting error — it is evidence for the decision this task exists to
+make. The body prices a complete palette at "40 hex + ANSI pairs plus 2 style names" per
+theme (6 semantic + 11 chrome + 3 gradient = 20 per variant, x2 variants — still exactly
+right). At three themes that is 120 reviewed pairs maintained by hand, and the theme count
+grew by 50% in the six weeks this task sat. **Option C's stated advantage — "the only
+option that scales the theme count without scaling the config surface" — now has a
+demonstrated growth rate behind it rather than a hypothetical one.** Note also that
+`miami-vice` reuses `latteAA` as its light variant (`theme.go:209`), exactly as
+`catppuccin` does, so the per-theme marginal cost in practice has been one dark palette,
+not two. That cuts the other way and is worth weighing when A and C are compared.
+
+**Verified accurate (2026-10-11) — the guards and the shape are unchanged:**
+- `themeFileTOML` is still a single `Name string` field (`internal/config/config.go:98`),
+  and the generated config comment still reads "a registered name, or \"auto\" for the
+  default" (`config.go:517`). The ceiling the Objective describes is still the real one.
+- `design.Palette` is still 6 semantic slots (a `map[theme.Color]Hue`), 11 chrome tokens
+  (Accent, BorderActive, BorderIdle, Danger, Heading, Match, MatchCurrent, MatchFg, Track,
+  Base, Surface), a `Gradient []Hue`, and a `Markdown` style name
+  (`internal/design/palette.go:44-79`). `Surface` is still documented as the only
+  background token.
+- All five cited build-time guards still live in `internal/design/design_test.go`:
+  `TestFindHighlightContrastAA`, `TestChromeSurfaceContrastAA`, `TestChromeSurfaceSlots`,
+  `TestNeonDarkSemanticSlots`, `TestNeonAccent`. The "guards that exist only at test time"
+  argument — the strongest argument in this task — is intact, and `miami-vice` shipping
+  under those same tests confirms the invariants are still the gate for a new palette.
+- `warnUnknownTheme` still degrades an unrecognized name to a warning plus the default
+  (`internal/cli/root.go:511`), so the fourth acceptance criterion's precedent still holds.
+
+No acceptance criterion was ticked: this task's deliverable is a recorded decision, and no
+decision has been recorded.

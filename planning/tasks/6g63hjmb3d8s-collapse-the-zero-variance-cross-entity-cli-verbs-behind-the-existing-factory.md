@@ -10,6 +10,8 @@ priority: low
 autonomy_level: 3
 tags: [cli, refactor, architecture]
 created: "2026-09-02"
+audited: "2026-10-11"
+updated_at: "2026-10-11"
 ---
 # Collapse the zero-variance cross-entity CLI verbs behind the existing factory
 
@@ -52,3 +54,33 @@ honestly and leave everything else alone.
 ## Related
 
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
+
+## Sweep refresh (2026-10-11)
+
+2026-10-11: automated weekly sweep — no drift; every premise and all six cited factories
+re-verified against current code, so the task stands exactly as written.
+
+**Verified accurate (2026-10-11):**
+- All five `path` commands are still separate, hand-written constructors:
+  `newTaskPathCmd` (`internal/cli/task.go:360`), `newEpicPathCmd` (`epic.go:28`),
+  and the audit / research / thread counterparts (`audit.go:571`, `research.go:331`,
+  `thread.go:318`). Read side by side, the variance is still exactly the four
+  substitutions the Objective names — noun, completion function, options function, and
+  the `core.Service` method.
+- The tail is still factored and the shape is not: `emitPath` (`internal/cli/task.go:384`)
+  is shared, `resolveOne` + `absPath` + the `Annotations: {"safety": "read-only"}` line are
+  copied per entity.
+- All six cited in-entity factories still exist: `newTransitionCmd`,
+  `deprecatedTransitionCmd`, `newAuditMoveCmd`, `newTaskDependencyEdgeCmd`,
+  `newThreadMembershipCmd`, `newThreadLifecycleCmd`.
+- All five `core.Service` `*Path` methods still exist (`TaskPath`, `EpicPath`, `AuditPath`,
+  `ResearchPath`, `ThreadPath`), so the "Out of scope" note about not collapsing that
+  fan-out still describes a live seam.
+- `docs/ARCHITECTURE.md:240` still carries the declined data-driven collapse verbatim
+  ("for five heterogeneous entities it trades clarity for machinery"), so the last
+  acceptance criterion still has the paragraph it expects to amend.
+
+**One small thing for whoever picks this up** (noted, not actioned — the sweep does not
+edit `internal/`): `emitPath`'s doc comment says "Shared by task/epic/audit path", but it
+is shared by all five, including research and thread. It is the kind of undercount the
+factory in this task would make structurally impossible to repeat.

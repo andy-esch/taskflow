@@ -3,13 +3,16 @@ schema: 1
 id: 6g54ay3njm8y
 status: ready-to-start
 epic: 21-code-quality-architecture-hardening
-description: Configure repository ruleset as code for main branch protection, enforcing Go Quality status check and preventing deletions/force-pushes
+description: 'Configure repository ruleset as code for main branch protection: required checks on today''s CI jobs (Lint/Tests/Planning Lint), no deletions/force-push'
 effort: 1 day
 tier: 3
 priority: medium
 autonomy_level: 3
 tags: [ci, github, security, infrastructure, quality]
 created: "2026-08-30"
+audited: "2026-10-11"
+audit_sources: [2026-10-11-weekly-task-sweep]
+updated_at: "2026-10-11"
 ---
 # Adopt branch protection ruleset as code (.github/ruleset.json)
 
@@ -123,3 +126,66 @@ gh ruleset view main -R andy-esch/taskflow
 gh ruleset check main -R andy-esch/taskflow
 go run ./cmd/tskflwctl lint
 ```
+
+## Sweep refresh (2026-10-11)
+
+2026-10-11: automated weekly sweep — the ruleset spec's required status check no longer
+exists; applying this task as written would make `main` permanently unmergeable. Body and
+acceptance criteria left intact; the correction is a recommendation, not an edit.
+
+> ⚠️ **The `Go Quality` job is gone.** Everything in "Background & Comparative Context"
+> and the "Ruleset Specification" block below rests on the claim that
+> `.github/workflows/ci.yml` "executes a single comprehensive job named **`Go Quality`**".
+> That was true when this task was filed (2026-08-30). It stopped being true on
+> 2026-09-26, and the task was never updated.
+
+**What CI actually runs today.** `.github/workflows/ci.yml` declares three jobs:
+
+| job id | `name:` (the status-check context) |
+| :--- | :--- |
+| `lint` | `Lint` |
+| `test` | `Tests` |
+| `planning-lint` | `Planning Lint` |
+
+The split happened in two commits on 2026-09-26: `bd375d5`
+("chore(ci): split tests into separate job in workflow") removed the single `Go Quality`
+job, and `835f91b` ("ci: dogfood planning lint action in workflow") added the third. A
+later commit, `9c804a6` (2026-10-09, "build: guard Go and linter toolchain coordination"),
+added a toolchain-coordination step the body's seven-step list also does not mention.
+
+**Why this matters more than a stale sentence.** The ruleset JSON in this task requires
+exactly one context, `{ "context": "Go Quality" }`, with
+`strict_required_status_checks_policy: true`. No job reports that context any more, so a
+required check that never arrives would block every PR into `main` indefinitely — and
+`bypass_actors: []` leaves no escape hatch. **Do not apply the JSON block below verbatim.**
+
+**Recommendation.** Replace the single `Go Quality` context with the three contexts CI
+actually publishes:
+
+```json
+"required_status_checks": [
+  { "context": "Lint" },
+  { "context": "Tests" },
+  { "context": "Planning Lint" }
+]
+```
+
+Three contexts rather than one is also strictly better for the task's stated goal: the
+split means a failure in any one job is independently visible to the ruleset instead of
+being hidden behind one aggregate. Note that the contexts are the jobs' `name:` values,
+not their ids, and that they will need revisiting whenever `ci.yml`'s job names change —
+which is exactly the coupling that produced this drift. Worth deciding, when this is
+picked up, whether to add a check that the ruleset's contexts still match `ci.yml`.
+
+**Also verified (2026-10-11):**
+- `.github/ruleset.json` still does not exist, and `.github/` holds only
+  `workflows/ci.yml` and `workflows/release.yml` — so the whole task is still unstarted.
+- No `ruleset-apply` recipe exists yet. Note the file is `Justfile` (capital J), not
+  `justfile` as the body's "Automation & Justfile Recipe" snippet implies.
+- `tidy-check` (`Justfile:76`) and `docs-check` (`Justfile:91`) both still exist, so the
+  last acceptance criterion's commands are still valid.
+
+**Acceptance criteria untouched.** The first and fourth criteria name `Go Quality` and are
+now built on a false premise, but "stale" is not "decided" — nothing here is met and
+nothing has been consciously waived, so no box was ticked or given a state. Rewriting them
+is a human call.
