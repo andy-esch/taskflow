@@ -174,6 +174,47 @@ func TestPlanningOpenersRejectChangedIdentityBeforeThreadApply(t *testing.T) {
 	}
 }
 
+// Direct data aliases must retain the governing marker as the identity re-read
+// anchor. After redirection, the old alias is still a readable bare tree; opening
+// from there must not hide a changed root or identity from an already-open store.
+func TestPlanningDataAliasRevalidatesGoverningMarkerBeforeThreadApply(t *testing.T) {
+	for _, workspace := range []bool{false, true} {
+		for _, change := range []string{"repoint-root", "replace-id"} {
+			t.Run(fmt.Sprintf("workspace=%t/%s", workspace, change), func(t *testing.T) {
+				entry := newThreadApplyEntry(t, false, "planning")
+				service, planningID := openThreadApplyEntry(t, entry.cfg.Root, workspace, func() error { return nil })
+				if planningID != entry.cfg.ID {
+					t.Fatalf("data alias lost governing identity: %q, want %q", planningID, entry.cfg.ID)
+				}
+				plan := composeThreadApplyEntry(t, service, planningID, entry)
+				if _, err := service.ApplyThreadPlan(plan, true); err != nil {
+					t.Fatalf("initial alias plan must be valid: %v", err)
+				}
+				roots := []string{entry.cfg.Root}
+				wantMessage := "apply plan belongs to planning repository"
+				if change == "repoint-root" {
+					roots = append(roots, repointThreadApplyEntry(t, entry, false))
+					wantMessage = "instead of guarded root"
+				} else {
+					testutil.Write(t, filepath.Join(entry.planning, config.ConfigFile),
+						fmt.Sprintf("id = %q\ntaskflow_root = \"planning\"\n", testutil.TaskID("replaced-planning")))
+				}
+				before := planningDocuments(t, roots...)
+				for _, dryRun := range []bool{true, false} {
+					receipt, err := service.ApplyThreadPlan(plan, dryRun)
+					assertThreadApplyRefused(t, plan, receipt, err, domain.ErrConflict)
+					if !strings.Contains(err.Error(), wantMessage) {
+						t.Fatalf("wrong governing-marker refusal, want %q: %v", wantMessage, err)
+					}
+					if !maps.Equal(before, planningDocuments(t, roots...)) {
+						t.Fatal("refused alias replay changed planning documents")
+					}
+				}
+			})
+		}
+	}
+}
+
 func TestPlanningOpenersPreserveThreadApplyAuthorization(t *testing.T) {
 	for _, opener := range threadApplyOpeners() {
 		for _, dryRun := range []bool{true, false} {
