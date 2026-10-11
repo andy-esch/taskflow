@@ -10,7 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [entity]
 created: "2026-08-29"
-updated_at: "2026-08-29"
+updated_at: "2026-10-11"
+audited: "2026-10-11"
+audit_sources: [2026-10-11-weekly-task-sweep]
 ---
 # create entities from TUI
 
@@ -105,3 +107,50 @@ distinct required-at-creation notion first; otherwise write per-kind field sets 
 
 - Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)
 - Reuses the overlay/form machinery from `internal/tui/edit.go` and `internal/tui/action.go`.
+
+## Sweep refresh (2026-10-11)
+
+2026-10-11: automated weekly sweep — re-verified every citation; two have drifted, the
+Threads one removes an "Out of scope" premise. Scope deliberately left unchanged.
+
+**Drift found — the Threads exclusion no longer holds.** The "Out of scope" note above
+says `entityKind` has exactly four values and there is no Threads tab. Both are now false:
+`entityKind` has five values (`internal/tui/entity.go:24-28`, `entityThreads` third) and a
+real Threads tab is registered in `newEntityTabs` with `name: "threads"` and aliases
+`th`/`thread` (`internal/tui/entity.go:463`). The stated blocker for "create a Thread from
+the TUI" is therefore gone, and `core.Service.NewThread` exists
+(`internal/core/service_thread.go:26`) with the title/description/goal input the table
+above already records. Whether a Threads create flow belongs in THIS task or stays with
+the Threads TUI work is a scoping call left to the human — the sweep does not rescope.
+
+**Drift found — `fieldSetter`'s signature moved.** The body cites it as
+`func(svc, slug, key, value) tea.Cmd`. It is now
+`func(svc *core.Service, ref entityRef, key, value string) tea.Cmd`
+(`internal/tui/edit.go:136`): `slug` became an `entityRef` carrying durable `key` plus
+display `label`. This does not change the task's argument — `editMenu` is still a
+per-field setter against an existing entity and still fires one `SetFields` write per
+`enter` — but any create form reusing the seam takes a ref, not a slug.
+
+**Verified accurate (2026-10-11):**
+- All five `core.Service` `New*` use cases exist and no store access from the TUI would be
+  needed: `NewTask` (`service_task.go:785`), `NewEpic` (`service_epic.go:25`), `NewAudit`
+  (`service_audit.go:24`), `NewResearch` (`service_research.go:34`), `NewThread`
+  (`service_thread.go:26`).
+- `editableFields` / `editableEpicFields` are still the per-kind field sets
+  (`internal/tui/edit.go:57,87`), as the body recommends imitating.
+- `c` is still unbound. The bound keys today are
+  `/ : ? E F G N O R S Y [ ] a ctrl+c ctrl+o ctrl+p e enter esc f g h l m n o q r s tab v y z`
+  (`internal/tui/keys.go`), and `n`/`N` are still find-next/find-prev (`keys.go:57-58`).
+- `helpSections` still derives the `?` overlay from the keyMap (`internal/tui/help.go:27`),
+  so the last acceptance criterion still holds as written.
+- `domain.FieldDoc.Required` still exists (`internal/domain/schema.go:47`), so the
+  "do not drive the form off it" warning still has a live target.
+- `WatchPaths` still covers every entity dir (`internal/store/fsstore.go:122`, consumed at
+  `internal/tui/tui.go:47`), so the cursor-fight hazard in Open decisions is still real.
+- `dangerBorder` is still the destructive-confirm idiom (`internal/tui/action.go:210`).
+- `NewTaskParams` still takes `Body` and `Template`, mutually exclusive
+  (`internal/core/service_task.go:766-786`).
+
+**Acceptance criteria untouched.** No create flow exists anywhere in `internal/tui` — no
+create overlay, and no `core.Service` `New*` call from the TUI at all — so no criterion is
+met and no box was ticked.

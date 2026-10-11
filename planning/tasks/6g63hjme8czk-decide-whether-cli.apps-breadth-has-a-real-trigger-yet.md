@@ -10,7 +10,8 @@ priority: low
 autonomy_level: 3
 tags: [cli, architecture, dx]
 created: "2026-09-02"
-updated_at: "2026-10-04"
+updated_at: "2026-10-11"
+audited: "2026-10-11"
 ---
 # Decide whether cli.App's breadth has a real trigger yet
 
@@ -59,3 +60,36 @@ Old field counts, retired ports, and whole-package-exemption assumptions were re
 the merged boundary work. The decision criteria remain unchecked: extraction is not evidence
 that this separate breadth question has been answered. This is not a required adapter-neutral
 Thread member and does not expand that Thread's closeout scope.
+
+## Sweep refresh (2026-10-11)
+
+2026-10-11: automated weekly sweep — no drift; the 2026-10-04 scope refresh above still
+describes `App` accurately field for field, and the decision is still unrecorded.
+
+**Verified accurate (2026-10-11)** against `internal/cli/root.go:27`:
+- `App` still receives `bindings ports.Bindings` and a lazy `openPlanning` opener, with a
+  `compositionErr` that keeps operational commands off a partial bundle while leaving
+  metadata-only commands usable.
+- `Fixer` and `Linter` are gone — no reference survives anywhere in `internal/cli`.
+- `Layout` is still present as an explicit local watcher capability, carrying exactly the
+  comment the scope refresh claims ("planning repair, body-link checking, and completion
+  are application use cases on `Svc`").
+- `CompletionService` still defers composition until Cobra has parsed the completed
+  command's flags, as the body states.
+- There is still no whole-CLI-package composition exemption. `.golangci.yml:120-129`
+  scopes `internal/cli` to two named local exceptions, `init.go` and `workspace.go`,
+  matching `docs/ARCHITECTURE.md`'s "named local exceptions" wording.
+- The prerequisite this task was sequenced behind is finished:
+  `isolate-cli-composition-wiring-and-enforce-controller-boundaries` (PR #277) is
+  `status: completed`, and `task blockers` reports this task `gate: clear`,
+  `eligible: true`. Nothing is holding it except the decision itself.
+
+**Measurement still outstanding.** The first acceptance criterion asks for concrete costs
+"with evidence, not asserted", and that evidence has not been gathered — so the sweep did
+not tick it. For whoever picks this up, the shape worth measuring is visible from the
+struct: `App` carries 5 distinct named application services (`Svc`, `SpaceSvc`,
+`SpaceOverviewSvc`, `WorkspaceSvc`, `ConfigSvc`) alongside invocation/IO state, resolved
+presentation, and three deferred-error fields (`compositionErr`, `userCfgErr`,
+`commandSafety`). Counting which commands actually reach outside their own concern is the
+missing evidence, and this sweep did not do it — recorded here so the next reader knows the
+criterion is genuinely open rather than overlooked.
