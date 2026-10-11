@@ -52,6 +52,7 @@ func ThreadsProjectedPageJSON(w io.Writer, cols []Column[core.ThreadView], list 
 		context = []orderedField{
 			{"graph_health", string(list.GraphHealth)},
 			{"graph_problems", wire.ToGraphProblemsJSON(list.GraphProblems)},
+			{"graph_legacy", wire.ToLegacyDependenciesJSON(list.GraphLegacy)},
 		}
 	}
 	return projectedPageJSONWithContext(w, "threads", cols, list.Threads, wire.ToThreadReadProblemsJSON(problems), page, context)

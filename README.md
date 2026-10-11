@@ -377,6 +377,9 @@ legacy migration are narrow recovery exceptions with different source preconditi
 enforces the same eligibility policy, while `task start --force` bypasses only the
 dependency gate and returns the outstanding blockers. Diagnostic queries report the
 queried task's derived state, health, and attributable problems.
+Thread reads also report repository-wide legacy fields, even outside their membership.
+JSON carries them in `graph_legacy`; lists hoist them once. Safe fields suggest
+`task depend migrate`; missing, ambiguous, or unsafe references require repair first.
 Ordinary `lint` reports every graph defect. See
 [`ADR-0006`](./planning/adrs/0006-adopt-threads-as-task-dags.md) for the model and rollout.
 

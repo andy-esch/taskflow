@@ -84,13 +84,14 @@ type LegacyReference struct {
 	Edge         DependencyEdge
 }
 
-// LegacyDependencyDiagnostic groups one legacy field occurrence. The production
-// repository currently has six such occurrences (some contain several references),
-// so lint reports six focused issues rather than one line per edge.
+// LegacyDependencyDiagnostic groups one legacy field occurrence, including
+// present-empty keys. TaskID is source identity; Location is opaque context,
+// separate from the optional TaskPath. Each occurrence may contain many edges.
 type LegacyDependencyDiagnostic struct {
 	TaskID     string
 	TaskSlug   string
 	TaskPath   string
+	Location   string // opaque occurrence context; never local-file authority
 	Field      string
 	References []LegacyReference
 	recordRef  taskGraphRecordRef
@@ -106,6 +107,58 @@ func (d LegacyDependencyDiagnostic) MigrationReady() bool {
 		}
 	}
 	return true
+}
+
+// MigrationGuidance names the supported workflow, not permission to migrate a
+// whole repository. Migration revalidates every source and the final graph.
+func (d LegacyDependencyDiagnostic) MigrationGuidance() string {
+	if d.MigrationReady() {
+		return "run task depend migrate"
+	}
+	return "run task depend repair, then task depend migrate"
+}
+
+// Summary explains the field occurrence, including unresolved intent, without
+// requiring adapters to invent diagnostic wording or parse graph messages.
+func (d LegacyDependencyDiagnostic) Summary() string {
+	summary := fmt.Sprintf("legacy %s on %s", d.Field, d.TaskID)
+	if len(d.References) == 0 {
+		return summary + " (empty field)"
+	}
+	var unresolved []string
+	for _, ref := range d.References {
+		if ref.Resolution != LegacyResolved {
+			unresolved = append(unresolved, fmt.Sprintf("%q: %s", ref.Value, ref.Resolution))
+		}
+	}
+	if len(unresolved) > 0 {
+		summary += " (" + strings.Join(unresolved, ", ") + ")"
+	}
+	return summary
+}
+
+// ExplainsGraphProblem identifies missing/ambiguous references already owned by
+// this grouped field diagnosis. Structural defects keep their separate owner.
+// Match the source occurrence so a sibling record's defect is never hidden.
+func (d LegacyDependencyDiagnostic) ExplainsGraphProblem(problem GraphProblem) bool {
+	var resolution LegacyResolution
+	switch problem.Code {
+	case ProblemLegacyMissing:
+		resolution = LegacyMissing
+	case ProblemLegacyAmbiguous:
+		resolution = LegacyAmbiguous
+	default:
+		return false
+	}
+	if d.TaskID != problem.TaskID || d.Field != problem.Field || d.TaskPath != problem.Path || d.Location != problem.Location {
+		return false
+	}
+	for _, ref := range d.References {
+		if ref.Resolution == resolution {
+			return true
+		}
+	}
+	return false
 }
 
 type LifecycleRole string
@@ -672,7 +725,7 @@ func (g *TaskGraph) resolveLegacyDiagnostics(records []taskGraphRecord, represen
 				continue
 			}
 			diagnostic := LegacyDependencyDiagnostic{
-				TaskID: taskID, TaskSlug: task.Slug, TaskPath: record.source.LocalPath, Field: field.name, recordRef: recordRef,
+				TaskID: taskID, TaskSlug: task.Slug, TaskPath: record.source.LocalPath, Location: record.source.Location, Field: field.name, recordRef: recordRef,
 			}
 			for _, value := range values {
 				ref := LegacyReference{Value: value}
@@ -846,8 +899,12 @@ func (g *TaskGraph) Problems() []GraphProblem {
 }
 
 func (g *TaskGraph) LegacyDiagnostics() []LegacyDependencyDiagnostic {
-	out := make([]LegacyDependencyDiagnostic, len(g.legacy))
-	for i, diagnostic := range g.legacy {
+	return cloneLegacyDiagnostics(g.legacy)
+}
+
+func cloneLegacyDiagnostics(diagnostics []LegacyDependencyDiagnostic) []LegacyDependencyDiagnostic {
+	out := make([]LegacyDependencyDiagnostic, len(diagnostics))
+	for i, diagnostic := range diagnostics {
 		out[i] = diagnostic
 		out[i].recordRef = 0 // snapshot-local correlation is not query data
 		out[i].References = make([]LegacyReference, len(diagnostic.References))
@@ -1002,7 +1059,7 @@ func sameGraphProblem(left, right GraphProblem) bool {
 
 func sameLegacyDiagnostic(left, right LegacyDependencyDiagnostic) bool {
 	return left.TaskID == right.TaskID && left.TaskSlug == right.TaskSlug &&
-		left.TaskPath == right.TaskPath && left.Field == right.Field &&
+		left.TaskPath == right.TaskPath && left.Location == right.Location && left.Field == right.Field &&
 		slices.EqualFunc(left.References, right.References, func(a, b LegacyReference) bool {
 			return a.Value == b.Value && a.Resolution == b.Resolution &&
 				a.Edge == b.Edge && slices.Equal(a.CandidateIDs, b.CandidateIDs)

@@ -323,6 +323,16 @@ func graphQueryHeader(w io.Writer, st Style, taskID, slug string, state core.Tas
 func graphDiagnosticsHuman(w io.Writer, st Style, problems []core.GraphProblem, legacy []core.LegacyDependencyDiagnostic) {
 	seen := make(map[string]bool, len(problems))
 	for _, problem := range problems {
+		grouped := false
+		for _, diagnostic := range legacy {
+			if diagnostic.ExplainsGraphProblem(problem) {
+				grouped = true
+				break
+			}
+		}
+		if grouped {
+			continue
+		}
 		location := ""
 		if problem.Location != problem.Path {
 			location = problem.Location
@@ -333,16 +343,16 @@ func graphDiagnosticsHuman(w io.Writer, st Style, problems []core.GraphProblem, 
 		}
 		seen[key] = true
 		if location != "" {
-			fmt.Fprintf(w, "%s %s: %s (location: %s)\n", st.Warn("⚠"), problem.Code, problem.Message, location)
+			fmt.Fprintf(w, "%s %s: %s (location: %s)\n", st.Warn("⚠"), problem.Code, singleLineText(problem.Message), singleLineText(location))
 		} else {
-			fmt.Fprintf(w, "%s %s: %s\n", st.Warn("⚠"), problem.Code, problem.Message)
+			fmt.Fprintf(w, "%s %s: %s\n", st.Warn("⚠"), problem.Code, singleLineText(problem.Message))
 		}
 	}
 	for _, diagnostic := range legacy {
-		remedy := "run task depend migrate"
-		if !diagnostic.MigrationReady() {
-			remedy = "run task depend repair, then task depend migrate"
+		fmt.Fprintf(w, "%s %s; %s", st.Warn("⚠"), singleLineText(diagnostic.Summary()), diagnostic.MigrationGuidance())
+		if diagnostic.Location != "" && diagnostic.Location != diagnostic.TaskPath {
+			fmt.Fprintf(w, " (location: %s)", singleLineText(diagnostic.Location))
 		}
-		fmt.Fprintf(w, "%s legacy %s on %s; %s\n", st.Warn("⚠"), diagnostic.Field, diagnostic.TaskID, remedy)
+		fmt.Fprintln(w)
 	}
 }

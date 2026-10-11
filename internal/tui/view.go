@@ -217,7 +217,8 @@ func (m Model) listPaneContent() string {
 		message := "No Threads.\n\nCreate one:\n  tskflwctl thread new \"Title\" --goal \"Outcome\""
 		if d := t.threadDiagnostics; d != nil {
 			if d.graphHealth != core.GraphHealthy {
-				message += fmt.Sprintf("\n\nRepository graph: %s (%d diagnostic(s))", d.graphHealth, len(d.graphProblems))
+				message += fmt.Sprintf("\n\nRepository graph: %s", d.graphHealth)
+				message += "\n" + strings.Join(threadDiagnosticLines(core.ThreadView{GraphProblems: d.graphProblems, GraphLegacy: d.graphLegacy}, m.st), "\n")
 			}
 			if len(d.readProblems) > 0 {
 				message += fmt.Sprintf("\nUnreadable Thread records: %d", len(d.readProblems))
@@ -531,6 +532,13 @@ func (m Model) footer() string {
 		}
 		if d.graphHealth != core.GraphHealthy {
 			hints = fmt.Sprintf("⚠ repository graph %s · ", d.graphHealth) + hints
+			if len(d.graphLegacy) > 0 {
+				legacy := fmt.Sprintf("⚠ %d legacy field(s)", len(d.graphLegacy))
+				if d.graphHealth == core.GraphDegraded {
+					legacy += "; " + d.graphLegacy[0].MigrationGuidance()
+				}
+				hints = legacy + " · " + hints
+			}
 		}
 	}
 	switch {

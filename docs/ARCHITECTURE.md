@@ -332,7 +332,9 @@ will give these decisions a durable authority without duplicating the current ma
   `drained/total`, separates repository graph health from Thread-local projection
   health, and emits a frontier of clear-gated `next-up` and `ready-to-start` members only
   when the combined evidence is healthy. Completed inconsistency carries stable reason codes;
-  list projections hoist global graph problems rather than repeating them per Thread. Guarded
+  list projections hoist global structural problems and legacy field occurrences rather than
+  repeating them per Thread, including filtered/empty pages. Both diagnose the same graph snapshot;
+  opaque legacy locations are context, never file authority. Guarded
   Thread creation resolves initial members and validates the global task/Thread identity
   namespace inside the repository critical section; it can create only `unstarted`. Existing
   Thread membership and lifecycle plans are likewise pure validations over one immutable

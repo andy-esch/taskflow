@@ -14,6 +14,7 @@ import (
 type threadListDiagnostics struct {
 	graphHealth   core.GraphHealth
 	graphProblems []core.GraphProblem
+	graphLegacy   []core.LegacyDependencyDiagnostic
 	readProblems  []core.ThreadReadProblem
 }
 
@@ -46,6 +47,7 @@ func loadThreadList(t *entityTab, svc *core.Service) tea.Cmd {
 			kind: entityThreads, gen: gen, items: items,
 			threadDiagnostics: &threadListDiagnostics{
 				graphHealth: view.GraphHealth, graphProblems: view.GraphProblems,
+				graphLegacy:  view.GraphLegacy,
 				readProblems: problems,
 			},
 		}

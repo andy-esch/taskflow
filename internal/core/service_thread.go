@@ -239,10 +239,11 @@ func (s *Service) ListThreadViews() (ThreadListView, []ThreadReadProblem, error)
 	sort.Slice(records, func(i, j int) bool { return threadRecordLess(records[i], records[j]) })
 	sort.Slice(problems, func(i, j int) bool { return threadReadProblemLess(problems[i], problems[j]) })
 	list := ThreadListView{
-		Threads: projectLoadedThreads(records, graph), GraphHealth: graph.Health(), GraphProblems: graph.Problems(),
+		Threads: projectLoadedThreads(records, graph), GraphHealth: graph.Health(), GraphProblems: graph.Problems(), GraphLegacy: graph.LegacyDiagnostics(),
 	}
 	for i := range list.Threads {
 		list.Threads[i].GraphProblems = nil
+		list.Threads[i].GraphLegacy = nil
 	}
 	return list, problems, nil
 }

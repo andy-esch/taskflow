@@ -87,16 +87,22 @@ type LegacyDependencyJSON struct {
 	TaskID     string                `json:"task_id"`
 	TaskSlug   string                `json:"task_slug,omitempty"`
 	Path       string                `json:"path,omitempty"`
+	Location   string                `json:"location,omitempty" jsonschema:"description=optional opaque source location; not a local path or selector"`
 	Field      string                `json:"field"`
 	References []LegacyReferenceJSON `json:"references"`
 }
 
-func toLegacyDependenciesJSON(diagnostics []core.LegacyDependencyDiagnostic) []LegacyDependencyJSON {
+// ToLegacyDependenciesJSON shares occurrence attribution across graph queries,
+// Thread views, and caller-projected repository context.
+func ToLegacyDependenciesJSON(diagnostics []core.LegacyDependencyDiagnostic) []LegacyDependencyJSON {
 	out := make([]LegacyDependencyJSON, 0, len(diagnostics))
 	for _, diagnostic := range diagnostics {
 		item := LegacyDependencyJSON{
 			TaskID: diagnostic.TaskID, TaskSlug: diagnostic.TaskSlug, Path: diagnostic.TaskPath,
 			Field: diagnostic.Field, References: make([]LegacyReferenceJSON, 0, len(diagnostic.References)),
+		}
+		if diagnostic.Location != diagnostic.TaskPath {
+			item.Location = diagnostic.Location
 		}
 		for _, ref := range diagnostic.References {
 			item.References = append(item.References, LegacyReferenceJSON{
@@ -136,7 +142,7 @@ func ToTaskBlockersEnvelope(result core.TaskBlockersResult) TaskBlockersEnvelope
 		SchemaVersion: SchemaVersion, Task: toGraphTaskJSON(result.TaskID, result.Task),
 		State: toTaskGraphStateJSON(result.State), Projection: result.Projection, Health: string(result.Health),
 		Blockers: make([]TaskBlockerJSON, 0, len(result.Blockers)),
-		Problems: ToGraphProblemsJSON(result.Problems), Legacy: toLegacyDependenciesJSON(result.Legacy),
+		Problems: ToGraphProblemsJSON(result.Problems), Legacy: ToLegacyDependenciesJSON(result.Legacy),
 	}
 	for _, blocker := range result.Blockers {
 		envelope.Blockers = append(envelope.Blockers, TaskBlockerJSON{
@@ -171,7 +177,7 @@ func ToTaskUnblocksEnvelope(result core.TaskUnblocksResult) TaskUnblocksEnvelope
 	envelope := TaskUnblocksEnvelope{
 		SchemaVersion: SchemaVersion, Task: toGraphTaskJSON(result.TaskID, result.Task),
 		State: toTaskGraphStateJSON(result.State), Health: string(result.Health), Unblocks: make([]TaskUnblockJSON, 0, len(result.Unblocks)),
-		Problems: ToGraphProblemsJSON(result.Problems), Legacy: toLegacyDependenciesJSON(result.Legacy),
+		Problems: ToGraphProblemsJSON(result.Problems), Legacy: ToLegacyDependenciesJSON(result.Legacy),
 	}
 	for _, dependent := range result.Unblocks {
 		envelope.Unblocks = append(envelope.Unblocks, TaskUnblockJSON{

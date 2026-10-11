@@ -1348,14 +1348,35 @@ func renderThreadMeta(d threadDetail, width int, s *styles) string {
 }
 
 func threadDiagnosticLines(view core.ThreadView, s *styles) []string {
-	diagnostics := make([]string, 0, len(view.Problems)+len(view.GraphProblems))
+	diagnostics := make([]string, 0, len(view.Problems)+len(view.GraphProblems)+len(view.GraphLegacy))
 	for _, problem := range view.Problems {
 		diagnostics = append(diagnostics, fmt.Sprintf("  %s %s  %s",
 			s.fg(theme.ColorYellow, theme.MarkerWarn.Glyph), problem.Code, terminalText(problem.Message)))
 	}
 	for _, problem := range view.GraphProblems {
+		grouped := false
+		for _, diagnostic := range view.GraphLegacy {
+			if diagnostic.ExplainsGraphProblem(problem) {
+				grouped = true
+				break
+			}
+		}
+		if grouped {
+			continue
+		}
 		diagnostics = append(diagnostics, fmt.Sprintf("  %s %s  %s",
 			s.fg(theme.ColorRed, theme.MarkerUnreadable.Glyph), problem.Code, terminalText(problem.Message)))
+	}
+	for _, diagnostic := range view.GraphLegacy {
+		color := theme.ColorYellow
+		if !diagnostic.MigrationReady() {
+			color = theme.ColorRed
+		}
+		text := diagnostic.Summary() + "; " + diagnostic.MigrationGuidance()
+		if diagnostic.Location != "" && diagnostic.Location != diagnostic.TaskPath {
+			text += " (location: " + diagnostic.Location + ")"
+		}
+		diagnostics = append(diagnostics, "  "+s.fg(color, theme.MarkerWarn.Glyph)+" "+terminalText(text))
 	}
 	return diagnostics
 }

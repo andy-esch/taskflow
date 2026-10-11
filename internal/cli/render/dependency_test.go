@@ -2,10 +2,14 @@ package render
 
 import (
 	"bytes"
+	"encoding/json"
+	"io"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/andy-esch/taskflow/internal/core"
+	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/wire"
 )
 
@@ -109,16 +113,116 @@ func TestTaskGraphRepairHumanAttributesNonRepairableDeclaration(t *testing.T) {
 func TestGraphDiagnosticsHumanOnlyOffersMigrationForSafeLegacyFields(t *testing.T) {
 	legacy := []core.LegacyDependencyDiagnostic{
 		{TaskID: "safe", Field: "blocked_by", References: []core.LegacyReference{{Resolution: core.LegacyResolved}}},
-		{TaskID: "broken", Field: "dependencies", References: []core.LegacyReference{{Resolution: core.LegacyMissing}}},
+		{TaskID: "broken", Field: "dependencies", References: []core.LegacyReference{{Value: "gone", Resolution: core.LegacyMissing}}},
 	}
 	var out bytes.Buffer
 	graphDiagnosticsHuman(&out, NewStyle(false), nil, legacy)
 	for _, want := range []string{
 		"legacy blocked_by on safe; run task depend migrate",
-		"legacy dependencies on broken; run task depend repair, then task depend migrate",
+		"legacy dependencies on broken (\"gone\": missing); run task depend repair, then task depend migrate",
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Fatalf("diagnostics missing %q:\n%s", want, out.String())
 		}
+	}
+}
+
+func TestGraphLegacyDiagnosticsHumanKeepOpaqueContextOnOneSafeLine(t *testing.T) {
+	location := "\x1b]0;fake title\adb://tasks/outside\nFORGED\x1b[31m"
+	legacy := core.LegacyDependencyDiagnostic{TaskID: "source-id", Field: "blocks", Location: location}
+	var out bytes.Buffer
+	graphDiagnosticsHuman(&out, NewStyle(false), nil, []core.LegacyDependencyDiagnostic{legacy})
+	want := "⚠ legacy blocks on source-id (empty field); run task depend migrate (location: db://tasks/outside FORGED)\n"
+	if out.String() != want || legacy.Location != location {
+		t.Fatalf("new legacy context was not safely presented without rewriting it: %q", out.String())
+	}
+}
+
+func TestGraphDiagnosticsHumanKeepProducedStructuralContextOnOneSafeLine(t *testing.T) {
+	for _, local := range []bool{false, true} {
+		name := "opaque-location"
+		if local {
+			name = "local-path-in-message"
+		}
+		t.Run(name, func(t *testing.T) {
+			location := "db://outside\nFORGED-READY\x1b[2J"
+			member := domain.Task{ID: "6g0000000001", Slug: "member", Status: domain.StatusNextUp}
+			owner := domain.Task{ID: "6g0000000002", Slug: "outside", Status: domain.StatusCompleted,
+				LegacyBlockedBy: []string{"gone"}, DependsOn: []string{"invalid-token"}}
+			source := core.RecordSource{ID: owner.ID, Location: location}
+			localPath := ""
+			if local {
+				source.Location = "tasks/6g0000000002-outside\nFORGED-READY\x1b[2J.md"
+				source.LocationIsPath = true
+				localPath = source.Location
+			}
+			records := []core.VersionedRecord[domain.Task]{
+				{Record: core.LoadedRecord[domain.Task]{Value: member, Source: core.RecordSource{ID: member.ID}}},
+				{Record: core.LoadedRecord[domain.Task]{Value: owner, Source: source}, LocalPath: localPath},
+			}
+			if local {
+				// Duplicate-source messages embed raw paths, separately from the optional
+				// location suffix. Sanitizing only that suffix cannot protect this case.
+				records = append(records, core.VersionedRecord[domain.Task]{LocalPath: "tasks/duplicate.md", Record: core.LoadedRecord[domain.Task]{
+					Value:  domain.Task{ID: owner.ID, Slug: "duplicate", Status: domain.StatusCompleted},
+					Source: core.RecordSource{ID: owner.ID, Location: "tasks/duplicate.md", LocationIsPath: true},
+				}})
+			}
+			graph := core.NewTaskGraphRead(core.TaskGraphRead{GuardedRecords: records})
+			view := core.ProjectThread(domain.Thread{ID: "6g0000000003", Slug: "delivery",
+				Status: domain.ThreadStatusInProgress, Description: "Delivery", Goal: "Ship",
+				Created: "2026-10-11", Tasks: []string{member.ID}}, graph)
+			problems, legacy := graph.Problems(), graph.LegacyDiagnostics()
+			if view.GraphHealth != core.GraphBroken || len(view.Frontier) != 0 || len(legacy) != 1 {
+				t.Fatalf("hostile graph did not reach the intended diagnostic producer: %+v", view)
+			}
+			if local {
+				found := false
+				for _, problem := range problems {
+					found = found || (problem.Code == core.ProblemDuplicateTaskID && strings.Contains(problem.Message, "\nFORGED-READY\x1b[2J"))
+				}
+				if !found {
+					t.Fatal("fixture failed to produce raw local-path content in a structural message")
+				}
+			}
+			for surface, render := range map[string]func(io.Writer) error{
+				"frontier": func(w io.Writer) error { return ThreadFrontierHuman(w, NewStyle(false), view) },
+				"blockers": func(w io.Writer) error {
+					return TaskBlockersHuman(w, NewStyle(false), core.TaskBlockersResult{TaskID: member.ID, Task: member,
+						State: graph.State(member.ID), Health: graph.Health(), Problems: problems, Legacy: legacy})
+				},
+				"unblocks": func(w io.Writer) error {
+					return TaskUnblocksHuman(w, NewStyle(false), core.TaskUnblocksResult{TaskID: member.ID, Task: member,
+						State: graph.State(member.ID), Health: graph.Health(), Problems: problems, Legacy: legacy})
+				},
+			} {
+				t.Run(surface, func(t *testing.T) {
+					var out bytes.Buffer
+					if err := render(&out); err != nil {
+						t.Fatal(err)
+					}
+					if strings.Contains(out.String(), "\nFORGED-READY") || strings.Contains(out.String(), "\x1b") {
+						t.Fatalf("structural evidence forged a row or terminal control: %q", out.String())
+					}
+					if !strings.Contains(out.String(), "invalid-dependency-id:") || !strings.Contains(out.String(), "legacy blocked_by") {
+						t.Fatalf("sanitization hid structural or legacy evidence: %s", out.String())
+					}
+				})
+			}
+			if !reflect.DeepEqual(graph.Problems(), problems) || !reflect.DeepEqual(graph.LegacyDiagnostics(), legacy) {
+				t.Fatal("terminal rendering rewrote core evidence")
+			}
+			var out bytes.Buffer
+			if err := ThreadFrontierJSON(&out, view); err != nil {
+				t.Fatal(err)
+			}
+			var decoded wire.ThreadFrontierEnvelope
+			if err := json.Unmarshal(out.Bytes(), &decoded); err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(decoded.View.GraphProblems, wire.ToGraphProblemsJSON(problems)) || decoded.View.GraphLegacy[0].Path != localPath || (!local && decoded.View.GraphLegacy[0].Location != location) {
+				t.Fatal("machine output lost raw source context")
+			}
+		})
 	}
 }

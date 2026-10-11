@@ -519,6 +519,9 @@ func cloneThreadView(view ThreadView) ThreadView {
 	view.ExternalGates = append([]ThreadExternalGate(nil), view.ExternalGates...)
 	view.Frontier = append([]ThreadTaskView(nil), view.Frontier...)
 	view.GraphProblems = append([]GraphProblem(nil), view.GraphProblems...)
+	if view.GraphLegacy != nil {
+		view.GraphLegacy = cloneLegacyDiagnostics(view.GraphLegacy)
+	}
 	view.Problems = append([]ThreadProblem(nil), view.Problems...)
 	return view
 }
