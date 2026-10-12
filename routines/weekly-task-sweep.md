@@ -14,7 +14,7 @@ connectors:
   - slack
 sweep_size: 5                    # tasks audited per run
 cooldown_days: 7                 # skip tasks audited more recently, unless their code moved
-last_modified: 2026-08-30
+last_modified: 2026-10-11
 ---
 
 # Weekly Task Sweep
@@ -54,7 +54,7 @@ Allowed writes:
 
 Forbidden — no exceptions, not even a one-line fix you are certain about:
   - `internal/`, `cmd/`, any `*.go` file, `go.mod`, `justfile`
-  - `docs/`, `README.md`, `CLAUDE.md`
+  - `docs/`, `README.md`, `AGENTS.md`
   - `planning/adrs/`, `planning/epics/`
   - any task's `status`, `tier`, `priority`, or scope
   - `depends_on` on any task (graph-owned; only guarded `task depend` may touch it)
@@ -64,14 +64,15 @@ and nothing structurally stops you from editing source. **The discipline is
 yours to hold.** A defect you are certain about is a finding with a
 `**Recommendation:**`, never a commit. Proposing the fix IS the deliverable.
 
-Before opening the PR you MUST verify you stayed in bounds:
+Before starting, inspect the checkout:
 
     git status --porcelain
 
-Every line must be under `planning/`. If anything else is listed — including a
-file you touched and meant to revert — **STOP**, restore it
-(`git checkout -- <path>`), re-run the check, and say so in the PR body. If you
-cannot get the check clean, post to Slack and exit without a PR.
+If there are existing changes, **STOP** and request a clean dedicated checkout;
+do not restore, stash, clean, or commit someone else's work. Before opening the
+PR, repeat the check: every change from this run must be under `planning/`.
+If an unexpected path appears, **STOP**, preserve the checkout, post to Slack,
+and exit without a PR. Never use a blanket revert to make the scope check pass.
 
 === START ===
 
@@ -84,7 +85,8 @@ cannot get the check clean, post to Slack and exit without a PR.
    quote the error, and exit without a PR. Every later step uses
    `./bin/tskflwctl`. There is no fallback tool.
 
-1. Read `CLAUDE.md` and `docs/ARCHITECTURE.md`. Skim
+1. Read `AGENTS.md`; follow its router to the contracts relevant to the selected
+   tasks as you verify them, rather than reading the whole architecture manual. Skim
    `./bin/tskflwctl epic list` — epic status carries the committed project
    context (what's active vs retired) that informs tier/priority judgment in
    step 8. Skim `planning/adrs/` filenames so you recognise when a task's

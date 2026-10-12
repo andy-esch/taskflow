@@ -3,10 +3,10 @@ package domain
 import "sort"
 
 // This file backs `tskflwctl schema` — the tool's self-description for agents.
-// Everything here is DERIVED from the same data the rest of the tool runs on
-// (the type maps, the status/bucket enums), so the schema output cannot drift
-// from real behavior. The only hand-authored content is per-field prose
-// (description/example), which a sync test pins to the real field set.
+// Field/type inventories come from the same registries the tool runs on.
+// Descriptions, examples, and authoring conventions are hand-authored metadata
+// in entity.go and need review alongside behavior changes. Sync tests check
+// field membership/types; they do not prove every prose claim.
 
 // FieldType reports the YAML storage type of a known task field: "int", "list",
 // "date", or "string". It reads the same maps the `--set` coercion and the

@@ -10,7 +10,7 @@ import (
 // These fuzz targets feed random bytes into the hand-rolled byte parsers, which
 // are the panic-prone surface (index math on untrusted input). Beyond no-panic,
 // the split/update targets assert the load-bearing invariants the byte parsers
-// risk corrupting (body preserved verbatim, output re-parses) — see CLAUDE.md's
+// risk corrupting (body preserved verbatim, output re-parses) — see AGENTS.md's
 // surgical-frontmatter rule. The seed corpus also runs under a normal `go test`.
 
 func seeds(f *testing.F) {

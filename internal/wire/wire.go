@@ -370,7 +370,10 @@ import (
 // occurrences, hoisted once in typed and opt-in projected lists. Shared legacy
 // diagnostics also retain optional opaque source locations. Eligibility,
 // diagnostic severity, and durable document/plan formats are unchanged.
-const SchemaVersion = "1.87"
+// 1.88: ADDITIVE — task authoring conventions direct callers to the already
+// shipped guarded dependency commands instead of describing them as future work.
+// JSON shapes, valid inputs, vocabularies, and mutation semantics are unchanged.
+const SchemaVersion = "1.88"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.

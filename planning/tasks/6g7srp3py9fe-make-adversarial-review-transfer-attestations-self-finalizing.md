@@ -10,6 +10,7 @@ priority: medium
 autonomy_level: 4
 tags: [reviews, agents, scripts, safety]
 created: "2026-09-07"
+updated_at: "2026-10-12"
 ---
 
 # Make adversarial review transfer attestations self-finalizing
@@ -54,3 +55,14 @@ finish the audit before invoking `transfer`; the 2026-09-07 audit therefore arri
 - Triggering review [audit ID collision hardening implementation](../audits/6g7sb0wnv5t5-2026-09-07-audit-id-collision-hardening-implementation-claude.md)
 - Repeated evidence: [final source-boundary review](../audits/6gg38rnydjbm-2026-10-03-final-semantic-entity-source-boundary-checkpoint-antigravity.md)
   arrived byte-identical to its independent sandbox but still persisted `transfer=pending`.
+
+## Thread and repeated evidence (2026-10-12)
+
+This task now belongs to
+[review-workspace safety and delivery evidence](../threads/6gk06gktr1q5-harden-isolated-review-workspace-safety-and-delivery-evidence.md).
+The [documentation ownership review](../audits/6gjtz31j4kpg-2026-10-11-documentation-ownership-and-agent-routing-implementation-external.md)
+again finalized its attestation before transfer and deferred the result to a handoff message;
+the owner confirmed byte-for-byte report delivery. That proves receipt for this run, not that the
+persisted attestation contract has been redesigned. The sibling
+[push-guard task](6gk06e2g21hv-disable-pushes-from-isolated-review-workspaces.md) is independent;
+neither needs an artificial dependency on the other or on the docs Thread.

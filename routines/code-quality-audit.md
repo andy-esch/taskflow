@@ -20,7 +20,7 @@ lens_rotation:                   # index = (ISO week * 2 + slot) mod 6; slot 0 =
   4: adapter-hygiene
   5: simplification
 max_open_audits: 10              # backpressure: at or above this, triage instead of authoring
-last_modified: 2026-09-20
+last_modified: 2026-10-11
 ---
 
 # Code Quality Audit (Twice-Weekly Lens Rotation)
@@ -67,7 +67,7 @@ Allowed writes:
 
 Forbidden — no exceptions, not even a one-line fix you are certain about:
   - `internal/`, `cmd/`, any `*.go` file, `go.mod`, `justfile`
-  - `docs/`, `README.md`, `CLAUDE.md`
+  - `docs/`, `README.md`, `AGENTS.md`
   - `planning/adrs/`, `planning/epics/`
   - any task's `status`, `tier`, `priority`, or scope
   - `depends_on` on any task (graph-owned; only guarded `task depend` may touch it)
@@ -77,14 +77,15 @@ and nothing structurally stops you from editing source. **The discipline is
 yours to hold.** A defect you are certain about is a finding with a
 `**Recommendation:**`, never a commit. Proposing the fix IS the deliverable.
 
-Before opening the PR you MUST verify you stayed in bounds:
+Before starting, inspect the checkout:
 
     git status --porcelain
 
-Every line must be under `planning/`. If anything else is listed — including a
-file you touched and meant to revert — **STOP**, restore it
-(`git checkout -- <path>`), re-run the check, and say so in the PR body. If you
-cannot get the check clean, post to Slack and exit without a PR.
+If there are existing changes, **STOP** and request a clean dedicated checkout;
+do not restore, stash, clean, or commit someone else's work. Before opening the
+PR, repeat the check: every change from this run must be under `planning/`.
+If an unexpected path appears, **STOP**, preserve the checkout, post to Slack,
+and exit without a PR. Never use a blanket revert to make the scope check pass.
 
 === START ===
 
@@ -96,8 +97,10 @@ cannot get the check clean, post to Slack and exit without a PR.
    If neither succeeds, **STOP**: post a Slack message saying the build failed,
    quote the error, and exit without a PR.
 
-1. Read `CLAUDE.md` and `docs/ARCHITECTURE.md` fully before anything else —
-   they define the non-negotiables this audit measures against (DI via one
+1. Read `AGENTS.md` first. Follow its router to the architecture package map
+   and the owning contracts relevant to today's lens; do not load the whole
+   manual by default. These define the non-negotiables this audit measures
+   against (DI via one
    `*cli.App`, output through injected `io.Writer`, `--json` everywhere with a
    `schema_version`, core never touches fs/cobra, status authoritative in
    frontmatter, atomic writes via `store/atomic.go`, errors wrapping the domain

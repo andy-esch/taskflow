@@ -22,7 +22,7 @@ lens_rotation:
     1: data-model-and-storage    # entity model, flat id-led layout, migration, OCC
     2: machine-contract          # --json envelopes, schema_version, agent ergonomics
     3: failure-and-recovery      # guard topology, atomicity, partial failure, repair
-last_modified: 2026-09-20
+last_modified: 2026-10-11
 ---
 
 # Weekly Architecture Audit (Single-Lens Rotation)
@@ -78,7 +78,7 @@ Allowed writes:
 
 Forbidden — no exceptions, not even a one-line fix you are certain about:
   - `internal/`, `cmd/`, any `*.go` file, `go.mod`, `justfile`
-  - `docs/`, `README.md`, `CLAUDE.md`
+  - `docs/`, `README.md`, `AGENTS.md`
   - `planning/adrs/`, `planning/epics/`
   - any task's `status`, `tier`, `priority`, or scope
   - `depends_on` on any task (graph-owned; only guarded `task depend` may touch it)
@@ -88,14 +88,15 @@ and nothing structurally stops you from editing source. **The discipline is
 yours to hold.** A defect you are certain about is a finding with a
 `**Recommendation:**`, never a commit. Proposing the fix IS the deliverable.
 
-Before opening the PR you MUST verify you stayed in bounds:
+Before starting, inspect the checkout:
 
     git status --porcelain
 
-Every line must be under `planning/`. If anything else is listed — including a
-file you touched and meant to revert — **STOP**, restore it
-(`git checkout -- <path>`), re-run the check, and say so in the PR body. If you
-cannot get the check clean, post to Slack and exit without a PR.
+If there are existing changes, **STOP** and request a clean dedicated checkout;
+do not restore, stash, clean, or commit someone else's work. Before opening the
+PR, repeat the check: every change from this run must be under `planning/`.
+If an unexpected path appears, **STOP**, preserve the checkout, post to Slack,
+and exit without a PR. Never use a blanket revert to make the scope check pass.
 
 === START ===
 
@@ -108,8 +109,9 @@ cannot get the check clean, post to Slack and exit without a PR.
    quote the error, and exit without a PR.
 
 1. Read, in this order:
-   - `CLAUDE.md` — the non-negotiables in one screen.
-   - `docs/ARCHITECTURE.md` — the orientation this audit measures against.
+   - `AGENTS.md` — the shared working rules, ownership matrix, and reading routes.
+   - `docs/ARCHITECTURE.md` — start with the package map, then read the contracts
+     relevant to today's lens rather than every subsystem manual by default.
    - `ls planning/adrs/` and read every ADR whose subject touches today's lens
      (LENS-SCOPES names them). Read the **Decision** and **Amendments**
      sections in full; skim the rest. An accepted ADR is the authority — your
