@@ -323,6 +323,177 @@ func TestReviewWorkspaceTransfersOnlyTheDeliverable(t *testing.T) {
 	}
 }
 
+func receiptPath(sandbox string) string {
+	return filepath.Join(sandbox, ".git", "isolated-review-workspace", "transfer-receipt")
+}
+
+func requireNoReceipt(t *testing.T, f fixture, sandbox string) {
+	t.Helper()
+	if _, err := os.Stat(receiptPath(sandbox)); !os.IsNotExist(err) {
+		t.Errorf("a receipt exists without a successful transfer: %v", err)
+	}
+	output, err := f.workspace(sandbox, "receipt")
+	if err == nil || !strings.Contains(output, "no transfer receipt") {
+		t.Errorf("receipt should refuse before a successful transfer; err=%v output:\n%s", err, output)
+	}
+}
+
+// The report is final before transfer, so it can carry only the verification
+// attestation. Delivery evidence is the helper's receipt, which exists only
+// after the transfer and fails once the source no longer holds those bytes.
+func TestTransferReceiptIsTheOnlyDeliveryEvidence(t *testing.T) {
+	f := newFixture(t)
+	sandbox := f.create(t)
+	appendFile(t, filepath.Join(sandbox, deliverableRel), "\nNo findings.\n")
+
+	output, err := f.workspace(sandbox, "verify")
+	if err != nil || !strings.Contains(output, "verify=passed") || !strings.Contains(output, "transfer=pending") ||
+		strings.Contains(output, "transfer=succeeded") {
+		t.Fatalf("verify must attest verification only; err=%v output:\n%s", err, output)
+	}
+	// A reviewer pastes that attestation into the report; it is still not delivery.
+	appendFile(t, filepath.Join(sandbox, deliverableRel), "\n```text\n"+output+"```\n")
+	requireNoReceipt(t, f, sandbox)
+
+	output, err = f.workspace(sandbox, "transfer")
+	if err != nil || !strings.Contains(output, "transfer=succeeded") {
+		t.Fatalf("transfer result=%v output:\n%s", err, output)
+	}
+	delivered := f.git(t, f.source, "hash-object", "--", deliverableRel)
+	if !strings.Contains(output, "transferred_blob="+delivered) || readFile(t, receiptPath(sandbox)) != output {
+		t.Fatalf("transfer must print the receipt it recorded for blob %s:\n%s", delivered, output)
+	}
+
+	output, err = f.workspace(sandbox, "receipt")
+	if err != nil {
+		t.Fatalf("receipt after transfer: %v\n%s", err, output)
+	}
+	for _, want := range []string{"verify=passed", "transfer=succeeded", "transferred_blob=" + delivered, "delivery=confirmed"} {
+		if !strings.Contains(output, want) {
+			t.Errorf("receipt omitted %q:\n%s", want, output)
+		}
+	}
+	for _, command := range []string{"verify", "transfer"} {
+		output, err := f.workspace(sandbox, command)
+		if err == nil || !strings.Contains(output, "already transferred") || !strings.Contains(output, "receipt --sandbox") {
+			t.Errorf("%s after transfer should point to the receipt; err=%v output:\n%s", command, err, output)
+		}
+	}
+	if got := f.git(t, f.source, "hash-object", "--", deliverableRel); got != delivered {
+		t.Fatalf("a refused repeat changed the delivered report: %s -> %s", delivered, got)
+	}
+
+	// The owner may triage after confirming receipt; the receipt then stops
+	// vouching for the current source bytes rather than silently passing.
+	appendFile(t, filepath.Join(f.source, deliverableRel), "\nTriaged.\n")
+	output, err = f.workspace(sandbox, "receipt")
+	if err == nil || !strings.Contains(output, "no longer matches the transferred report") {
+		t.Fatalf("receipt should refuse after the source changed; err=%v output:\n%s", err, output)
+	}
+}
+
+func TestFailedTransfersRecordNoReceipt(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		disturb func(t *testing.T, f fixture, sandbox string)
+		want    string
+	}{
+		{"source deliverable drift", func(t *testing.T, f fixture, sandbox string) {
+			appendFile(t, filepath.Join(f.source, deliverableRel), "\nOwner edit.\n")
+		}, "source deliverable changed"},
+		{"unrelated workspace change", func(t *testing.T, f fixture, sandbox string) {
+			appendFile(t, filepath.Join(sandbox, "src", "kept.txt"), "probe\n")
+		}, "changes outside the deliverable"},
+		{"reviewer commit", func(t *testing.T, f fixture, sandbox string) {
+			f.git(t, sandbox, "commit", "-qam", "reviewer commit")
+		}, "reviewer commits are not permitted"},
+		{"source write failure", func(t *testing.T, f fixture, sandbox string) {
+			if os.Geteuid() == 0 {
+				t.Skip("a read-only directory does not stop root")
+			}
+			dir := filepath.Dir(filepath.Join(f.source, deliverableRel))
+			if err := os.Chmod(dir, 0o555); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
+		}, "Permission denied"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t)
+			sandbox := f.create(t)
+			appendFile(t, filepath.Join(sandbox, deliverableRel), "\nNo findings.\n")
+			tc.disturb(t, f, sandbox)
+			sourceReport := readFile(t, filepath.Join(f.source, deliverableRel))
+
+			output, err := f.workspace(sandbox, "transfer")
+			if err == nil || !strings.Contains(output, tc.want) {
+				t.Fatalf("transfer should fail closed with %q; err=%v output:\n%s", tc.want, err, output)
+			}
+			if strings.Contains(output, "transfer=succeeded") {
+				t.Errorf("a failed transfer printed success:\n%s", output)
+			}
+			if got := readFile(t, filepath.Join(f.source, deliverableRel)); got != sourceReport {
+				t.Errorf("a failed transfer changed the source report:\n%s", got)
+			}
+			requireNoReceipt(t, f, sandbox)
+		})
+	}
+}
+
+// The generated brief is the reviewer's literal instructions. Its helper calls
+// must follow the order the receipt contract needs, and it must not again ask the
+// report to record a transfer that can only happen after the report is final.
+func TestGeneratedBriefFollowsTheReceiptContract(t *testing.T) {
+	f := newFixture(t)
+	repositoryRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
+	if err != nil {
+		t.Fatal(err)
+	}
+	capture := filepath.Join(f.root, "generated-brief.md")
+	fakeCLI := filepath.Join(f.root, "fake-tskflwctl")
+	writeFile(t, fakeCLI, "#!/usr/bin/env bash\nwhile (($# > 0)); do\n\tif [[ \"$1\" == --body-file ]]; then cp \"$2\" \"$CAPTURE\"; exit 0; fi\n\tshift\ndone\n", 0o755)
+	brief := filepath.Join(f.root, "brief.md")
+	writeFile(t, brief, strings.Join([]string{
+		"## Review brief", "Require a consumer inventory and one mutation probe.",
+		"## Review target", "## Intended contract to challenge", "## Mandatory evidence floor",
+		"## Required hostile angles", "## Validation and restoration", "## Deliverable", "## Reviewer report", "",
+	}, "\n\n"), 0o644)
+
+	command := exec.Command("/usr/bin/env", "bash", filepath.Join(repositoryRoot, "scripts", "prepare-adversarial-review-audits.sh"),
+		"--area", "receipt-contract", "--title", "Receipt contract", "--brief-file", brief,
+		"--reviewer", "claude", "--date", "2026-10-12", "-C", f.root, "--dry-run")
+	command.Dir = f.root
+	command.Env = append(f.env, "TSKFLWCTL="+fakeCLI, "CAPTURE="+capture)
+	if output, err := command.CombinedOutput(); err != nil || !strings.Contains(string(output), "preflight ok") {
+		t.Fatalf("generator dry run: %v\n%s", err, output)
+	}
+	generated := readFile(t, capture)
+
+	var calls []string
+	for _, line := range strings.Split(generated, "\n") {
+		for _, field := range strings.Fields(line) {
+			if strings.HasSuffix(strings.Trim(field, "`\"$()"), "isolated-review-workspace.sh") {
+				rest := strings.Fields(line[strings.Index(line, field)+len(field):])
+				if len(rest) > 0 {
+					calls = append(calls, rest[0])
+				}
+				break
+			}
+		}
+	}
+	if got, want := strings.Join(calls, " "), "create verify verify transfer receipt"; got != want {
+		t.Errorf("generated helper calls = %q, want %q", got, want)
+	}
+	for _, want := range []string{"`verify=passed`", "`transfer=pending`", "receipt in your handoff message"} {
+		if !strings.Contains(generated, want) {
+			t.Errorf("generated brief omitted %q", want)
+		}
+	}
+	if strings.Contains(generated, "transfer result—in the report") {
+		t.Error("generated brief still requires the report to record its own transfer")
+	}
+}
+
 func writeFile(t *testing.T, path, contents string, mode os.FileMode) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {

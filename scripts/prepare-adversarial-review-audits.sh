@@ -177,23 +177,35 @@ project command in `$SOURCE_ROOT`. The sandbox's push URLs are disabled; never r
 push to the source path. If creation fails, report the blocker; never fall back to the shared
 checkout.
 
-Before transfer, restore every probe so only the assigned audit differs, inspect its diff, then use
-the helper for fail-closed verification and transfer:
+Before transfer, restore every probe so only the assigned audit differs, inspect its diff, then run
+the helper's fail-closed verification:
 
 ```sh
 "$SANDBOX/scripts/isolated-review-workspace.sh" verify --sandbox "$SANDBOX"
 git diff -- "$AUDIT_REL"
+```
+
+Copy that `verify` output into the report's isolation attestation: workspace path, resolved Git
+directory, baseline commit, captured source blob/fingerprint, deliverable, push guard,
+`verify=passed`, and `transfer=pending`. The report is final from this point, so `transfer=pending`
+is the truthful value; never edit it to claim delivery. Re-run `verify` (its fields do not depend on
+the report text), then transfer:
+
+```sh
+"$SANDBOX/scripts/isolated-review-workspace.sh" verify --sandbox "$SANDBOX"
 "$SANDBOX/scripts/isolated-review-workspace.sh" transfer --sandbox "$SANDBOX"
 ```
 
 The helper refuses commits, staging, unrelated changes, a non-independent `.git`, a removed or
 weakened push guard, source-deliverable drift, and empty reports; it copies back only the assigned
-audit through a same-directory atomic rename. Do not copy anything else manually. Leave the workspace in place and report its path until
-the implementation owner confirms receipt. On refusal, preserve it and report the conflict rather
-than resolving it in the shared checkout.
+audit through a same-directory atomic rename. A successful transfer records a helper-owned receipt
+and prints it (`transfer=succeeded` with the transferred blob); a refused or failed transfer records
+none. Put that printed receipt in your handoff message. Do not copy anything else manually. Leave the
+workspace in place and report its path until the implementation owner confirms delivery with
+`"$SANDBOX/scripts/isolated-review-workspace.sh" receipt --sandbox "$SANDBOX"`. On refusal, preserve
+it and report the conflict rather than resolving it in the shared checkout.
 
-Include the helper's attestation—workspace path, resolved Git directory, baseline commit, captured
-source blob/fingerprint, deliverable, and transfer result—in the report. A report without it is
+A report without the verification attestation, or a handoff without the transfer receipt, is
 incomplete even if its technical findings are otherwise sound.
 
 EOF
@@ -222,8 +234,12 @@ for i in "${!reviewers[@]}"; do
 		--date "$audit_date" --body-file "${body_files[$i]}" --no-input >/dev/null
 	"${cli[@]}" -C "$planning_root" audit lint "${audit_slugs[$i]}" >/dev/null
 	audit_path="$("${cli[@]}" -C "$planning_root" audit path "${audit_slugs[$i]}")"
-	printf '\n[%s]\nReview the audit assigned to you at %s. The current checkout is a shared, read-only handoff: before inspecting or testing, follow the audit\047s Mandatory reviewer sandbox protocol and do all work in that independent clone. Complete both review passes, then copy back only the assigned audit after its origin-hash guard passes. Preserve the brief and leave every finding open for implementation-owner triage. Include the required isolation attestation in your report.\n' \
+	printf '\n[%s]\nReview the audit assigned to you at %s. The current checkout is a shared, read-only handoff: before inspecting or testing, follow the audit\047s Mandatory reviewer sandbox protocol and do all work in that independent clone. Complete both review passes, then copy back only the assigned audit after its origin-hash guard passes. Preserve the brief and leave every finding open for implementation-owner triage. Put the verification attestation in your report and the helper\047s printed transfer receipt in your handoff message.\n' \
 		"${reviewers[$i]}" "$audit_path"
 done
 
 printf '\n[handoff freeze]\nDo not launch either reviewer until the implementation snapshot and both audit briefs are final for this review round. Once a reviewer starts, do not edit its audit or silently advance the review target. If either must change, cancel and relaunch that review or accept a report explicitly scoped to the captured sandbox baseline.\n'
+
+# The Markdown code span is an intentional literal.
+# shellcheck disable=SC2016
+printf '\n[delivery]\nBefore triaging or cleaning up after a handoff, confirm delivery with that sandbox\047s `scripts/isolated-review-workspace.sh receipt --sandbox <sandbox>`. A report\047s transfer=pending attestation is verification evidence, not delivery.\n'

@@ -14,6 +14,7 @@ SANDBOX="$(scripts/isolated-review-workspace.sh create \
 
 "$SANDBOX/scripts/isolated-review-workspace.sh" verify --sandbox "$SANDBOX"
 "$SANDBOX/scripts/isolated-review-workspace.sh" transfer --sandbox "$SANDBOX"
+"$SANDBOX/scripts/isolated-review-workspace.sh" receipt --sandbox "$SANDBOX"
 ```
 
 `create` makes an independent `--no-hardlinks` clone, overlays the current staged, unstaged,
@@ -22,6 +23,15 @@ baseline commit. `verify` fails if the reviewer committed, staged anything, chan
 or if the source deliverable changed. `transfer` repeats those checks, requires a real deliverable
 delta, and atomically replaces only that source file. State and attestation evidence live under the
 sandbox's private `.git`; the sandbox remains available until its owner confirms receipt.
+
+A report must be final before `transfer` runs, so it cannot record its own delivery. `verify`
+therefore attests verification only (`verify=passed`, `transfer=pending`). After the transferred
+bytes are confirmed in the source, `transfer` writes a receipt under the sandbox's private state and
+prints it: the verification fields plus `transfer=succeeded`, the transferred blob, the source path,
+and a UTC timestamp. `receipt` fails until a transfer has succeeded, and afterwards whenever the
+source or sandbox no longer holds the transferred bytes; on success it reprints the receipt with
+`delivery=confirmed`. Once a receipt exists, `verify` and `transfer` refuse and point to `receipt`.
+A refused or failed transfer records no receipt.
 
 A clone's `origin` would otherwise push to the live source checkout, so `create` sets every sandbox
 push URL to `isolated-review-push-disabled://source-is-read-only`. Git has no transport for that
@@ -71,9 +81,15 @@ while its reviewer is active. If either target changes, cancel and relaunch or e
 report scoped to the already captured baseline. This avoids forcing the final source-hash guard into
 a conflict and makes each verdict's reviewed state unambiguous.
 
-The report must attest to isolation with the sandbox path, resolved Git directory, sandbox baseline
-commit, captured source-audit blob, and transfer result. This is a deliverable rather than an
-honor-system preamble: a technically useful report that omits it is still protocol-incomplete.
+Isolation evidence has one contract, split by when each part can exist. The report carries the final
+`verify` output: sandbox path, resolved Git directory, baseline commit, captured source-audit blob and
+fingerprint, deliverable, push guard, `verify=passed`, and `transfer=pending`. Its `transfer=pending`
+is expected and is never delivery evidence. The reviewer's handoff message carries the receipt that
+`transfer` prints, and the implementation owner runs `receipt` against the retained sandbox before
+triage or cleanup. This is a deliverable rather than an honor-system preamble: a report without the
+verification attestation, or a handoff without a confirmable receipt, is protocol-incomplete. The
+receipt lives in reviewer-writable sandbox state, so it detects accidents and stale delivery claims,
+not a deliberately forged handoff.
 
 The script deliberately does not generate the substantive brief. Review quality has come from
 deriving the implementation contract and hostile cases for the change at hand, not from a generic

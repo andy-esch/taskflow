@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gk06gktr1q5
-status: in-progress
+status: completed
 description: Harden the general external-review sandbox against accidental source-ref writes and make guarded transfer evidence truthful and achievable.
 goal: Ordinary sandbox pushes cannot change source refs, and compliant guarded transfers produce truthful, verifiable delivery evidence.
 created: "2026-10-12"
@@ -9,6 +9,7 @@ tags: [scripts, reviews, safety]
 tasks: [6g7srp3py9fe, 6gk06e2g21hv]
 updated_at: "2026-10-12"
 started_at: "2026-10-12"
+ended_at: "2026-10-12"
 ---
 # Thread: Harden isolated review workspace safety and delivery evidence
 

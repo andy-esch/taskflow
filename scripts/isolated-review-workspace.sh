@@ -6,21 +6,31 @@ readonly state_dir_name="isolated-review-workspace"
 # An unknown transport scheme makes Git fail before contacting anything, and its
 # error names the guard. A clone otherwise pushes to the live source checkout.
 readonly push_guard_url="isolated-review-push-disabled://source-is-read-only"
+# A report must be final before transfer, so it can attest only verification.
+# This helper-owned file is the delivery evidence, written only after transfer.
+readonly receipt_name="transfer-receipt"
 
 usage() {
 	cat <<'EOF'
-Create, verify, or transfer an isolated review workspace.
+Create, verify, transfer, or confirm delivery from an isolated review workspace.
 
 Usage:
   isolated-review-workspace.sh create --deliverable <repo-relative-file> [--source <repo>] [--sandbox-parent <dir>] [--print-path]
   isolated-review-workspace.sh verify --sandbox <dir>
   isolated-review-workspace.sh transfer --sandbox <dir>
+  isolated-review-workspace.sh receipt --sandbox <dir>
 
 The workspace is an independent local clone overlaid with the source repository's
 current staged, unstaged, untracked, and deleted state. A sandbox-only baseline
 commit makes temporary review probes easy to restore. Verification permits only
 one unstaged deliverable delta, and transfer copies only that file back after
 checking that its source version has not changed.
+
+A report is final before transfer, so its verify attestation says
+transfer=pending. A successful transfer records a receipt in the workspace's
+private state and prints it; receipt fails until then, and afterwards confirms
+that the source still holds the transferred bytes. Verify and transfer refuse
+once a receipt exists.
 
 Every workspace remote pushes only to a disabled URL, so an ordinary `git push`
 fails before reaching the source; verify and transfer reject a removed or
@@ -205,8 +215,8 @@ create_workspace() {
 	printf 'push_guard=%s\n' "$push_guard_url"
 }
 
-# Sets globals for the verification/transfer attestation.
-load_workspace() {
+# Sets globals describing the workspace and its recorded capture.
+load_state() {
 	local requested="$1"
 	sandbox_root="$(canonical_dir "$requested")" || die "workspace does not exist: $requested"
 	git_dir="$(git -C "$sandbox_root" rev-parse --absolute-git-dir 2>/dev/null)" || die "workspace is not a Git repository"
@@ -225,6 +235,13 @@ load_workspace() {
 		die "recorded source is no longer a Git repository"
 	validate_target "$source_root" "$deliverable"
 	validate_target "$sandbox_root" "$deliverable"
+}
+
+# Sets globals for the verification/transfer attestation.
+load_workspace() {
+	load_state "$1"
+	[[ ! -e "$state_dir/$receipt_name" ]] ||
+		die "deliverable already transferred; confirm delivery with: $0 receipt --sandbox '$sandbox_root'"
 	[[ -s "$sandbox_root/$deliverable" ]] || die "workspace deliverable must not be empty: $deliverable"
 	[[ "$(git -C "$sandbox_root" rev-parse HEAD)" == "$baseline" ]] || die "workspace HEAD changed; reviewer commits are not permitted"
 	git -C "$sandbox_root" diff --cached --quiet --exit-code -- || die "workspace has staged changes"
@@ -247,11 +264,46 @@ load_workspace() {
 	git -C "$sandbox_root" diff --quiet --exit-code -- "$deliverable" || deliverable_changed=true
 }
 
+# Only called after load_workspace passed, so verification has succeeded.
 attest() {
 	printf 'sandbox_path=%s\ngit_dir=%s\nbaseline_commit=%s\n' "$sandbox_root" "$git_dir" "$baseline"
 	printf 'source_blob=%s\nsource_fingerprint=%s\ndeliverable=%s\n' "$source_blob" "$source_snapshot" "$deliverable"
 	printf 'push_guard=%s\n' "$push_guard_url"
-	printf 'deliverable_changed=%s\ntransfer=%s\n' "$deliverable_changed" "$1"
+	printf 'deliverable_changed=%s\nverify=passed\ntransfer=%s\n' "$deliverable_changed" "$1"
+}
+
+# Written atomically after the transferred bytes are confirmed in the source.
+write_receipt() {
+	local source_target="$1"
+	local receipt="$state_dir/$receipt_name"
+	local transferred stamp pending
+	transferred="$(git -C "$source_root" hash-object -- "$deliverable")" ||
+		die "deliverable transferred, but its source blob could not be read for the receipt"
+	stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+	pending="$(mktemp "$receipt.XXXXXX")" ||
+		die "deliverable transferred, but its receipt could not be created in $state_dir"
+	if ! {
+		attest succeeded
+		printf 'transferred_blob=%s\n' "$transferred"
+		printf 'source_deliverable=%s\nsandbox_retained=%s\n' "$source_target" "$sandbox_root"
+		printf 'transferred_at=%s\n' "$stamp"
+	} >"$pending" || ! mv "$pending" "$receipt"; then
+		rm -f "$pending"
+		die "deliverable transferred, but its receipt could not be recorded at $receipt"
+	fi
+}
+
+receipt_value() {
+	local file="$1"
+	local wanted="$2"
+	local key value
+	while IFS='=' read -r key value; do
+		if [[ "$key" == "$wanted" ]]; then
+			printf '%s' "$value"
+			return 0
+		fi
+	done <"$file"
+	return 1
 }
 
 parse_sandbox_arg() {
@@ -287,8 +339,31 @@ transfer_deliverable() {
 	transfer_file=""
 	cmp -s "$sandbox_target" "$source_target" || die "transferred deliverable does not match the workspace"
 	trap - EXIT
-	attest succeeded
-	printf 'source_deliverable=%s\nsandbox_retained=%s\n' "$source_target" "$sandbox_root"
+	write_receipt "$source_target"
+	cat "$state_dir/$receipt_name"
+}
+
+# Delivery evidence for the owner: fails until a transfer has succeeded, and
+# whenever the source or workspace no longer holds the transferred bytes.
+show_receipt() {
+	parse_sandbox_arg "$@"
+	load_state "$sandbox_arg"
+	local receipt="$state_dir/$receipt_name"
+	local transferred current
+	[[ -f "$receipt" && ! -L "$receipt" ]] ||
+		die "no transfer receipt: the guarded transfer has not succeeded for this workspace; a report's transfer=pending attestation is verification evidence, not delivery"
+	[[ "$(receipt_value "$receipt" transfer || true)" == succeeded ]] ||
+		die "transfer receipt does not record a successful transfer: $receipt"
+	transferred="$(receipt_value "$receipt" transferred_blob || true)"
+	[[ -n "$transferred" ]] || die "transfer receipt has no transferred_blob: $receipt"
+	current="$(git -C "$source_root" hash-object -- "$deliverable")"
+	[[ "$current" == "$transferred" ]] ||
+		die "source deliverable no longer matches the transferred report (transferred $transferred, source now $current); the receipt records only the earlier transfer"
+	current="$(git -C "$sandbox_root" hash-object -- "$deliverable")"
+	[[ "$current" == "$transferred" ]] ||
+		die "workspace deliverable changed after transfer (transferred $transferred, workspace now $current)"
+	cat "$receipt"
+	printf 'delivery=confirmed\n'
 }
 
 main() {
@@ -301,6 +376,7 @@ main() {
 	create) create_workspace "$@" ;;
 	verify) verify_workspace "$@" ;;
 	transfer) transfer_deliverable "$@" ;;
+	receipt) show_receipt "$@" ;;
 	-h | --help | help) usage ;;
 	*) die "unknown command: $command" ;;
 	esac
