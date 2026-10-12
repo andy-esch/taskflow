@@ -530,22 +530,14 @@ For example, `task show <TAB>` and `thread show <TAB>` offer readable aliases wh
 or canonical IDs when aliases collide or shadow an ID. Completion respects `-C`/`--space`
 and still offers malformed frontmatter; duplicate canonical IDs are omitted—use `lint` to diagnose them.
 
-## Development
+## Contributing
 
-`just` wraps the common tasks:
+Start with [the shared contributor and agent guide](./AGENTS.md) for working rules,
+validation, source ownership, and task-based routes into architecture and package contracts.
+[Justfile](./justfile) owns the development recipes, including race-enabled tests.
+`AGENTS.md` is the shared entry point; there are no separate tool-specific policy copies.
 
-- `just build` — build `bin/tskflwctl`
-- `just run *ARGS` — `go run ./cmd/tskflwctl …`
-- `just test` — `go test ./...`
-- `just lint` — `golangci-lint run ./...`
-- `just fmt` — gofmt + lint formatting
-- `just tidy` — `go mod tidy`
-- `just release-validate` — validate a clean release candidate without changing tracked files
-
-Design rationale lives in [`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md).
-For planning-data changes, start with its [change checklist](./docs/ARCHITECTURE.md#planning-data-change-checklist).
-
-### Interactive TUI (`tskflwctl ui`)
+## Interactive TUI (`tskflwctl ui`)
 
 A Bubble Tea browser over the **same `core`** the CLI uses (a second primary
 adapter — never the filesystem directly). Launched outside any planning repo, the atlas
