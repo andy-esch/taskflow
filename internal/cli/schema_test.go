@@ -158,3 +158,37 @@ func TestSchema_UnknownKind_Exit11(t *testing.T) {
 		t.Errorf("unknown kind should exit 11 (validation), got %v", err)
 	}
 }
+
+// The agent router sends authors to schema task. Pin both operational clauses,
+// not just command names: stale advice can contain every name while calling the
+// guarded route future work or authorizing generic writes. This focused prose
+// regression is not a general semantic validator for authoring conventions.
+func TestSchemaTask_DependencyGuidanceNamesShippedCommands(t *testing.T) {
+	js := runRoot(t, "-C", t.TempDir(), "schema", "task", "--json")
+	var result struct {
+		Conventions []string `json:"conventions"`
+	}
+	if err := json.Unmarshal([]byte(js), &result); err != nil {
+		t.Fatal(err)
+	}
+	var guidance string
+	for _, convention := range result.Conventions {
+		if strings.HasPrefix(convention, "depends_on ") {
+			guidance = convention
+		}
+	}
+	if !strings.Contains(guidance, "Use guarded `task depend add/remove` commands to change canonical edges") {
+		t.Fatalf("dependency authoring must route to shipped guarded commands: %q", guidance)
+	}
+	if !strings.Contains(guidance, "generic task creation, `task set`, `task edit`, and `lint --fix` cannot add, remove, or reinterpret it") {
+		t.Errorf("dependency authoring must prohibit generic graph writes: %q", guidance)
+	}
+	var output bytes.Buffer
+	root := newTestRootCmd(strings.NewReader(""), &output, &output)
+	for _, verb := range []string{"add", "remove"} {
+		cmd, _, err := root.Find([]string{"task", "depend", verb})
+		if err != nil || cmd == nil || cmd.Name() != verb || !cmd.Runnable() {
+			t.Fatalf("schema dependency remedy is not a runnable command: %s (%v)", verb, err)
+		}
+	}
+}

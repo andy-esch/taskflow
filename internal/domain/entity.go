@@ -9,19 +9,15 @@ import (
 // in a `switch kind` at every layer. One registry entry (entities, below) gives a
 // document kind its top-level directory, its authoring frontmatter, and its
 // authoring conventions; the schema/authoring/convention lookups all read the
-// registry, so adding a new entity (the scaffolded project/adr) is a registry
-// entry rather than edits scattered across the domain.
+// registry rather than maintaining separate kind inventories.
 //
-// Scope (M1, staged): this collapses the DOMAIN enumeration. Body templates
-// (core), the store scan, and the render/TUI delegates are deliberately still
-// per-entity — tracked by the rest of epic 21 (M9/M10) and the later M1 steps.
-// The descriptor names the directory but is NOT a second source of truth for a
-// task's status: the per-status/bucket subdirs stay derived from the status/bucket
-// enums via layout.go's TaskStatusDirs/AuditBucketDirs.
+// This registry describes authoring metadata; it does not implement a new
+// entity's use cases, persistence, or UI routes. The descriptor names a flat
+// directory, not a status/bucket layout: lifecycle is authoritative in frontmatter.
 type Descriptor struct {
-	Kind            string          // the `schema <kind>` word: task | epic | audit | research
+	Kind            string          // the `schema <kind>` word
 	Plural          string          // the plural for user-facing prose; NOT Kind+"s" — "research" is a mass noun
-	Dir             string          // top-level planning dir (TasksDir / EpicsDir / AuditsDir / ResearchDir)
+	Dir             string          // top-level planning dir
 	AuthoringFields []FieldDoc      // frontmatter a drafter fills in (not tool-managed stamps)
 	Conventions     []string        // short, factual "how to write it" rules
 	Templates       []NamedTemplate // body scaffolds offered for this kind; the one named DefaultTemplate is used when --template is omitted
@@ -51,10 +47,8 @@ type Placeholder struct {
 	Label string // the preview label, e.g. "<title>"
 }
 
-// entities is the single registry of document kinds. The ORDER is the
-// schema/display order — keep it task, epic, audit (consumers and golden output
-// depend on it). A new entity is one entry here (plus, for now, its store scan and
-// render funcs — see the Descriptor doc).
+// entities is the registry of authoring metadata. Its order is schema/display
+// order and part of the machine contract; see [Descriptor] for its scope.
 var entities = []Descriptor{
 	{
 		Kind:   "task",
@@ -71,7 +65,7 @@ var entities = []Descriptor{
 		},
 		Conventions: []string{
 			"status lives in frontmatter (authoritative) and is changed only via the lifecycle verbs (start/next/complete/…), which edit it in place — don't edit it directly.",
-			"depends_on is a sorted set of stable task IDs owned by the repository-global DAG. It is preservation-only until guarded `task depend add/remove` commands land: generic task creation, `task set`, `task edit`, and `lint --fix` cannot add, remove, or reinterpret it.",
+			"depends_on is a sorted set of stable task IDs owned by the repository-global DAG. Use guarded `task depend add/remove` commands to change canonical edges; generic task creation, `task set`, `task edit`, and `lint --fix` cannot add, remove, or reinterpret it.",
 			fmt.Sprintf("description is a single line, ≤%d characters.", MaxDescriptionLen),
 			"at least one tag is required at creation.",
 			"the filename slug is derived from the title; any title is accepted (colons, dashes, arrows, …) and the full title is kept as the body H1.",
