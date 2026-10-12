@@ -3,6 +3,9 @@
 set -euo pipefail
 
 readonly state_dir_name="isolated-review-workspace"
+# An unknown transport scheme makes Git fail before contacting anything, and its
+# error names the guard. A clone otherwise pushes to the live source checkout.
+readonly push_guard_url="isolated-review-push-disabled://source-is-read-only"
 
 usage() {
 	cat <<'EOF'
@@ -18,6 +21,11 @@ current staged, unstaged, untracked, and deleted state. A sandbox-only baseline
 commit makes temporary review probes easy to restore. Verification permits only
 one unstaged deliverable delta, and transfer copies only that file back after
 checking that its source version has not changed.
+
+Every workspace remote pushes only to a disabled URL, so an ordinary `git push`
+fails before reaching the source; verify and transfer reject a removed or
+weakened guard. This prevents accidents. It is not a security boundary against
+a push to an explicit source path or a command-line configuration override.
 
 The sandbox is retained after transfer for owner-confirmed cleanup.
 EOF
@@ -105,6 +113,31 @@ assert_independent_clone() {
 	[[ -z "$(git -C "$sandbox" config --get core.worktree || true)" ]] || die "workspace has core.worktree configured"
 }
 
+# Every remote must push only to the disabled URL after Git's own insteadOf
+# expansion, and no workspace push-destination setting may name a path or URL
+# instead of such a remote. This catches accidental reconfiguration; explicit-URL
+# pushes and user-wide or command-line overrides are outside a local check.
+check_push_guard() {
+	local sandbox="$1"
+	local source_root="$2"
+	local remotes remote urls key value
+	remotes="$(git -C "$sandbox" remote)"
+	[[ $'\n'"$remotes"$'\n' == *$'\n'origin$'\n'* ]] ||
+		die "push guard missing: remote 'origin' was removed; restore it with: git -C '$sandbox' remote add origin '$source_root' && git -C '$sandbox' remote set-url --push origin '$push_guard_url'"
+	while IFS= read -r remote; do
+		[[ -n "$remote" ]] || continue
+		urls="$(git -C "$sandbox" remote get-url --push --all "$remote" 2>&1)" ||
+			die "push guard unreadable for remote '$remote': $urls"
+		[[ "$urls" == "$push_guard_url" ]] ||
+			die "push guard weakened: remote '$remote' would push to: $(printf '%s' "$urls" | tr '\n' ' '); restore it with: git -C '$sandbox' config --replace-all remote.$remote.pushurl '$push_guard_url' (and remove any url.*.insteadOf rule that rewrites it)"
+	done <<<"$remotes"
+	while IFS=' ' read -r key value; do
+		[[ -n "$key" ]] || continue
+		[[ "$value" == "." || $'\n'"$remotes"$'\n' == *$'\n'"$value"$'\n'* ]] ||
+			die "push guard bypassed: $key names '$value' rather than a guarded remote; remove it with: git -C '$sandbox' config --unset '$key'"
+	done < <(git -C "$sandbox" config --local --get-regexp '^(remote\.pushdefault|branch\..*\.(pushremote|remote))$' || true)
+}
+
 create_workspace() {
 	local source_arg="."
 	local deliverable=""
@@ -136,6 +169,7 @@ create_workspace() {
 	sandbox="$(mktemp -d "$parent/isolated-review.XXXXXX")"
 	trap 'if [[ -n "${sandbox:-}" && -d "$sandbox" ]]; then rm -rf "$sandbox"; fi' EXIT
 	git clone --quiet --no-hardlinks "$source_root" "$sandbox"
+	git -C "$sandbox" remote set-url --push origin "$push_guard_url"
 	rsync -a --delete --exclude='/.git/' "$source_root/" "$sandbox/"
 	after="$(source_fingerprint "$source_root")"
 	sandbox_state="$(source_fingerprint "$sandbox")"
@@ -152,6 +186,7 @@ create_workspace() {
 	baseline="$(git -C "$sandbox" rev-parse HEAD)"
 	git_dir="$(git -C "$sandbox" rev-parse --absolute-git-dir)"
 	assert_independent_clone "$sandbox" "$git_dir"
+	check_push_guard "$sandbox" "$source_root"
 	state_dir="$git_dir/$state_dir_name"
 	(umask 077 && mkdir -p "$state_dir")
 	write_state "$state_dir" source-root "$source_root"
@@ -167,6 +202,7 @@ create_workspace() {
 	fi
 	printf 'sandbox_path=%s\ngit_dir=%s\nbaseline_commit=%s\n' "$sandbox" "$git_dir" "$baseline"
 	printf 'deliverable=%s\nsource_blob=%s\nsource_fingerprint=%s\n' "$deliverable" "$source_blob" "$after"
+	printf 'push_guard=%s\n' "$push_guard_url"
 }
 
 # Sets globals for the verification/transfer attestation.
@@ -192,6 +228,7 @@ load_workspace() {
 	[[ -s "$sandbox_root/$deliverable" ]] || die "workspace deliverable must not be empty: $deliverable"
 	[[ "$(git -C "$sandbox_root" rev-parse HEAD)" == "$baseline" ]] || die "workspace HEAD changed; reviewer commits are not permitted"
 	git -C "$sandbox_root" diff --cached --quiet --exit-code -- || die "workspace has staged changes"
+	check_push_guard "$sandbox_root" "$source_root"
 
 	local dirty=0 invalid="" entry status relative
 	while IFS= read -r -d '' entry; do
@@ -213,6 +250,7 @@ load_workspace() {
 attest() {
 	printf 'sandbox_path=%s\ngit_dir=%s\nbaseline_commit=%s\n' "$sandbox_root" "$git_dir" "$baseline"
 	printf 'source_blob=%s\nsource_fingerprint=%s\ndeliverable=%s\n' "$source_blob" "$source_snapshot" "$deliverable"
+	printf 'push_guard=%s\n' "$push_guard_url"
 	printf 'deliverable_changed=%s\ntransfer=%s\n' "$deliverable_changed" "$1"
 }
 

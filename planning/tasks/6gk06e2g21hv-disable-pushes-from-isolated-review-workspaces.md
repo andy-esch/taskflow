@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gk06e2g21hv
-status: ready-to-start
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Prevent ordinary sandbox pushes from mutating source refs and verify the accident-prevention guard without claiming hostile-agent isolation.
 effort: 2-4 hours
@@ -10,6 +10,9 @@ priority: medium
 autonomy_level: 4
 tags: [scripts, reviews, git, safety]
 created: "2026-10-12"
+updated_at: "2026-10-12"
+started_at: "2026-10-12"
+completed_at: "2026-10-12"
 ---
 # Disable pushes from isolated review workspaces
 
@@ -33,13 +36,13 @@ creating or changing source refs with an accidental push.
 
 ## Acceptance criteria
 
-- [ ] Newly created review sandboxes refuse ordinary default and explicit-origin pushes without
+- [x] Newly created review sandboxes refuse ordinary default and explicit-origin pushes without
       modifying source refs or files, including when the source permits updates to other branches.
-- [ ] Verify/transfer reject removal or weakening of the configured push guard with actionable
+- [x] Verify/transfer reject removal or weakening of the configured push guard with actionable
       diagnostics; source configuration and user-global settings remain untouched.
-- [ ] Disposable-repository tests compare source refs and bytes before/after attempted pushes,
+- [x] Disposable-repository tests compare source refs and bytes before/after attempted pushes,
       exercise a weakened guard, and still prove the normal report/verify/transfer workflow.
-- [ ] Scripts guidance explains the guard, remediation, and explicit-URL/config-override limits
+- [x] Scripts guidance explains the guard, remediation, and explicit-URL/config-override limits
       without claiming that local Git configuration is a hostile-agent security sandbox.
 
 ## Sequencing
@@ -62,3 +65,25 @@ The docs Thread may continue or close without waiting for this tooling improveme
 - [General helper](../../scripts/isolated-review-workspace.sh) and [protocol](../../scripts/README.md)
 - [Transfer-attestation task](6g7srp3py9fe-make-adversarial-review-transfer-attestations-self-finalizing.md)
 - [Review-workspace hardening Thread](../threads/6gk06gktr1q5-harden-isolated-review-workspace-safety-and-delivery-evidence.md)
+
+## Delivery and verification (2026-10-12)
+
+- `create` sets every sandbox push URL to `isolated-review-push-disabled://source-is-read-only`,
+  an unknown transport, immediately after cloning. Fetch still reads the source.
+- `verify` and `transfer` refuse a removed `origin`, any remote whose effective push URL after
+  `insteadOf` expansion is not that guard, and a workspace `remote.pushDefault` or
+  `branch.<name>.pushRemote`/`remote` naming a path or URL. Each refusal prints the restoring
+  `git -C <sandbox> …` command. Local upstreams (`remote = .`) remain allowed.
+- [Disposable-repository tests](../../internal/tools/reviewworkspace/review_workspace_test.go)
+  attempt default, origin, new-branch, existing-branch, `--all`, and tag pushes, comparing the
+  source's refs, config, HEAD, index, objects, and working files before and after. A control push
+  to the explicit source path then succeeds. That proves the source accepts other-branch updates
+  and documents the explicit-URL limit. Both `verify` and `transfer` reject eight weakenings,
+  and the redirected user-global configuration stays unchanged. The normal
+  capture/verify/transfer workflow still moves only the deliverable.
+- Mutations: removing guard installation fails the push test, and removing the `verify`/`transfer`
+  check fails all eight weakening cases. ShellCheck, vet, lint, and the package tests pass on
+  macOS `/bin/bash` 3.2 with openrsync; CI exercises Linux.
+- [Scripts guidance](../../scripts/README.md) and the generated review brief state the guard,
+  remediation, and limits: explicit-URL pushes, `git -c`/environment overrides, and user-wide or
+  system configuration are outside a workspace-local accident guard.

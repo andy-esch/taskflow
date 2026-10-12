@@ -173,8 +173,9 @@ sandbox-only baseline commit. That checkpoint—not the source branch's last com
 baseline for probes and the only commit the reviewer may create. Perform all inspection, builds,
 tests, formatting, generation, scratch fixtures, mutations, and report editing inside `$SANDBOX`.
 Never commit again, switch branches, stage, restore, clean, stash, reset, or run a write-capable
-project command in `$SOURCE_ROOT`. If creation fails, report the blocker; never fall back to the
-shared checkout.
+project command in `$SOURCE_ROOT`. The sandbox's push URLs are disabled; never re-enable them or
+push to the source path. If creation fails, report the blocker; never fall back to the shared
+checkout.
 
 Before transfer, restore every probe so only the assigned audit differs, inspect its diff, then use
 the helper for fail-closed verification and transfer:
@@ -185,9 +186,9 @@ git diff -- "$AUDIT_REL"
 "$SANDBOX/scripts/isolated-review-workspace.sh" transfer --sandbox "$SANDBOX"
 ```
 
-The helper refuses commits, staging, unrelated changes, a non-independent `.git`, source-deliverable
-drift, and empty reports; it copies back only the assigned audit through a same-directory atomic
-rename. Do not copy anything else manually. Leave the workspace in place and report its path until
+The helper refuses commits, staging, unrelated changes, a non-independent `.git`, a removed or
+weakened push guard, source-deliverable drift, and empty reports; it copies back only the assigned
+audit through a same-directory atomic rename. Do not copy anything else manually. Leave the workspace in place and report its path until
 the implementation owner confirms receipt. On refusal, preserve it and report the conflict rather
 than resolving it in the shared checkout.
 

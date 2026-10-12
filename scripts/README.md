@@ -23,6 +23,19 @@ or if the source deliverable changed. `transfer` repeats those checks, requires 
 delta, and atomically replaces only that source file. State and attestation evidence live under the
 sandbox's private `.git`; the sandbox remains available until its owner confirms receipt.
 
+A clone's `origin` would otherwise push to the live source checkout, so `create` sets every sandbox
+push URL to `isolated-review-push-disabled://source-is-read-only`. Git has no transport for that
+scheme, so `git push`, `git push origin …`, and branch, `--all`, or tag pushes fail before contacting
+the source; fetching from `origin` still reads it. `verify` and `transfer` refuse a removed `origin`,
+any remote whose effective push URL (after `insteadOf` expansion) is anything else, and a workspace
+`remote.pushDefault` or `branch.<name>.pushRemote`/`remote` setting that names a path or URL instead
+of a guarded remote. Each refusal prints the `git -C <sandbox> …` command that restores the guard.
+
+The guard prevents accidents; it is not a security boundary. A push that names the source path or
+URL explicitly, a `git -c`/environment override, or user-wide or system Git configuration bypasses
+a workspace-local setting, and the helper never edits source or user-wide configuration to compensate.
+The source checkout remains read-only by protocol.
+
 The source checkout still needs a handoff freeze. A filesystem copy cannot make an arbitrary live
 working tree transactionally atomic, and the source-hash guard cannot coordinate with an editor that
 ignores it. The helper detects ordinary drift and fails closed; it is not a repository lock.
