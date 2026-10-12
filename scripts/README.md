@@ -19,7 +19,8 @@ SANDBOX="$(scripts/isolated-review-workspace.sh create \
 
 `create` makes an independent `--no-hardlinks` clone, overlays the current staged, unstaged,
 untracked, and deleted state, rejects a source that changes during capture, and makes one local
-baseline commit. `verify` fails if the reviewer committed, staged anything, changed another file,
+baseline commit. The source may be a linked worktree: the overlay excludes its root `.git` file as
+well as a `.git` directory, and the workspace's independence is re-checked before any Git write. `verify` fails if the reviewer committed, staged anything, changed another file,
 or if the source deliverable changed. `transfer` repeats those checks, requires a real deliverable
 delta, and atomically replaces only that source file. State and attestation evidence live under the
 sandbox's private `.git`; the sandbox remains available until its owner confirms receipt.

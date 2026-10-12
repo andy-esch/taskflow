@@ -180,7 +180,12 @@ create_workspace() {
 	trap 'if [[ -n "${sandbox:-}" && -d "$sandbox" ]]; then rm -rf "$sandbox"; fi' EXIT
 	git clone --quiet --no-hardlinks "$source_root" "$sandbox"
 	git -C "$sandbox" remote set-url --push origin "$push_guard_url"
-	rsync -a --delete --exclude='/.git/' "$source_root/" "$sandbox/"
+	# A linked-worktree source has a .git file naming the shared repository, so
+	# exclude the root .git of either type rather than only a directory.
+	rsync -a --delete --exclude='/.git' "$source_root/" "$sandbox/"
+	# Re-check before any workspace Git write: an overlay that replaced .git would
+	# otherwise stage and commit the baseline into the source repository.
+	assert_independent_clone "$sandbox" "$(git -C "$sandbox" rev-parse --absolute-git-dir)"
 	after="$(source_fingerprint "$source_root")"
 	sandbox_state="$(source_fingerprint "$sandbox")"
 	[[ "$before" == "$after" ]] || die "source working state changed during the copy; freeze the handoff and retry"

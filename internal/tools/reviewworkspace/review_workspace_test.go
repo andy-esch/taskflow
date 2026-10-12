@@ -121,7 +121,12 @@ func (f fixture) helper(root string, args ...string) (string, error) {
 
 func (f fixture) create(t *testing.T) string {
 	t.Helper()
-	output, err := f.helper(f.source, "create", "--source", f.source, "--deliverable", deliverableRel,
+	return f.createFrom(t, f.source)
+}
+
+func (f fixture) createFrom(t *testing.T, source string) string {
+	t.Helper()
+	output, err := f.helper(source, "create", "--source", source, "--deliverable", deliverableRel,
 		"--sandbox-parent", f.parent, "--print-path")
 	if err != nil {
 		t.Fatalf("create failed: %v\n%s", err, output)
@@ -267,6 +272,66 @@ func TestVerifyAndTransferRejectAWeakenedPushGuard(t *testing.T) {
 				t.Error("user-global Git configuration changed")
 			}
 		})
+	}
+}
+
+// A linked worktree's .git is a file naming the shared repository's
+// administration. If the overlay copied it over the clone's own .git, the
+// baseline add and commit would land in the source repository.
+func TestLinkedWorktreeSourceStaysIndependent(t *testing.T) {
+	f := newFixture(t)
+	linked := filepath.Join(f.root, "linked")
+	f.git(t, f.source, "worktree", "add", "-q", "-b", "review-branch", linked)
+	appendFile(t, filepath.Join(linked, "src", "kept.txt"), "linked branch work\n")
+	f.git(t, linked, "commit", "-qam", "linked branch work")
+	writeFile(t, filepath.Join(linked, "src", "linked-untracked.txt"), "untracked in the worktree\n", 0o644)
+	linkedHead := f.git(t, linked, "rev-parse", "HEAD")
+	mainReport := readFile(t, filepath.Join(f.source, deliverableRel))
+
+	sharedGitDir := filepath.Join(f.source, ".git")
+	shared := func() string {
+		return strings.Join([]string{
+			f.git(t, f.source, "for-each-ref", "--format=%(objectname) %(refname)"),
+			f.git(t, f.source, "worktree", "list", "--porcelain"),
+			f.git(t, linked, "status", "--porcelain=v1", "--untracked-files=all"),
+			readFile(t, filepath.Join(sharedGitDir, "index")),
+			treeDigest(t, filepath.Join(sharedGitDir, "worktrees")),
+			treeDigest(t, filepath.Join(sharedGitDir, "objects")),
+		}, "\n--\n")
+	}
+	before := shared()
+
+	sandbox := f.createFrom(t, linked)
+	if after := shared(); after != before {
+		t.Fatalf("creating a workspace from a linked worktree changed the shared repository:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+	if info, err := os.Lstat(filepath.Join(sandbox, ".git")); err != nil || !info.IsDir() {
+		t.Fatalf("sandbox .git must be its own directory: info=%v err=%v", info, err)
+	}
+	if got := f.git(t, sandbox, "rev-parse", "--absolute-git-dir"); got != filepath.Join(sandbox, ".git") {
+		t.Fatalf("sandbox Git directory = %q", got)
+	}
+	if got := f.git(t, sandbox, "rev-parse", "HEAD^"); got != linkedHead {
+		t.Fatalf("baseline parent = %s, want the linked worktree's branch head %s", got, linkedHead)
+	}
+	if got := readFile(t, filepath.Join(sandbox, "src", "kept.txt")); !strings.Contains(got, "linked branch work") {
+		t.Errorf("sandbox did not capture the linked branch commit: %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(sandbox, "src", "linked-untracked.txt")); err != nil {
+		t.Errorf("sandbox did not capture worktree-untracked state: %v", err)
+	}
+
+	appendFile(t, filepath.Join(sandbox, deliverableRel), "\nReviewed from a linked worktree.\n")
+	for _, command := range []string{"verify", "transfer", "receipt"} {
+		if output, err := f.workspace(sandbox, command); err != nil {
+			t.Fatalf("%s from a linked-worktree source: %v\n%s", command, err, output)
+		}
+	}
+	if got, want := readFile(t, filepath.Join(linked, deliverableRel)), readFile(t, filepath.Join(sandbox, deliverableRel)); got != want {
+		t.Errorf("linked worktree report = %q, want the delivered %q", got, want)
+	}
+	if got := readFile(t, filepath.Join(f.source, deliverableRel)); got != mainReport {
+		t.Errorf("transfer wrote the main checkout's report instead of the linked worktree's: %q", got)
 	}
 }
 

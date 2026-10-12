@@ -87,3 +87,23 @@ The docs Thread may continue or close without waiting for this tooling improveme
 - [Scripts guidance](../../scripts/README.md) and the generated review brief state the guard,
   remediation, and limits: explicit-URL pushes, `git -c`/environment overrides, and user-wide or
   system configuration are outside a workspace-local accident guard.
+
+## Linked-worktree sources (2026-10-12)
+
+Preparing this branch's review exposed a second way a review could write into the source. A
+linked-worktree source has a root `.git` *file* naming the shared repository. The overlay excluded
+only a `.git` directory, so rsync tried to replace the clone's own `.git` with that file, and
+`create`'s independence check ran only after the baseline `git add -A` and commit.
+
+On macOS openrsync this fails closed (`unlinkat: Directory not empty`) and `create` deletes the
+sandbox. GNU rsync's `--delete` replacement behavior was not available locally, so whether the old
+helper could commit into the shared repository on Linux is unverified.
+
+- The overlay now excludes `/.git` of either type. Independence is re-asserted right after the
+  overlay, before any workspace Git write.
+- [`TestLinkedWorktreeSourceStaysIndependent`](../../internal/tools/reviewworkspace/review_workspace_test.go)
+  builds a linked worktree with its own branch commit and untracked state, and uses it as the
+  source. It checks that the shared repository's refs, worktree administration, index, and objects
+  are unchanged; that the sandbox owns its `.git` directory; and that the baseline sits on the
+  worktree's branch. It then shows verify/transfer/receipt delivering only into the linked
+  worktree. Restoring the old exclude fails the test, and CI runs it on GNU rsync.
