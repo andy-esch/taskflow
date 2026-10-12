@@ -11,7 +11,7 @@ autonomy_level: 4
 tags: [documentation, ci, agents, maintainability]
 created: "2026-09-12"
 depends_on: [6g63hjm7cp6w, 6g6x7e2ef37r, 6g9cz5sv6kck, 6ggxymjbf86r]
-updated_at: "2026-10-05"
+updated_at: "2026-10-11"
 ---
 # Reconcile documentation projections and enforce drift checks
 
@@ -31,7 +31,9 @@ recurrence without snapshot-testing prose.
 - [ ] README, agent guides, architecture guides, package docs, generated CLI reference, schema guidance, ADR links, and compatibility documents are checked against the source-of-truth matrix and contradictory copies are removed or corrected.
 - [ ] Stable links and navigation work after the architecture split, including links from code comments and package docs where appropriate.
 - [ ] CI or a documented `just` target verifies generated documentation and package/import inventory freshness, compiles Go examples, and performs a proportionate internal-link check.
-- [ ] Agent-specific wrappers or duplicated safety digests have one explicit sync mechanism; mutable command and feature inventories are linked or generated rather than copied.
+- [ ] Shared agent guidance has one explicit owner in AGENTS.md; routing checks
+  detect competing policy copies, and mutable command and feature inventories
+  are linked or generated rather than copied.
 - [ ] Drift failures explain the canonical source and remediation command instead of reporting only a generic diff.
 - [ ] `just test`, `just lint`, documentation generation/checks, `git diff --check`, and planning lint pass.
 
@@ -45,6 +47,30 @@ recurrence without snapshot-testing prose.
 The [focused pure-layer import guard](6ggxymjbf86r-guard-core-and-domain-against-direct-i-o-and-framework-imports.md)
 now follows the dependency-policy ADR and feeds this final reconciliation. Verify guidance against
 its actual enforcement, without claiming that import checks prove behavioral safety.
+
+## Agent-routing handoff (2026-10-11)
+
+Use the [ownership research](../research/6gjggjw01raw-documentation-ownership-and-portable-agent-routing.md)
+and root `AGENTS.md` ownership matrix. Claude and Antigravity use native discovery; the repository
+has neither `CLAUDE.md` nor `GEMINI.md`. Add proportionate checks for the shared root entry point,
+working routes, and absence of competing shared-policy inventories. Avoid
+snapshotting prose or requiring installed/authenticated model clients in CI. Keep documented
+client-loading smoke checks separate from static link validity and behavioral adherence.
+
+The maintainer chose native discovery after reviewing current Claude and Antigravity support.
+Keep version/settings/ancestor-file caveats and Gemini CLI's differing default discovery in
+the dated research, not another root instruction file.
+
+Reconcile the remaining README product reference against command metadata and tested behavior;
+the ownership slice only removes its duplicate contributor workflow. Preserve user-oriented
+examples where useful, but route exhaustive mutable inventories to generated reference/schema.
+
+Include the active routines in this reconciliation. The ownership slice repoints their live
+entry points and removes unsafe dirty-checkout revert instructions; it is not a full workflow
+audit. For example, `weekly-task-sweep.md` forbids tier/priority writes in its scope block but
+allows them in step 8. Resolve that policy conflict explicitly rather than silently choosing
+either instruction. Check repeated architecture summaries against their owners and verify
+safe checkout handling without running routine writes against an unrelated dirty tree.
 
 ## Related
 

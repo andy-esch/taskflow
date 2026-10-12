@@ -11,7 +11,7 @@ autonomy_level: 3
 tags: [docs, architecture, maintainability]
 created: "2026-09-04"
 depends_on: [6g9cz5saenme]
-updated_at: "2026-09-13"
+updated_at: "2026-10-11"
 ---
 
 # Restructure the architecture documentation into focused guides
@@ -40,6 +40,15 @@ ADR, or planning history.
 - Re-litigating accepted ADR decisions unless the restructuring exposes a concrete contradiction
   that should be tracked separately.
 - A comprehensive rewrite of unrelated user or CLI documentation.
+
+## Research handoff (2026-10-11)
+
+The [ownership research](../research/6gjggjw01raw-documentation-ownership-and-portable-agent-routing.md)
+measured the current reference at 1,087 lines / 11,466 words (baseline 09974fb), larger than the
+Thread's original estimate. Inventory its dated `Status (2026-08-25)` and review-history sections
+separately from current contracts; do not leave historical feature snapshots presented as current
+guidance. Preserve accepted decision history in ADRs and useful review provenance in planning.
+Keep the planning-data checklist's owner and old incoming links explicit during extraction.
 
 ## Related
 
