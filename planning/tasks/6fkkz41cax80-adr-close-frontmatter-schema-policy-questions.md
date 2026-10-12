@@ -10,9 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [validation, schema, adr]
 created: "2026-07-07"
-updated_at: "2026-09-22"
+updated_at: "2026-10-12"
 started_at: "2026-08-23"
-audit_sources: [2026-09-07-arch-data-model-and-storage, 2026-09-20-weekly-task-sweep]
+audit_sources: [2026-09-07-arch-data-model-and-storage, 2026-09-20-weekly-task-sweep, 2026-10-12-arch-machine-contract]
 audited: "2026-09-20"
 ---
 # ADR — declared frontmatter-schema contract: close the policy questions
@@ -358,3 +358,5 @@ side — and the park decision — remain open exactly as drafted.
   repair applicability; the implementation task is sequenced behind this ADR rather than deciding the
   vocabulary in code.
 - 2026-09-20: automated weekly sweep — survey untouched; flagged that §E's "ADR-0005" number is now taken (next free is 0009) and that ADR-0008 settles Q10's envelope half; all prior-art citations re-verified.
+
+Cross-referenced (PARTIAL, not a handoff) by audit 2026-10-12-arch-machine-contract: H1. That finding concerns the *wire* JSON Schema, which ADR-0008 §2 holds separate from the on-disk `schema:` key this task governs — so H1 stays open. The overlap is the source of truth: if this ADR lands one declared registry, it is the natural origin for the `x-taskflow-vocabulary` annotations H1 proposes, and Q2 (unknown/custom fields) is the same question H1 asks about unknown vocabulary *values*.
