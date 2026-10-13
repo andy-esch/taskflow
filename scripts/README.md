@@ -37,7 +37,10 @@ the source disable index auto-refresh and optional locks, so capturing a stat-di
 not rewrite its index. `verify` fails if the reviewer committed, staged anything, changed another file,
 or if the source deliverable changed. `transfer` repeats those checks, requires a real deliverable
 delta, and atomically replaces only that source file. State and attestation evidence live under the
-sandbox's private `.git`; the sandbox remains available until its owner confirms receipt.
+sandbox's private `.git`. Sandboxes are created under `/tmp` unless `--sandbox-parent` names another
+directory. Each one stays in place until its review is processed, and is disposable afterwards:
+keep anything valuable in the audit, then delete it. `/tmp`'s operating-system cleanup reclaims
+any left behind.
 
 A report must be final before `transfer` runs, so it cannot record its own delivery. `verify`
 therefore attests verification only (`verify=passed`, `transfer=pending`). After the transferred
@@ -95,7 +98,7 @@ speculative architecture findings.
 Every generated review uses the general isolated-workspace helper above. The injected protocol
 treats the handoff checkout as read-only, and the reviewer may transfer only their assigned audit
 back after the helper's verification passes. The sandbox is retained until the implementation
-owner confirms receipt.
+owner has confirmed receipt and processed the review, then discarded.
 This is required even for nominally read-only reviews: two reviewers may run simultaneously, and
 review tooling or restoration commands must never share an index, branch, generated files, or
 working tree with each other or the implementation owner. A Git worktree is intentionally not used

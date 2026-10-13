@@ -43,7 +43,9 @@ fails before reaching the source; verify and transfer reject a removed or
 weakened guard. This prevents accidents. It is not a security boundary against
 a push to an explicit source path or a command-line configuration override.
 
-The sandbox is retained after transfer for owner-confirmed cleanup.
+Workspaces are created under /tmp unless --sandbox-parent names another
+directory. A workspace is retained after transfer until its review is
+processed, then it is disposable.
 EOF
 }
 
@@ -288,7 +290,9 @@ check_push_guard() {
 create_workspace() {
 	local source_arg="."
 	local deliverable=""
-	local parent="${TMPDIR:-/tmp}"
+	# Workspaces are disposable once their review is processed; /tmp lets the
+	# operating system's temporary-file cleanup reclaim any left behind.
+	local parent="/tmp"
 	local print_path=false
 	while (($# > 0)); do
 		case "$1" in

@@ -572,6 +572,25 @@ func TestInTreeSymlinksAreAccepted(t *testing.T) {
 	}
 }
 
+// Workspaces are disposable once processed, so by default they live in /tmp,
+// where the operating system's temporary-file cleanup reclaims leftovers.
+func TestWorkspacesDefaultToTmp(t *testing.T) {
+	tmp, err := filepath.EvalSymlinks("/tmp")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := newFixture(t)
+	output, err := f.helper(f.source, "create", "--source", f.source, "--deliverable", deliverableRel, "--print-path")
+	if err != nil {
+		t.Fatalf("create: %v\n%s", err, output)
+	}
+	sandbox := strings.TrimSpace(output)
+	t.Cleanup(func() { _ = os.RemoveAll(sandbox) })
+	if filepath.Dir(sandbox) != tmp {
+		t.Fatalf("default workspace %q is not directly under %q", sandbox, tmp)
+	}
+}
+
 // The nested-metadata scan once used the sandbox path as a find pattern, so a
 // parent directory containing brackets made create refuse its own root .git.
 func TestPatternCharactersInTheSandboxParentPath(t *testing.T) {
@@ -1151,6 +1170,11 @@ done
 	for _, line := range strings.Split(generated, "\n") {
 		for _, field := range strings.Fields(line) {
 			if strings.HasSuffix(strings.Trim(field, "`\"$()"), "isolated-review-workspace.sh") {
+				// Any other spelling, such as ./scripts/… after cd "$SANDBOX",
+				// runs the reviewer-mutable sandbox copy.
+				if !strings.Contains(field, "$SOURCE_ROOT/scripts/isolated-review-workspace.sh") {
+					t.Errorf("generated brief runs a helper copy other than the source's: %q", line)
+				}
 				rest := strings.Fields(line[strings.Index(line, field)+len(field):])
 				if len(rest) > 0 {
 					calls = append(calls, rest[0])
