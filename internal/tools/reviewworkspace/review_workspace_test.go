@@ -1154,6 +1154,17 @@ done
 		t.Fatalf("a later block ran without a sandbox; err=%v output:\n%s", err, output)
 	}
 
+	// The literal create block uses the default parent, /tmp. Remove any
+	// workspace it makes whose recorded source is this fixture, and nothing else.
+	t.Cleanup(func() {
+		created, _ := filepath.Glob("/tmp/isolated-review.*")
+		for _, sandbox := range created {
+			source, err := os.ReadFile(filepath.Join(sandbox, ".git", "isolated-review-workspace", "source-root"))
+			if err == nil && strings.HasPrefix(string(source), f.root+string(os.PathSeparator)) {
+				_ = os.RemoveAll(sandbox)
+			}
+		}
+	})
 	walkthrough := strings.Join([]string{
 		"set -e",
 		fill(blocks[0], deliverableRel),
