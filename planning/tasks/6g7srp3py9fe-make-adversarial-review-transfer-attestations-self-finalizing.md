@@ -10,7 +10,7 @@ priority: medium
 autonomy_level: 4
 tags: [reviews, agents, scripts, safety]
 created: "2026-09-07"
-updated_at: "2026-10-12"
+updated_at: "2026-10-13"
 started_at: "2026-10-12"
 completed_at: "2026-10-12"
 ---
@@ -97,3 +97,18 @@ be final before `transfer` runs, so it can truthfully attest only verification.
 - Mutations: writing a receipt at `verify`, skipping the source-match check, recording the receipt
   before the source write, and restoring `main`'s generator each fail the intended test.
   ShellCheck, vet, lint, and the package tests pass.
+
+## Review round (2026-10-13)
+
+Two independent reviews dogfooded the receipt contract: both reports were delivered through
+`transfer` and confirmed with `receipt` from the source copy. They found that a failure after the
+source rename left a delivered report described as undelivered, and that the generated brief could
+fall through to the shared checkout or verify with a mutated sandbox copy. All of these are fixed:
+
+- `transfer` records a pending receipt before touching the source, and failures after the rename
+  exit 3. `receipt` records an interrupted delivery whose bytes are intact, or reports it uncertain.
+- The handoff prints exact `SOURCE_ROOT` and `AUDIT_REL`, and every generated block fails closed.
+- The protocol runs the helper from the source checkout's copy.
+
+See the [delivery-evidence review](../audits/6gk49rvj7rhe-2026-10-12-review-workspace-hardening-implementation-claude-delivery-evidence.md)
+and the [git-safety review](../audits/6gk49rv9gech-2026-10-12-review-workspace-hardening-implementation-claude-git-safety.md).

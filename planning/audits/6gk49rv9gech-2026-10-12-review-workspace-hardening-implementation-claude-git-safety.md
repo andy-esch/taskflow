@@ -1,10 +1,10 @@
 ---
 schema: 1
 id: 6gk49rv9gech
-bucket: open
+bucket: closed
 area: review-workspace-hardening-implementation-claude-git-safety
 date: "2026-10-12"
-updated_at: "2026-10-12"
+updated_at: "2026-10-13"
 ---
 # Audit: Review-workspace hardening implementation — claude-git-safety — 2026-10-12
 
@@ -605,7 +605,7 @@ Unresolved:
 
 ## Findings
 
-#### H1. Overlay copies nested Git metadata that writes source refs while verify attests independence · **Status:** open
+#### H1. Overlay copies nested Git metadata that writes source refs while verify attests independence · **Status:** fixed in 98cdd131
 
 **File:** scripts/isolated-review-workspace.sh:185 | **Component:** scripts/isolated-review-workspace.sh
 **Effort:** M · **Urgency:** soon
@@ -662,7 +662,14 @@ test those implicit callers. Absolute-gitdir submodules are in the same class bu
 
 **Recommendation:** Reject or strip nested .git entries after the overlay (or overlay only non-ignored paths) and fail the fingerprint closed.
 
-#### M1. create rewrites the source index through git diff auto-refresh · **Status:** open
+**Resolution:** The overlay excludes .git at any depth; create, verify, and
+    transfer refuse nested Git metadata; the fingerprint fails closed so a
+    non-ignored nested repository is refused.
+    TestNestedWorktreeIsCopiedWithoutItsGitMetadata and
+    TestNestedRepositoryInTheSourceIsRefused pin it, and both coordinated
+    mutations were killed.
+
+#### M1. create rewrites the source index through git diff auto-refresh · **Status:** fixed in 98cdd131
 
 **File:** scripts/isolated-review-workspace.sh:83 | **Component:** scripts/isolated-review-workspace.sh
 **Effort:** XS · **Urgency:** soon
@@ -696,7 +703,11 @@ contention with an owner command is timing-dependent: 0 of 193 attempts collided
 
 **Recommendation:** Run source-side Git reads with -c diff.autoRefreshIndex=false --no-optional-locks and add a stat-dirty regression.
 
-#### M2. Push-destination check ignores included and worktree config so a passing verify coexists with a source push · **Status:** open
+**Resolution:** Source-side reads run with diff.autoRefreshIndex=false and
+    --no-optional-locks. TestCreateLeavesAStatDirtySourceIndexUntouched covers a
+    plain checkout and a linked worktree; removing the setting fails both.
+
+#### M2. Push-destination check ignores included and worktree config so a passing verify coexists with a source push · **Status:** fixed in 1ece6c8c
 
 **File:** scripts/isolated-review-workspace.sh:148 | **Component:** scripts/isolated-review-workspace.sh
 **Effort:** S · **Urgency:** soon
@@ -739,7 +750,13 @@ overrides remain documented limits.
 
 **Recommendation:** Resolve effective push destinations (%(push:remotename) or --includes without a file scope) and pin branch.<name>.remote.
 
-#### M3. A failure after the source rename leaves delivered-but-unrecorded state that receipt reports as not succeeded · **Status:** open
+**Resolution:** Destination settings are read from the local file with includes
+    and from config.worktree, legacy remote files are refused, and
+    branch.NAME.remote is pinned. The weakening test covers include.path,
+    includeIf, worktree config, and legacy files; each scope mutation fails its
+    case.
+
+#### M3. A failure after the source rename leaves delivered-but-unrecorded state that receipt reports as not succeeded · **Status:** fixed in fc537a52
 
 **File:** scripts/isolated-review-workspace.sh:343 | **Component:** scripts/isolated-review-workspace.sh
 **Effort:** S · **Urgency:** eventually
@@ -776,7 +793,12 @@ regression for a failure after the rename.
 
 **Recommendation:** Prepare the receipt before the rename and make receipt report an unrecorded delivery distinctly.
 
-#### L1. Several printed restoration commands fail when run literally · **Status:** open
+**Resolution:** A pending receipt is recorded before the source is touched,
+    post-rename failures exit 3, and receipt records an interrupted delivery
+    whose bytes are intact or reports it uncertain. Retries point to receipt
+    instead of blaming owner drift.
+
+#### L1. Several printed restoration commands fail when run literally · **Status:** fixed in 1ece6c8c
 
 **File:** scripts/isolated-review-workspace.sh:147 | **Component:** scripts/isolated-review-workspace.sh
 **Effort:** XS · **Urgency:** eventually
@@ -800,7 +822,12 @@ output (key, newline, value, NUL-terminated).
 
 **Recommendation:** Use --unset-all, quote keys, and parse --get-regexp -z output.
 
-#### L2. Mutation survivors and fixture shapes leave new invariants unpinned · **Status:** open
+**Resolution:** Refusals print restore lines quoted with printf %q, using
+    --unset-all and --file for included or multi-valued settings and naming any
+    insteadOf rule that rewrites the guard. The weakening test runs every
+    printed line literally and then requires verify to pass.
+
+#### L2. Mutation survivors and fixture shapes leave new invariants unpinned · **Status:** fixed in 98cdd131, 1ece6c8c, fc537a52, 229426ab
 
 **File:** internal/tools/reviewworkspace/review_workspace_test.go:36 | **Component:** internal/tools/reviewworkspace
 **Effort:** S · **Urgency:** eventually
@@ -835,7 +862,13 @@ why H1 and M2 stay invisible.
 
 **Recommendation:** Add stat-dirty, nested, include-scoped fixtures plus receipt workspace-edit and non-dry-run handoff assertions.
 
-#### L3. Task note says the pre-fix linked-worktree overlay fails closed on macOS but it commits into the source · **Status:** open
+**Resolution:** Added fixtures for stat-dirty, nested, include-scoped, and
+    worktree-scoped state; a receipt workspace-edit case; a non-dry-run
+    generator run; and an rsync shim that pins the post-overlay assertion on
+    every platform. Each surviving mutation named here now fails its intended
+    test.
+
+#### L3. Task note says the pre-fix linked-worktree overlay fails closed on macOS but it commits into the source · **Status:** fixed
 
 **File:** planning/tasks/6gk06e2g21hv-disable-pushes-from-isolated-review-workspaces.md | **Component:** planning
 **Effort:** XS · **Urgency:** soon
@@ -861,3 +894,8 @@ source branches and reflogs for stray `capture isolated review baseline` commits
 captured in this sandbox have none.
 
 **Recommendation:** Correct the record and check source branches and reflogs for stray baseline commits from main's helper.
+
+**Resolution:** Corrected in the push-guard task note (2026-10-13 correction
+    section). No stray capture-isolated-review-baseline commit exists in any ref
+    or reflog of the shared repository; the bug in the main-branch helper ends
+    when this branch merges.

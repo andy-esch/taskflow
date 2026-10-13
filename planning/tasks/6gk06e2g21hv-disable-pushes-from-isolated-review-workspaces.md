@@ -10,7 +10,7 @@ priority: medium
 autonomy_level: 4
 tags: [scripts, reviews, git, safety]
 created: "2026-10-12"
-updated_at: "2026-10-12"
+updated_at: "2026-10-13"
 started_at: "2026-10-12"
 completed_at: "2026-10-12"
 ---
@@ -107,3 +107,22 @@ helper could commit into the shared repository on Linux is unverified.
   are unchanged; that the sandbox owns its `.git` directory; and that the baseline sits on the
   worktree's branch. It then shows verify/transfer/receipt delivering only into the linked
   worktree. Restoring the old exclude fails the test, and CI runs it on GNU rsync.
+
+## Correction and review round (2026-10-13)
+
+The linked-worktree note above is wrong to say the pre-fix overlay fails closed on macOS. The
+[git-safety review](../audits/6gk49rv9gech-2026-10-12-review-workspace-hardening-implementation-claude-git-safety.md)
+(L3) ran the real pre-fix helper on openrsync against a linked worktree of a `git init` repository.
+It committed `chore: capture isolated review baseline` onto the source branch, and only a cloned
+fixture failed closed. The outcome depends on repository shape, not on the platform. `main`'s
+helper keeps that exclude until this branch merges. No such commit exists in any ref or reflog of
+this repository.
+
+The same review round found related source-safety gaps, all fixed on this branch:
+
+- Nested `.git` files (ignored `.claude/worktrees/*`) were copied into sandboxes still bound to the
+  shared repository (H1). Sixteen retained sandboxes held such pointers and were deleted with the
+  maintainer's approval; two possibly in use by another session were left in place.
+- `git diff` refreshed a stat-dirty source index (M1).
+- Push destinations set in include or worktree config, or in legacy remote files, passed `verify`
+  (M2).

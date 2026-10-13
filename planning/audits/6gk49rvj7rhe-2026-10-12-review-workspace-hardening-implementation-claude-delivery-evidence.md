@@ -1,10 +1,10 @@
 ---
 schema: 1
 id: 6gk49rvj7rhe
-bucket: open
+bucket: closed
 area: review-workspace-hardening-implementation-claude-delivery-evidence
 date: "2026-10-12"
-updated_at: "2026-10-12"
+updated_at: "2026-10-13"
 ---
 # Audit: Review-workspace hardening implementation — claude-delivery-evidence — 2026-10-12
 
@@ -430,7 +430,7 @@ Documented limits or unresolved:
 
 ## Findings
 
-#### M1. A failed post-rename transfer delivers the report but leaves no receipt and no recovery · **Status:** open
+#### M1. A failed post-rename transfer delivers the report but leaves no receipt and no recovery · **Status:** fixed in fc537a52
 
 **File:** scripts/isolated-review-workspace.sh:343 | **Component:** scripts/isolated-review-workspace.sh
 **Effort:** S
@@ -454,7 +454,12 @@ Documented limits or unresolved:
 
 **Recommendation:** Record an in-flight marker, give post-rename failures a distinct status, and let receipt recover a delivered-unrecorded transfer.
 
-#### M2. A failed create in the generated brief falls through to the shared checkout, and the brief's path wording makes create fail · **Status:** open
+**Resolution:** Same root cause as git-safety M3: the pending receipt precedes
+    the rename, post-rename failures exit 3, and receipt records or diagnoses
+    the interrupted delivery. The unwritable state directory now refuses with
+    the source unchanged, and the editor-save case reports delivery uncertain.
+
+#### M2. A failed create in the generated brief falls through to the shared checkout, and the brief's path wording makes create fail · **Status:** fixed in 229426ab
 
 **File:** scripts/prepare-adversarial-review-audits.sh:161 | **Component:** scripts/prepare-adversarial-review-audits.sh
 **Effort:** S
@@ -477,7 +482,12 @@ Documented limits or unresolved:
 
 **Recommendation:** Guard the generated blocks (exit on empty SANDBOX) and print SOURCE_ROOT plus the repository-relative AUDIT_REL in the handoff prompt.
 
-#### M3. Verify attests an intact push guard while include-file or legacy-remote settings push to the source · **Status:** open
+**Resolution:** The handoff prints exact SOURCE_ROOT and AUDIT_REL, every
+    generated block is guarded with SANDBOX:?, and commands chain with &&. The
+    generator test executes the blocks with the old absolute path (refused, no
+    fall-through) and runs a full literal walkthrough.
+
+#### M3. Verify attests an intact push guard while include-file or legacy-remote settings push to the source · **Status:** fixed in 1ece6c8c
 
 **File:** scripts/isolated-review-workspace.sh:148 | **Component:** scripts/isolated-review-workspace.sh
 **Effort:** XS
@@ -502,7 +512,11 @@ Detected controls: include that adds an origin `pushurl`, empty `pushurl` reset,
 
 **Recommendation:** Read push-destination settings with --local --includes and refuse legacy remotes/branches files, or document them as limits.
 
-#### L1. Some push-guard restoration commands do not restore the guard or do not parse · **Status:** open
+**Resolution:** Same root cause as git-safety M2: workspace-scoped reads now
+    include include files and config.worktree, and legacy remotes and branches
+    files are refused.
+
+#### L1. Some push-guard restoration commands do not restore the guard or do not parse · **Status:** fixed in 1ece6c8c
 
 **File:** scripts/isolated-review-workspace.sh:142 | **Component:** scripts/isolated-review-workspace.sh
 **Effort:** S
@@ -530,7 +544,10 @@ The other eleven cases restore, and `verify` passes after them. That covers all 
 
 **Recommendation:** Quote interpolated names, print the offending insteadOf keys as unset commands, and have the test execute each printed command.
 
-#### L2. New fail-closed branches survive compiler-valid mutations · **Status:** open
+**Resolution:** Same root cause as git-safety L1; the weakening test now runs
+    each printed restore line, including the insteadOf and quoted-name cases.
+
+#### L2. New fail-closed branches survive compiler-valid mutations · **Status:** fixed in fc537a52, 229426ab, 98cdd131
 
 **File:** internal/tools/reviewworkspace/review_workspace_test.go:511 | **Component:** internal/tools/reviewworkspace
 **Effort:** S
@@ -550,7 +567,11 @@ The other eleven cases restore, and `verify` passes after them. That covers all 
 
 **Recommendation:** Add a post-transfer workspace edit, a non-dry-run generator assertion, and a direct post-overlay assertion probe.
 
-#### L3. The verifier runs from the reviewer-mutable sandbox copy and can attest its own mutation · **Status:** open
+**Resolution:** The receipt workspace-blob check, handoff prompt, delivery note,
+    and post-overlay assertion each gained a regression; the corresponding
+    mutations now fail.
+
+#### L3. The verifier runs from the reviewer-mutable sandbox copy and can attest its own mutation · **Status:** fixed in 229426ab
 
 **File:** scripts/prepare-adversarial-review-audits.sh:184 | **Component:** scripts/prepare-adversarial-review-audits.sh
 **Effort:** XS
@@ -566,3 +587,7 @@ The other eleven cases restore, and `verify` passes after them. That covers all 
 **Scope.** Low. Transfer still copies only the deliverable, so the source is not harmed. The false evidence is the verification attestation, and it matters most for reviews of this helper itself.
 
 **Recommendation:** Run verify and transfer from the read-only source copy, or refuse when the running helper differs from the baseline blob.
+
+**Resolution:** The protocol, README, and tests run verify, transfer, and
+    receipt from the source checkout copy, which reviewers cannot mutate; the
+    generator test rejects any brief that runs the sandbox copy.
