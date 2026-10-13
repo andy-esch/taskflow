@@ -11,7 +11,7 @@ autonomy_level: 4
 tags: [documentation, ci, agents, maintainability]
 created: "2026-09-12"
 depends_on: [6g63hjm7cp6w, 6g6x7e2ef37r, 6g9cz5sv6kck, 6ggxymjbf86r]
-updated_at: "2026-10-11"
+updated_at: "2026-10-12"
 ---
 # Reconcile documentation projections and enforce drift checks
 
@@ -76,3 +76,18 @@ safe checkout handling without running routine writes against an unrelated dirty
 
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
 - Thread [Make documentation layered, executable, and agent-navigable](../threads/6g9czp7g9pt3-make-documentation-layered-executable-and-agent-navigable.md)
+
+## Architecture extraction handoff (2026-10-12)
+
+The short index and six focused guides now replace the monolithic reference; old section anchors
+forward to their new owners. A bounded [navigation test](../../internal/tools/architecturecheck/architecture_test.go)
+runs with just test, checking inline local routes/ATX anchors in the index, guides, AGENTS and README,
+plus linked package-comment return paths. It deliberately is not a full Markdown/network checker,
+semantic prose validator, package inventory verifier or import-map/example gate. Reuse that check
+where appropriate; broaden coverage only for demonstrated missing routes. This task still owns
+repository-wide reconciliation, root-policy duplication/routine consistency, executable inventory
+and example integration. Do not tick its broader criteria just because the extraction test passes.
+
+## External-review coverage handoff (2026-10-12)
+
+The extraction review fixed false-positive index/back-links (fences, inline code and bare mentions), wrapped link labels, and retained index anchors referenced by tasks/Threads. The new incoming-route check derives links from planning/tasks and planning/threads, not a duplicate heading inventory. Historical audits with source-line citations, routines, reference-style Markdown/HTML, full package inventory and semantic claim-to-test agreement remain outside that bounded guard. Check those deliberately in this reconciliation rather than claiming a green navigation test proves repository-wide or semantic fidelity. A nearby userconfig compiler-enforcement claim was corrected to the actual depguard rule; continue auditing package overviews under the sibling task.

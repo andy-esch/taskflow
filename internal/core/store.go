@@ -5,7 +5,7 @@
 // [VersionedRecord]. [NewService] validates paired [SourceSetID] witnesses;
 // optional local capabilities do not follow from semantic reads. Persistence
 // adapters require an explicit [MutationPolicy]. The contributor checklist is
-// docs/ARCHITECTURE.md#planning-data-change-checklist; detailed contracts remain beside their types.
+// docs/architecture/planning-data.md#change-checklist; detailed contracts remain beside their types.
 package core
 
 import (
@@ -117,6 +117,10 @@ type TaskLifecyclePlanner func(*TaskGraph) (TaskLifecyclePlan, error)
 // TaskLifecycleMutationStore owns the guarded lifecycle read/authorize/write
 // boundary. It is separate from TaskStore so read-only and lightweight test
 // adapters do not claim atomic repository semantics they cannot provide.
+// A committing transition revalidates the whole task+Thread source snapshot and
+// its target before writing, so raw edits cannot leave authorized impact receipts
+// based on detected stale evidence. This does not eliminate a raw editor's final
+// verify-to-write race.
 type TaskLifecycleMutationStore interface {
 	MutateTaskLifecycle(now time.Time, dryRun bool, planner TaskLifecyclePlanner) (TaskLifecycleMutationResult, error)
 }

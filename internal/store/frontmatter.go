@@ -1,5 +1,6 @@
 // Package store is the secondary adapter: planning tasks as markdown+frontmatter
-// files on disk, behind the core's TaskStore port.
+// files on disk, behind consumer-owned core ports. See
+// docs/architecture/persistence.md for preservation, transaction, and recovery relationships.
 package store
 
 import (

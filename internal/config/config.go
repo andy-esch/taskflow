@@ -1,4 +1,6 @@
 // Package config locates the planning data within a single repo.
+// See docs/architecture/configuration-and-spaces.md for discovery, identity,
+// preference scope, and workspace relationships; API details remain beside their types.
 package config
 
 import (

@@ -11,7 +11,7 @@ tags: [tui]
 created: "2026-06-24"
 id: 6ffdv9g01q40
 audited: "2026-09-13"
-updated_at: "2026-09-13"
+updated_at: "2026-10-12"
 ---
 # Edit unreadable files from the TUI
 
@@ -41,8 +41,9 @@ $EDITOR; see `internal/editor` + model.go `openInEditor`). `E` already works on 
       promotes it into the normal list if it now parses (and out of `problems`).
 - [ ] The parse error is visible (detail pane or row) so you know what to fix
       before opening the editor.
-- [ ] go build ./... + go test ./... + golangci-lint run ./... green; README TUI
-      section + docs/ARCHITECTURE.md updated if a new view/key is added.
+- [ ] Normal code gates pass; update the README TUI entry point and
+  docs/architecture/tui.md for new navigation or asynchronous behavior. Binding
+  details stay in owning help sections rather than copied key inventories.
 
 ## Implementation sketch
 
@@ -113,3 +114,7 @@ Acceptance criteria left untouched — none is demonstrably met.
 ## Progress log
 
 - 2026-09-13: automated weekly sweep — every citation re-verified and still exact; scope grew, since Threads now carry a second, separate unreadable channel (`readProblems`) and the dashboard shows a third count.
+
+## Architecture review handoff (2026-10-12)
+
+Use [TUI architecture](../../docs/architecture/tui.md) for navigation, command/refresh ownership and explicit local-path capabilities; update actual help sections for bindings. AC4 now targets that owner rather than the retired monolith/key inventory. The dated sketches and FileProblem citations above predate the portable-read refactor: reverify them before implementation, never parse an opaque Location to authorize editing, and include unreadable Thread records. This is routing/scope maintenance, not delivery of the problems editor.

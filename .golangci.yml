@@ -204,8 +204,9 @@ linters:
         # The repo-scoped config must never consult the home-scoped one: planning-root
         # discovery has to stay a pure function of the cwd, or `--space`-style handles
         # and a user's preferences file could silently move where data is read from.
-        # docs/ARCHITECTURE.md states this as an invariant; without a rule it is only a
-        # convention, since nothing structurally prevents the import (audit
+        # docs/architecture/boundaries.md#enforced-fitness-rules states this invariant;
+        # without a rule it is only a convention, since nothing structurally prevents
+        # the import (audit
         # 2026-08-18-multi-space-config-foundation, L1).
         config-must-not-read-home-scope:
           files:

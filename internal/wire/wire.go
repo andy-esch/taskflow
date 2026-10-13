@@ -11,6 +11,8 @@
 // The split: every `ToXEnvelope(...)` constructor returns a VALUE (so a web
 // handler can wrap it), and render's `XJSON(w, …)` emit funcs build that value
 // then encode it. The human renderers (`*Human`, Style, lipgloss) stay in render.
+// See docs/architecture/cli-and-wire.md for cross-package ownership and validation;
+// compatibility decisions remain in ADR-0008 and declarations beside [SchemaVersion].
 package wire
 
 import (
