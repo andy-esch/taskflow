@@ -459,6 +459,111 @@ func TestNestedRepositoryInTheSourceIsRefused(t *testing.T) {
 	}
 }
 
+// rsync copies symlinks verbatim, so an absolute or escaping link lets a Git
+// command or a write through it reach the source; so does a case-variant .GIT
+// gitfile on a case-insensitive filesystem. create and verify must refuse all.
+func TestSymlinksLeadingOutOfTheWorkspaceAreRefused(t *testing.T) {
+	createCases := []struct{ name, link, target string }{
+		{"absolute link in an ignored directory", "ignored/source-root", ""},
+		{"relative link climbing out", "src/escape", "../../.."},
+	}
+	for _, tc := range createCases {
+		t.Run("create: "+tc.name, func(t *testing.T) {
+			f := newFixture(t)
+			target := tc.target
+			if target == "" {
+				target = f.source
+			}
+			if err := os.MkdirAll(filepath.Dir(filepath.Join(f.source, tc.link)), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(target, filepath.Join(f.source, tc.link)); err != nil {
+				t.Fatal(err)
+			}
+			before := f.sharedAdmin(t)
+			output, err := f.helper(f.source, "create", "--source", f.source, "--deliverable", deliverableRel,
+				"--sandbox-parent", f.parent, "--print-path")
+			if err == nil || !strings.Contains(output, "points outside the workspace") {
+				t.Fatalf("create should refuse an escaping symlink; err=%v output:\n%s", err, output)
+			}
+			if entries, _ := os.ReadDir(f.parent); len(entries) != 0 {
+				t.Fatalf("a refused create left a workspace behind: %v", entries)
+			}
+			if f.sharedAdmin(t) != before {
+				t.Fatal("the shared repository changed")
+			}
+		})
+	}
+
+	for _, tc := range []struct {
+		name  string
+		plant func(t *testing.T, f fixture, sandbox string)
+		want  string
+	}{
+		{"absolute link planted after create", func(t *testing.T, f fixture, sandbox string) {
+			if err := os.Symlink(f.source, filepath.Join(sandbox, "ignored-up")); err != nil {
+				t.Fatal(err)
+			}
+		}, "points outside the workspace"},
+		{"case-variant gitfile planted after create", func(t *testing.T, f fixture, sandbox string) {
+			writeFile(t, filepath.Join(sandbox, "ignored", "up", ".GIT"), "gitdir: "+filepath.Join(f.source, ".git")+"\n", 0o644)
+		}, "nested Git metadata"},
+	} {
+		t.Run("verify: "+tc.name, func(t *testing.T) {
+			f := newFixture(t)
+			sandbox := f.create(t)
+			appendFile(t, filepath.Join(sandbox, deliverableRel), "\nReviewed.\n")
+			tc.plant(t, f, sandbox)
+			for _, command := range []string{"verify", "transfer"} {
+				if output, err := f.workspace(sandbox, command); err == nil || !strings.Contains(output, tc.want) {
+					t.Errorf("%s should refuse; err=%v output:\n%s", command, err, output)
+				}
+			}
+		})
+	}
+}
+
+// Links that stay inside the repository are ordinary content: a dangling link
+// or one to a directory is captured by its link text, as git add stores it.
+func TestInTreeSymlinksAreAccepted(t *testing.T) {
+	f := newFixture(t)
+	for link, target := range map[string]string{"src/latest": "does-not-exist", "src/plan-link": "../planning"} {
+		if err := os.Symlink(target, filepath.Join(f.source, link)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	sandbox := f.create(t)
+	for link, target := range map[string]string{"src/latest": "does-not-exist", "src/plan-link": "../planning"} {
+		if got, err := os.Readlink(filepath.Join(sandbox, link)); err != nil || got != target {
+			t.Errorf("sandbox %s = %q (%v), want link to %q", link, got, err, target)
+		}
+	}
+	appendFile(t, filepath.Join(sandbox, deliverableRel), "\nReviewed.\n")
+	if output, err := f.workspace(sandbox, "verify"); err != nil {
+		t.Fatalf("verify: %v\n%s", err, output)
+	}
+}
+
+// The nested-metadata scan once used the sandbox path as a find pattern, so a
+// parent directory containing brackets made create refuse its own root .git.
+func TestPatternCharactersInTheSandboxParentPath(t *testing.T) {
+	f := newFixture(t)
+	parent := filepath.Join(f.root, "par[1]*?")
+	if err := os.MkdirAll(parent, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	output, err := f.helper(f.source, "create", "--source", f.source, "--deliverable", deliverableRel,
+		"--sandbox-parent", parent, "--print-path")
+	if err != nil {
+		t.Fatalf("create under %q: %v\n%s", parent, err, output)
+	}
+	sandbox := strings.TrimSpace(output)
+	appendFile(t, filepath.Join(sandbox, deliverableRel), "\nReviewed.\n")
+	if output, err := f.workspace(sandbox, "verify"); err != nil {
+		t.Fatalf("verify under %q: %v\n%s", parent, err, output)
+	}
+}
+
 // A content-identical but stat-dirty tracked file makes porcelain diff rewrite
 // the index. Capturing the source must leave its index bytes untouched, both
 // for a plain checkout and for a linked worktree's shared administration.

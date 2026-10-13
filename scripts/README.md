@@ -25,10 +25,14 @@ mutates the sandbox's copy, and a mutated verifier could attest its own changes.
 `create` makes an independent `--no-hardlinks` clone, overlays the current staged, unstaged,
 untracked, and deleted state, rejects a source that changes during capture, and makes one local
 baseline commit. The overlay never copies Git metadata: every `.git` file or directory is excluded
-at any depth, so a linked-worktree source, or an ignored nested worktree such as
-`.claude/worktrees/*`, cannot bind part of the workspace to the shared repository. `create`, `verify`,
-and `transfer` refuse nested `.git` entries, and `create` re-checks independence before its first
-Git write. A non-ignored nested repository cannot be fingerprinted, so `create` refuses it. Reads of
+at any depth, so a linked-worktree source or an ignored nested worktree such as
+`.claude/worktrees/*` arrives without its binding to the shared repository. `create`, `verify`, and
+`transfer` refuse any nested `.git` in any letter case, because case-insensitive filesystems read
+`.GIT` as a gitfile. They also refuse any symlink whose target is absolute or climbs out of the
+workspace, because rsync copies links verbatim and Git commands or writes through them would reach
+the source. Symlinks that stay inside the repository are ordinary content, captured by their link
+text even when dangling or pointing at a directory. `create` re-checks independence before its
+first Git write. A non-ignored nested repository cannot be fingerprinted, so `create` refuses it. Reads of
 the source disable index auto-refresh and optional locks, so capturing a stat-dirty checkout does
 not rewrite its index. `verify` fails if the reviewer committed, staged anything, changed another file,
 or if the source deliverable changed. `transfer` repeats those checks, requires a real deliverable

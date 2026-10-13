@@ -107,10 +107,14 @@ source_fingerprint() {
 		read_git "$root" ls-files --others --exclude-standard -z >"$untracked"; then
 		while IFS= read -r -d '' relative; do
 			printf 'untracked\0%s\0' "$relative" >>"$record"
-			read_git "$root" hash-object -- "$relative" >>"$record" || {
-				ok=false
-				break
-			}
+			# A symlink is content by its link text, as git add stores it; hashing
+			# would follow it and fail on a dangling or directory target.
+			if [[ -L "$root/$relative" ]]; then
+				readlink "$root/$relative" >>"$record" || ok=false
+			else
+				read_git "$root" hash-object -- "$relative" >>"$record" || ok=false
+			fi
+			$ok || break
 		done <"$untracked"
 	else
 		ok=false
@@ -122,16 +126,46 @@ source_fingerprint() {
 	$ok
 }
 
-# Only the workspace's own root .git may exist. A copied linked-worktree .git
-# file, submodule, or nested repository would bind part of the workspace to
-# another repository's administration while the root still looks independent.
-refuse_nested_git() {
+# Succeeds when a symlink's target, resolved lexically from the link's own
+# directory, is absolute or climbs above the workspace root.
+link_escapes() {
+	local entry="$1"
+	local target="$2"
+	local depth part
+	local -a parts
+	[[ "$target" != /* ]] || return 0
+	IFS=/ read -r -a parts <<<"$entry"
+	depth=$((${#parts[@]} - 1))
+	IFS=/ read -r -a parts <<<"$target"
+	for part in "${parts[@]}"; do
+		case "$part" in
+		'' | .) ;;
+		..) depth=$((depth - 1)) && ((depth >= 0)) || return 0 ;;
+		*) depth=$((depth + 1)) ;;
+		esac
+	done
+	return 1
+}
+
+# Only the workspace's own root .git may bind it to a repository. A nested
+# .git in any letter case (case-insensitive filesystems read .GIT as a gitfile)
+# or a symlink leading out of the workspace would let Git commands or writes
+# reach another repository while the root still looks independent. The scan
+# runs from inside the workspace, so path characters are never patterns.
+refuse_external_bindings() {
 	local sandbox="$1"
-	local found
-	found="$(find "$sandbox" -path "$sandbox/.git" -prune -o -name .git -print)" ||
-		die "cannot scan the workspace for nested Git metadata"
-	[[ -z "$found" ]] ||
-		die "workspace contains nested Git metadata: ${found%%$'\n'*}; it can act on another repository, so move it outside the workspace"
+	local entry target
+	while IFS= read -r -d '' entry; do
+		entry="${entry#./}"
+		case "${entry##*/}" in
+		[.][gG][iI][tT])
+			die "workspace contains nested Git metadata: $sandbox/$entry; it can act on another repository, so move it outside the workspace"
+			;;
+		esac
+		target="$(readlink "$sandbox/$entry")" || die "cannot read workspace symlink: $entry"
+		! link_escapes "$entry" "$target" ||
+			die "workspace symlink $entry points outside the workspace ($target), so Git commands or writes through it reach other files; remove it or make it relative within the repository"
+	done < <(cd "$sandbox" && find . -path ./.git -prune -o \( -iname .git -o -type l \) -print0)
 }
 
 write_state() {
@@ -274,7 +308,7 @@ create_workspace() {
 	rsync -a --delete --exclude='.git' "$source_root/" "$sandbox/"
 	# Re-check before any workspace Git write: an overlay that replaced or nested
 	# .git would otherwise stage and commit the baseline into another repository.
-	refuse_nested_git "$sandbox"
+	refuse_external_bindings "$sandbox"
 	assert_independent_clone "$sandbox" "$(git -C "$sandbox" rev-parse --absolute-git-dir)"
 	after="$(source_fingerprint "$source_root")" || die "cannot fingerprint the source working state after the copy"
 	sandbox_state="$(source_fingerprint "$sandbox")" || die "cannot fingerprint the workspace overlay"
@@ -347,7 +381,7 @@ load_workspace() {
 	[[ -s "$sandbox_root/$deliverable" ]] || die "workspace deliverable must not be empty: $deliverable"
 	[[ "$(git -C "$sandbox_root" rev-parse HEAD)" == "$baseline" ]] || die "workspace HEAD changed; reviewer commits are not permitted"
 	git -C "$sandbox_root" diff --cached --quiet --exit-code -- || die "workspace has staged changes"
-	refuse_nested_git "$sandbox_root"
+	refuse_external_bindings "$sandbox_root"
 	check_push_guard "$sandbox_root" "$source_root"
 
 	local dirty=0 invalid="" entry status relative
