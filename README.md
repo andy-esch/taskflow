@@ -534,7 +534,7 @@ and still offers malformed frontmatter; duplicate canonical IDs are omitted—us
 
 Start with [the shared contributor and agent guide](./AGENTS.md) for working rules,
 validation, source ownership, and task-based routes into architecture and package contracts.
-[Justfile](./justfile) owns the development recipes, including race-enabled tests.
+[Justfile](./Justfile) owns the development recipes, including race-enabled tests.
 `AGENTS.md` is the shared entry point; there are no separate tool-specific policy copies.
 
 ## Interactive TUI (`tskflwctl ui`)

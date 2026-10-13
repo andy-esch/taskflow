@@ -34,7 +34,7 @@ for humans and coding agents, not a tool-specific policy copy.
 
 ## Build and validate
 
-Recipes in [justfile](justfile) own the commands; don't copy version pins here.
+Recipes in [Justfile](Justfile) own the commands; don't copy version pins here.
 The executable entry point is `cmd/tskflwctl`, not a root Go package.
 
 ```sh
@@ -53,7 +53,7 @@ to [the release guide](docs/RELEASING.md), not this quick-start.
 
 | Subject | Owner / where to change it |
 | --- | --- |
-| Build, test, generation, tool versions | [justfile](justfile) recipes; [go.mod](go.mod), CI/build configuration and [release policy](docs/RELEASING.md) for versions. |
+| Build, test, generation, tool versions | [Justfile](Justfile) recipes; [go.mod](go.mod), CI/build configuration and [release policy](docs/RELEASING.md) for versions. |
 | Architectural boundaries and exceptions | [Architecture reference](docs/ARCHITECTURE.md); `.golangci.yml` and regression tests show what is actually enforced. |
 | Package/type contracts | Comments beside owning Go packages, ports, and types; start with [core ports](internal/core/store.go). Tests pin behavioral guarantees. |
 | CLI behavior and machine output | Command/use-case implementation and tests; `--help`, [generated CLI reference](docs/cli/tskflwctl.md), `schema`, and [wire contracts](internal/wire/wire.go) expose it. Generate derived reference, don't hand-edit it. |

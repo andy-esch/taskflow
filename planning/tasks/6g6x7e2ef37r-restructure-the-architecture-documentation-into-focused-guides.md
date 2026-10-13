@@ -155,3 +155,9 @@ Claude's four Low findings were verified and fixed via audit finding verbs: corr
 Antigravity contributed independent checks and two killed mutations, but its exhaustive verdict and two nonexistent destination references were not accepted. The original report is preserved with an explicit owner correction. Future reviews should challenge the actual assertions with decoys and verify every destination, not generalize a helper test to all callers. Both landed reports matched their retained sandbox copies before owner edits; pending transfer attestations were not rewritten into invented final results.
 
 Full race tests, lint (0 issues), build, generated CLI drift check, planning link lint and whitespace checks pass. Production behavior and wire revision are unchanged. Broader Markdown/routine/semantic reconciliation and selective package overviews remain in the existing threaded tasks; the two stale open-task ACs were re-routed without checking them off. This slice is ready for PR handoff; no commit or push was made during review disposition.
+
+## CI portability followup (2026-10-12)
+
+[PR #303](https://github.com/andy-esch/taskflow/pull/303) exposed lowercase justfile links that macOS accepted but Linux rejected; Git tracks Justfile. Corrected the AGENTS, README and research routes. The navigation guard now checks exact directory-entry spelling for both file and parent-directory components, without resolving away symlink names. The new regression failed on all three wrong-case variants before the fix and passes afterward.
+
+The CI-equivalent go test -p 4 -race -coverprofile=<temporary output> ./... run passed locally, as did lint, build and generated-doc checks. Coverage stayed outside the worktree. This corrects navigation/test portability, not product behavior or the wire contract.

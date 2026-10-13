@@ -200,6 +200,9 @@ func checkTarget(document, raw string) error {
 	if err != nil {
 		return fmt.Errorf("target %q: %w", raw, err)
 	}
+	if err := checkPathCase(path); err != nil {
+		return fmt.Errorf("target %q: %w", raw, err)
+	}
 	if target.Fragment == "" {
 		return nil
 	}
@@ -214,6 +217,32 @@ func checkTarget(document, raw string) error {
 		return fmt.Errorf("target %q: missing heading anchor %q", raw, target.Fragment)
 	}
 	return nil
+}
+
+// os.Stat alone accepts the wrong case on common macOS filesystems, hiding
+// links that break on Linux or GitHub. Check each lexical component against the
+// directory entry spelling; do not canonicalize away symlink names in the URL.
+func checkPathCase(path string) error {
+	for path = filepath.Clean(path); ; path = filepath.Dir(path) {
+		name, parent := filepath.Base(path), filepath.Dir(path)
+		if name == "." || name == ".." || parent == path {
+			return nil
+		}
+		entries, err := os.ReadDir(parent)
+		if err != nil {
+			return fmt.Errorf("read link target directory %s: %w", parent, err)
+		}
+		exact := false
+		for _, entry := range entries {
+			if entry.Name() == name {
+				exact = true
+				break
+			}
+		}
+		if !exact {
+			return fmt.Errorf("path component %q does not match on-disk spelling in %s", name, parent)
+		}
+	}
 }
 
 func readFile(t *testing.T, path string) string {
@@ -372,6 +401,25 @@ func TestCheckTargetDetectsBrokenRoutes(t *testing.T) {
 	for _, target := range []string{"missing.md", "guide.md#removed-contract"} {
 		if err := checkTarget(document, target); err == nil {
 			t.Errorf("broken route %q passed", target)
+		}
+	}
+}
+
+func TestCheckTargetRejectsCaseMismatch(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.Mkdir(filepath.Join(dir, "Guides"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "Guides", "Justfile"), []byte("# Recipes\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	document := filepath.Join(dir, "index.md")
+	if err := checkTarget(document, "Guides/Justfile"); err != nil {
+		t.Fatal(err)
+	}
+	for _, target := range []string{"Guides/justfile", "guides/Justfile", "GUIDES/Justfile"} {
+		if err := checkTarget(document, target); err == nil {
+			t.Errorf("case-mismatched route %q passed", target)
 		}
 	}
 }

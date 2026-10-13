@@ -23,7 +23,7 @@ without introducing another documentation system or assuming identical coding-ag
   `AGENTS.md` as the shared owner. After the loader research, they selected native Claude
   and Antigravity discovery, removing `CLAUDE.md` and declining a `GEMINI.md` wrapper.
 - [README](../../README.md) has two development sections; its later `just test` description
-  omits the race detector present in [justfile](../../justfile). The large manual command roster
+  omits the race detector present in [Justfile](../../Justfile). The large manual command roster
   competes with [generated CLI reference](../../docs/cli/tskflwctl.md). Generation derives command
   metadata, not tested runtime semantics; both are needed when a promise is in dispute.
 - [Architecture](../../docs/ARCHITECTURE.md) is now 1,087 lines / 11,466 words, with a
