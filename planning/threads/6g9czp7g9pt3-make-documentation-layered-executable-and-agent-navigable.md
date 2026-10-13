@@ -66,6 +66,11 @@ the new task prevents future bypasses rather than repairing a present adapter vi
 The checklist is a section of the architecture reference, not a new peer document. A future
 focused-guide extraction should follow this Thread's ownership and layout decisions.
 
+That extraction now places the canonical checklist in the
+[planning-data guide](../../docs/architecture/planning-data.md#change-checklist); the old index
+anchor remains a forwarding route. Use the focused owner for future changes rather than copying
+the checklist into a package overview.
+
 ## Ownership checkpoint (2026-10-12)
 
 Research and ownership delivery are complete. The
@@ -78,3 +83,15 @@ The review-sandbox push/attestation work belongs to
 [a separate hardening Thread](6gk06gktr1q5-harden-isolated-review-workspace-safety-and-delivery-evidence.md),
 not this Thread's completion criteria. Architecture restructuring, package docs, executable
 examples/inventories, and final reconciliation remain unfinished here.
+
+## Architecture extraction checkpoint (2026-10-12)
+
+The architecture split is complete and ready for PR handoff. A short index
+routes to six guides with code/test links and package-comment return paths. The dated feature
+snapshot is preserved as task history; named exceptions, CAS/receipt limitations, preview rules
+and source-authority constraints remain current guide content. A bounded navigation test runs in
+the ordinary suite, but import-map enforcement, selective package overviews, executable examples
+and broader reconciliation still belong to the sequenced tasks. Claude's four Low findings were
+verified and fixed; Antigravity's useful probes do not support its exhaustive all-falsified claim.
+The guard now rejects non-navigable decoys and checks retained anchors referenced by tasks/Threads.
+Both audits are settled with explicit evidence limits, not treated as completion of downstream slices.

@@ -1,6 +1,7 @@
 // Package cli is the primary adapter: the cobra command tree over the core.
 // The TUI (package tui, launched by `ui`) is a second primary adapter over the
 // same core.
+// See docs/architecture/cli-and-wire.md for invocation, output, and contract ownership.
 package cli
 
 import (

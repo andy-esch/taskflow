@@ -7,10 +7,10 @@
 // planning repo carried one contributor's taste. Those settings belong to a person,
 // not a repo; this is where they live.
 //
-// This package deliberately knows NOTHING about planning repos, and internal/config
-// deliberately does not import it. Home-scope data can therefore never influence
-// where the planning root is discovered — an invariant the compiler enforces rather
-// than one the reader has to remember.
+// Internal import policy keeps repo discovery separate from home preferences:
+// internal/config must not import this package. Depguard's
+// config-must-not-read-home-scope rule enforces this, not the compiler.
+// See docs/architecture/configuration-and-spaces.md#preferences-and-home-registry.
 package userconfig
 
 import (

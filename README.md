@@ -53,7 +53,7 @@ regenerate with `just gifs`.
 | **[`cmd/tskflwctl/`](./cmd/tskflwctl/)** | The CLI entrypoint (thin composition root). |
 | **[`internal/`](./internal/)** | `domain` (pure) · `core` (use cases) · `store` (markdown adapter) · `cli` (cobra) · `tui` (Bubble Tea) · `config`/`userconfig` · `spacehealth` · `spacestore`/`workspacestore`. |
 | **[`planning/`](./planning/)** | This repo's own epics, tasks, Threads, and research (self-hosted). |
-| **[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)** | Package map and detailed architecture reference. |
+| **[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)** | Architecture index, focused guides, and code/test contract routes. |
 
 ## Install
 
@@ -534,7 +534,7 @@ and still offers malformed frontmatter; duplicate canonical IDs are omitted—us
 
 Start with [the shared contributor and agent guide](./AGENTS.md) for working rules,
 validation, source ownership, and task-based routes into architecture and package contracts.
-[Justfile](./justfile) owns the development recipes, including race-enabled tests.
+[Justfile](./Justfile) owns the development recipes, including race-enabled tests.
 `AGENTS.md` is the shared entry point; there are no separate tool-specific policy copies.
 
 ## Interactive TUI (`tskflwctl ui`)

@@ -110,8 +110,9 @@ and exit without a PR. Never use a blanket revert to make the scope check pass.
 
 1. Read, in this order:
    - `AGENTS.md` — the shared working rules, ownership matrix, and reading routes.
-   - `docs/ARCHITECTURE.md` — start with the package map, then read the contracts
-     relevant to today's lens rather than every subsystem manual by default.
+   - `docs/ARCHITECTURE.md` — use its index to select the focused guides in
+     `docs/architecture/` relevant to today's lens, then follow their owning code
+     and regression links rather than reading every subsystem by default.
    - `ls planning/adrs/` and read every ADR whose subject touches today's lens
      (LENS-SCOPES names them). Read the **Decision** and **Amendments**
      sections in full; skim the rest. An accepted ADR is the authority — your
@@ -331,10 +332,10 @@ happened, and exit without opening a PR. Don't push a half-finished audit.
 in the repo today.)
 
   hexagonal-boundaries
-    Governing ADRs: read `docs/ARCHITECTURE.md` first; then any ADR describing
+    Governing ADRs: read `docs/architecture/boundaries.md` first; then any ADR describing
       the cli/tui/core/store layering.
     Surface: internal/core/store.go (port definitions), internal/core/service*.go,
-      internal/cli/app.go + the command tree, internal/tui/, internal/wire/,
+      internal/cli/root.go + the command tree, internal/tui/, internal/wire/,
       internal/domain/
     Look for: decisions duplicated across the seam (an adapter re-deriving what
       core owns); ports that leak persistence vocabulary into core; a core type
