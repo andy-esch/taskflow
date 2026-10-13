@@ -304,6 +304,34 @@ func TestVerifyAndTransferRejectAWeakenedPushGuard(t *testing.T) {
 		{"legacy remotes file", func(t *testing.T, f fixture, sandbox string) {
 			writeFile(t, filepath.Join(sandbox, ".git", "remotes", "src"), "URL: "+f.source+"\n", 0o644)
 		}},
+		{"symlinked legacy remotes file", func(t *testing.T, f fixture, sandbox string) {
+			file := filepath.Join(f.root, "legacy-remote")
+			writeFile(t, file, "URL: "+f.source+"\n", 0o644)
+			if err := os.MkdirAll(filepath.Join(sandbox, ".git", "remotes"), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.Symlink(file, filepath.Join(sandbox, ".git", "remotes", "src")); err != nil {
+				t.Fatal(err)
+			}
+		}},
+		{"legacy remotes file with a newline in its name", func(t *testing.T, f fixture, sandbox string) {
+			writeFile(t, filepath.Join(sandbox, ".git", "remotes", "a\nb"), "URL: "+f.source+"\n", 0o644)
+		}},
+		{"dormant conditional include", func(t *testing.T, f fixture, sandbox string) {
+			file := filepath.Join(f.root, "notes.gitconfig")
+			writeFile(t, file, "[remote]\n\tpushDefault = "+f.source+"\n", 0o644)
+			f.git(t, sandbox, "config", "includeIf.onbranch:notes/**.path", file)
+		}},
+		{"push URL from an included file", func(t *testing.T, f fixture, sandbox string) {
+			file := filepath.Join(f.root, "pushurl.gitconfig")
+			writeFile(t, file, "[remote \"origin\"]\n\tpushurl = "+f.source+"\n", 0o644)
+			f.git(t, sandbox, "config", "include.path", file)
+		}},
+		{"push URL in worktree config", func(t *testing.T, f fixture, sandbox string) {
+			f.git(t, sandbox, "config", "core.repositoryFormatVersion", "1")
+			f.git(t, sandbox, "config", "extensions.worktreeConfig", "true")
+			f.git(t, sandbox, "config", "--worktree", "--add", "remote.origin.pushurl", f.source)
+		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFixture(t)

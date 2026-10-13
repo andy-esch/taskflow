@@ -236,16 +236,31 @@ origin_file() {
 check_push_guard() {
 	local sandbox="$1"
 	local source_root="$2"
-	local remotes remote urls origin entry key value rule rules legacy
+	local remotes remote urls origin entry key value rule rules file legacy
 	remotes="$(git -C "$sandbox" remote)"
 	[[ $'\n'"$remotes"$'\n' == *$'\n'origin$'\n'* ]] ||
 		die "push guard missing: remote 'origin' was removed"$'\n'"$(restore_line git -C "$sandbox" remote add origin "$source_root")"$'\n'"$(restore_line git -C "$sandbox" remote set-url --push origin "$push_guard_url")"
+	# A conditional include can activate later, for example on a branch that does
+	# not exist yet, so the push settings it would bring cannot be checked now.
+	while IFS= read -r -d '' origin && IFS= read -r -d '' entry; do
+		key="${entry%%$'\n'*}"
+		die "push guard bypassed: conditional include $key can change push settings later, for example on another branch"$'\n'"$(restore_line git config --file "$(origin_file "$sandbox" "$origin")" --unset-all "$key")"
+	done < <(workspace_config "$sandbox" '^includeif\.')
 	while IFS= read -r remote; do
 		[[ -n "$remote" ]] || continue
 		urls="$(git -C "$sandbox" remote get-url --push --all "$remote" 2>&1)" ||
 			die "push guard unreadable for remote '$remote': $urls"
 		[[ "$urls" != "$push_guard_url" ]] || continue
 		rules=""
+		# A push URL set in an included file or config.worktree survives a local
+		# replace-all, so remove it from the file that sets it.
+		while IFS= read -r -d '' origin && IFS= read -r -d '' entry; do
+			[[ "${entry%%$'\n'*}" == "remote.$remote.pushurl" ]] || continue
+			file="$(origin_file "$sandbox" "$origin")"
+			[[ "$file" != "$sandbox/.git/config" ]] || continue
+			rule="$(restore_line git config --file "$file" --unset-all "remote.$remote.pushurl")"
+			[[ "$rules"$'\n' == *$'\n'"$rule"$'\n'* ]] || rules="$rules"$'\n'"$rule"
+		done < <(workspace_config "$sandbox" '^remote\..*\.pushurl$')
 		while IFS= read -r -d '' origin && IFS= read -r -d '' entry; do
 			key="${entry%%$'\n'*}"
 			value=""
@@ -264,9 +279,10 @@ check_push_guard() {
 		[[ "$value" != *$'\n'* ]] && [[ "$value" == "." || $'\n'"$remotes"$'\n' == *$'\n'"$value"$'\n'* ]] ||
 			die "push guard bypassed: $key names '$value' rather than a guarded remote"$'\n'"$(restore_line git config --file "$(origin_file "$sandbox" "$origin")" --unset-all "$key")"
 	done < <(workspace_config "$sandbox" '^(remote\.pushdefault|branch\..*\.(pushremote|remote))$')
-	legacy="$(find "$sandbox/.git/remotes" "$sandbox/.git/branches" -type f 2>/dev/null | head -n 1 || true)"
-	[[ -z "$legacy" ]] ||
+	# Any non-directory entry, including a symlink, can define a legacy remote.
+	while IFS= read -r -d '' legacy; do
 		die "push guard bypassed: legacy remote file $legacy can name a push URL that git remote does not list"$'\n'"$(restore_line rm -- "$legacy")"
+	done < <(find "$sandbox/.git/remotes" "$sandbox/.git/branches" ! -type d -print0 2>/dev/null)
 }
 
 create_workspace() {

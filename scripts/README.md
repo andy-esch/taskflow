@@ -65,10 +65,12 @@ scheme, so `git push`, `git push origin …`, and branch, `--all`, or tag pushes
 the source; fetching from `origin` still reads it. `verify` and `transfer` refuse a removed `origin`,
 any remote whose effective push URL (after `insteadOf` expansion) is anything else, and a
 `remote.pushDefault` or `branch.<name>.pushRemote`/`remote` setting that names a path or URL instead
-of a guarded remote. These settings are read from every workspace scope: the local file, its
-`include.path`/`includeIf` files, and `config.worktree`. Legacy `.git/remotes` and `.git/branches`
-files are refused, because `git remote` does not list them. Each refusal prints one or more
-`restore:` lines, quoted for the shell, that restore the guard when run as written.
+of a guarded remote. These settings, and push URLs, are read from every workspace scope: the local
+file, its `include.path` files, and `config.worktree`. Conditional `includeIf` entries are refused
+outright, because they can activate later, for example on a branch that does not exist yet. Any
+entry under `.git/remotes` or `.git/branches`, including a symlink, is refused, because
+`git remote` does not list legacy remotes. Each refusal prints one or more `restore:` lines, quoted
+for the shell, that restore the guard when run as written.
 
 The guard prevents accidents; it is not a security boundary. A push that names the source path or
 URL explicitly, a `git -c`/environment override, or user-wide or system Git configuration bypasses
