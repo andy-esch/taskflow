@@ -37,7 +37,13 @@ prints it: the verification fields plus `transfer=succeeded`, the transferred bl
 and a UTC timestamp. `receipt` fails until a transfer has succeeded, and afterwards whenever the
 source or sandbox no longer holds the transferred bytes; on success it reprints the receipt with
 `delivery=confirmed`. Once a receipt exists, `verify` and `transfer` refuse and point to `receipt`.
-A refused or failed transfer records no receipt.
+
+`transfer` records the receipt's fields in a pending file *before* touching the source, so an
+unwritable state directory refuses the transfer while the source is unchanged. Refusals exit 2 and
+record nothing. Exit 3 means the source report had already been replaced when a later step failed.
+In that case run `receipt`: it records the delivery if the source and workspace both still hold the
+transferred bytes, and otherwise reports the delivery as uncertain rather than confirmed. A report
+copied by hand, or by a helper version without receipts, is reported as not vouched for.
 
 A clone's `origin` would otherwise push to the live source checkout, so `create` sets every sandbox
 push URL to `isolated-review-push-disabled://source-is-read-only`. Git has no transport for that

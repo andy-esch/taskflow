@@ -577,8 +577,10 @@ func receiptPath(sandbox string) string {
 
 func requireNoReceipt(t *testing.T, f fixture, sandbox string) {
 	t.Helper()
-	if _, err := os.Stat(receiptPath(sandbox)); !os.IsNotExist(err) {
-		t.Errorf("a receipt exists without a successful transfer: %v", err)
+	for _, path := range []string{receiptPath(sandbox), receiptPath(sandbox) + ".pending"} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Errorf("%s exists without a successful transfer: %v", filepath.Base(path), err)
+		}
 	}
 	output, err := f.workspace(sandbox, "receipt")
 	if err == nil || !strings.Contains(output, "no transfer receipt") {
@@ -631,6 +633,17 @@ func TestTransferReceiptIsTheOnlyDeliveryEvidence(t *testing.T) {
 		t.Fatalf("a refused repeat changed the delivered report: %s -> %s", delivered, got)
 	}
 
+	// A workspace edit after transfer means the retained sandbox no longer shows
+	// what was delivered, so the receipt must stop vouching for it.
+	reportPath := filepath.Join(sandbox, deliverableRel)
+	deliveredReport := readFile(t, reportPath)
+	appendFile(t, reportPath, "\nLate edit.\n")
+	output, err = f.workspace(sandbox, "receipt")
+	if err == nil || !strings.Contains(output, "workspace deliverable changed after transfer") {
+		t.Fatalf("receipt should refuse after a workspace edit; err=%v output:\n%s", err, output)
+	}
+	writeFile(t, reportPath, deliveredReport, 0o644)
+
 	// The owner may triage after confirming receipt; the receipt then stops
 	// vouching for the current source bytes rather than silently passing.
 	appendFile(t, filepath.Join(f.source, deliverableRel), "\nTriaged.\n")
@@ -664,7 +677,19 @@ func TestFailedTransfersRecordNoReceipt(t *testing.T) {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = os.Chmod(dir, 0o755) })
-		}, "Permission denied"},
+		}, "the source was not changed"},
+		// Both reviewers reproduced this one after the rename; the pending record
+		// now proves the state directory writable before the source is touched.
+		{"unwritable state directory", func(t *testing.T, f fixture, sandbox string) {
+			if os.Geteuid() == 0 {
+				t.Skip("a read-only directory does not stop root")
+			}
+			dir := filepath.Dir(receiptPath(sandbox))
+			if err := os.Chmod(dir, 0o500); err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+		}, "the source was not changed"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := newFixture(t)
@@ -685,6 +710,102 @@ func TestFailedTransfersRecordNoReceipt(t *testing.T) {
 			}
 			requireNoReceipt(t, f, sandbox)
 		})
+	}
+}
+
+// withMvShim returns a fixture whose helper runs a PATH mv that can fail the
+// receipt publish or simulate an editor saving into the source just after the
+// rename: the two post-rename failures the reviewers reproduced.
+func (f fixture) withMvShim(t *testing.T, env ...string) fixture {
+	t.Helper()
+	realMv, err := exec.LookPath("mv")
+	if err != nil {
+		t.Fatal(err)
+	}
+	shimDir := filepath.Join(f.root, "mv-shim")
+	writeFile(t, filepath.Join(shimDir, "mv"), `#!/usr/bin/env bash
+for destination; do :; done
+if [[ -n "${FAIL_RECEIPT_PUBLISH:-}" && "$destination" == */transfer-receipt ]]; then exit 1; fi
+"$REAL_MV" "$@" || exit
+if [[ -n "${EDIT_AFTER_RENAME:-}" && "$destination" == "$EDIT_AFTER_RENAME" ]]; then printf 'owner save\n' >>"$destination"; fi
+`, 0o755)
+	shimmed := f
+	shimmed.env = append(append([]string{}, f.env...),
+		"PATH="+shimDir+string(os.PathListSeparator)+os.Getenv("PATH"), "REAL_MV="+realMv)
+	shimmed.env = append(shimmed.env, env...)
+	return shimmed
+}
+
+func exitCode(err error) int {
+	if exitErr, ok := err.(*exec.ExitError); ok {
+		return exitErr.ExitCode()
+	}
+	return -1
+}
+
+// A failure after the rename used to leave a delivered report that every
+// command described as undelivered. Exit 3 now says the source was replaced,
+// and receipt records the delivery once both copies hold the transferred bytes.
+func TestInterruptedTransferIsRecordedByReceipt(t *testing.T) {
+	f := newFixture(t)
+	sandbox := f.create(t)
+	appendFile(t, filepath.Join(sandbox, deliverableRel), "\nNo findings.\n")
+	output, err := f.withMvShim(t, "FAIL_RECEIPT_PUBLISH=1").workspace(sandbox, "transfer")
+	if exitCode(err) != 3 || !strings.Contains(output, "receipt was not recorded") {
+		t.Fatalf("transfer should exit 3 after delivering without a receipt; err=%v output:\n%s", err, output)
+	}
+	if readFile(t, filepath.Join(f.source, deliverableRel)) != readFile(t, filepath.Join(sandbox, deliverableRel)) {
+		t.Fatal("the interrupted transfer did not deliver the report")
+	}
+	for _, command := range []string{"verify", "transfer"} {
+		output, err := f.workspace(sandbox, command)
+		if err == nil || !strings.Contains(output, "receipt was not recorded") || strings.Contains(output, "source deliverable changed") {
+			t.Errorf("%s should point to receipt, not blame the owner; err=%v output:\n%s", command, err, output)
+		}
+	}
+	output, err = f.workspace(sandbox, "receipt")
+	delivered := f.git(t, f.source, "hash-object", "--", deliverableRel)
+	if err != nil || !strings.Contains(output, "delivery=confirmed") || !strings.Contains(output, "transferred_blob="+delivered) ||
+		!strings.Contains(output, "recorded_by=receipt") {
+		t.Fatalf("receipt should record the interrupted delivery; err=%v output:\n%s", err, output)
+	}
+	if output, err := f.workspace(sandbox, "receipt"); err != nil || !strings.Contains(output, "delivery=confirmed") {
+		t.Fatalf("the recorded receipt should keep confirming; err=%v output:\n%s", err, output)
+	}
+}
+
+// If the source changes between the rename and its confirmation, nothing may
+// later claim delivery: transfer exits 3 and receipt reports the uncertainty.
+func TestUnconfirmedTransferIsNeverReportedAsDelivered(t *testing.T) {
+	f := newFixture(t)
+	sandbox := f.create(t)
+	appendFile(t, filepath.Join(sandbox, deliverableRel), "\nNo findings.\n")
+	shimmed := f.withMvShim(t, "EDIT_AFTER_RENAME="+filepath.Join(f.source, deliverableRel))
+	output, err := shimmed.workspace(sandbox, "transfer")
+	if exitCode(err) != 3 || !strings.Contains(output, "no longer holds the transferred bytes") {
+		t.Fatalf("transfer should exit 3 when the delivered bytes changed; err=%v output:\n%s", err, output)
+	}
+	output, err = f.workspace(sandbox, "receipt")
+	if err == nil || !strings.Contains(output, "delivery uncertain") || strings.Contains(output, "delivery=confirmed") {
+		t.Fatalf("receipt must not confirm an unconfirmed delivery; err=%v output:\n%s", err, output)
+	}
+	if output, err := f.workspace(sandbox, "transfer"); err == nil || !strings.Contains(output, "receipt was not recorded") {
+		t.Fatalf("a retry should point to receipt; err=%v output:\n%s", err, output)
+	}
+}
+
+// A report copied by hand, or by a helper version without receipts, is not
+// delivery evidence; both commands must say so rather than blame owner drift.
+func TestHandCopiedReportIsNotVouchedFor(t *testing.T) {
+	f := newFixture(t)
+	sandbox := f.create(t)
+	appendFile(t, filepath.Join(sandbox, deliverableRel), "\nNo findings.\n")
+	writeFile(t, filepath.Join(f.source, deliverableRel), readFile(t, filepath.Join(sandbox, deliverableRel)), 0o644)
+	if output, err := f.workspace(sandbox, "receipt"); err == nil || !strings.Contains(output, "cannot vouch for it") {
+		t.Fatalf("receipt should refuse to vouch for a hand copy; err=%v output:\n%s", err, output)
+	}
+	if output, err := f.workspace(sandbox, "verify"); err == nil || !strings.Contains(output, "already holds this workspace's report") {
+		t.Fatalf("verify should name the existing copy; err=%v output:\n%s", err, output)
 	}
 }
 

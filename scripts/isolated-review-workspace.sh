@@ -9,6 +9,9 @@ readonly push_guard_url="isolated-review-push-disabled://source-is-read-only"
 # A report must be final before transfer, so it can attest only verification.
 # This helper-owned file is the delivery evidence, written only after transfer.
 readonly receipt_name="transfer-receipt"
+# Written before the source is touched, so the receipt cannot be lost to a
+# failure after the source rename; published as the receipt once confirmed.
+readonly pending_name="transfer-receipt.pending"
 
 usage() {
 	cat <<'EOF'
@@ -30,7 +33,10 @@ A report is final before transfer, so its verify attestation says
 transfer=pending. A successful transfer records a receipt in the workspace's
 private state and prints it; receipt fails until then, and afterwards confirms
 that the source still holds the transferred bytes. Verify and transfer refuse
-once a receipt exists.
+once a receipt exists. Refusals exit 2 and leave the source unchanged. Exit 3
+means the source report was already replaced when the failure hit; run receipt,
+which records an interrupted delivery whose bytes are intact or explains why it
+cannot.
 
 Every workspace remote pushes only to a disabled URL, so an ordinary `git push`
 fails before reaching the source; verify and transfer reject a removed or
@@ -44,6 +50,13 @@ EOF
 die() {
 	printf 'error: %s\n' "$*" >&2
 	exit 2
+}
+
+# Exit 3 means the source report had already been replaced when the failure hit;
+# exit 2 is reserved for refusals that left the source unchanged.
+die_delivered() {
+	printf 'error: %s\n' "$*" >&2
+	exit 3
 }
 
 canonical_dir() {
@@ -324,6 +337,14 @@ load_workspace() {
 	load_state "$1"
 	[[ ! -e "$state_dir/$receipt_name" ]] ||
 		die "deliverable already transferred; confirm delivery with: $0 receipt --sandbox '$sandbox_root'"
+	local source_now
+	source_now="$(git -C "$source_root" hash-object -- "$deliverable")"
+	if [[ -e "$state_dir/$pending_name" ]]; then
+		[[ "$source_now" == "$source_blob" ]] ||
+			die "a transfer replaced the source report but its receipt was not recorded; resolve it with: $0 receipt --sandbox '$sandbox_root'"
+		# Interrupted before the rename: nothing was delivered.
+		rm -f "$state_dir/$pending_name"
+	fi
 	[[ -s "$sandbox_root/$deliverable" ]] || die "workspace deliverable must not be empty: $deliverable"
 	[[ "$(git -C "$sandbox_root" rev-parse HEAD)" == "$baseline" ]] || die "workspace HEAD changed; reviewer commits are not permitted"
 	git -C "$sandbox_root" diff --cached --quiet --exit-code -- || die "workspace has staged changes"
@@ -341,8 +362,11 @@ load_workspace() {
 	done < <(git -C "$sandbox_root" status --porcelain=v1 -z --untracked-files=all)
 	[[ -z "$invalid" && "$dirty" -le 1 ]] || die $'workspace has changes outside the deliverable:\n'"$invalid"
 	git -C "$sandbox_root" diff --check -- "$deliverable"
-	[[ "$(git -C "$source_root" hash-object -- "$deliverable")" == "$source_blob" ]] ||
+	if [[ "$source_now" != "$source_blob" ]]; then
+		[[ "$source_now" != "$(git -C "$sandbox_root" hash-object -- "$deliverable")" ]] ||
+			die "the source already holds this workspace's report but no receipt was recorded; inspect it with: $0 receipt --sandbox '$sandbox_root'"
 		die "source deliverable changed after workspace creation; preserve the workspace"
+	fi
 	deliverable_changed=false
 	git -C "$sandbox_root" diff --quiet --exit-code -- "$deliverable" || deliverable_changed=true
 }
@@ -355,25 +379,34 @@ attest() {
 	printf 'deliverable_changed=%s\nverify=passed\ntransfer=%s\n' "$deliverable_changed" "$1"
 }
 
-# Written atomically after the transferred bytes are confirmed in the source.
-write_receipt() {
-	local source_target="$1"
-	local receipt="$state_dir/$receipt_name"
-	local transferred stamp pending
-	transferred="$(git -C "$source_root" hash-object -- "$deliverable")" ||
-		die "deliverable transferred, but its source blob could not be read for the receipt"
-	stamp="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-	pending="$(mktemp "$receipt.XXXXXX")" ||
-		die "deliverable transferred, but its receipt could not be created in $state_dir"
+# Records the receipt fields before the source is touched, so an unwritable
+# state directory refuses the transfer while the source is still unchanged.
+write_pending() {
+	local transferred="$1"
+	local source_target="$2"
+	local pending="$state_dir/$pending_name"
+	local temporary
+	temporary="$(mktemp "$pending.XXXXXX")" ||
+		die "cannot record a transfer receipt in $state_dir; the source was not changed"
 	if ! {
 		attest succeeded
 		printf 'transferred_blob=%s\n' "$transferred"
 		printf 'source_deliverable=%s\nsandbox_retained=%s\n' "$source_target" "$sandbox_root"
-		printf 'transferred_at=%s\n' "$stamp"
-	} >"$pending" || ! mv "$pending" "$receipt"; then
-		rm -f "$pending"
-		die "deliverable transferred, but its receipt could not be recorded at $receipt"
+	} >"$temporary" || ! mv "$temporary" "$pending"; then
+		rm -f "$temporary"
+		die "cannot record a transfer receipt in $state_dir; the source was not changed"
 	fi
+}
+
+# Publishes the pending record as the receipt once the source holds its bytes.
+# Returns nonzero rather than dying: the caller knows whether delivery happened.
+publish_receipt() {
+	local note="$1"
+	local pending="$state_dir/$pending_name"
+	{
+		printf 'transferred_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+		[[ -z "$note" ]] || printf '%s\n' "$note"
+	} >>"$pending" && mv "$pending" "$state_dir/$receipt_name"
 }
 
 receipt_value() {
@@ -412,39 +445,68 @@ transfer_deliverable() {
 	$deliverable_changed || die "deliverable has no review delta to transfer"
 	local source_target="$source_root/$deliverable"
 	local sandbox_target="$sandbox_root/$deliverable"
-	local transfer_file
-	transfer_file="$(mktemp "${source_target}.review-transfer.XXXXXX")"
-	trap 'if [[ -n "${transfer_file:-}" && -f "$transfer_file" ]]; then rm -f "$transfer_file"; fi' EXIT
-	cp -p "$sandbox_target" "$transfer_file"
+	local transferred
+	transferred="$(git hash-object -- "$sandbox_target")" || die "cannot hash the workspace report"
+	write_pending "$transferred" "$source_target"
+	# Until the rename, any failure removes the staged copy and the pending record.
+	transfer_file=""
+	pending_cleanup="$state_dir/$pending_name"
+	trap 'rm -f "${transfer_file:-}"; if [[ -n "${pending_cleanup:-}" ]]; then rm -f "$pending_cleanup"; fi' EXIT
+	transfer_file="$(mktemp "${source_target}.review-transfer.XXXXXX")" ||
+		die "cannot stage the report beside the source deliverable; the source was not changed"
+	cp -p "$sandbox_target" "$transfer_file" || die "cannot stage the report; the source was not changed"
+	[[ "$(git hash-object -- "$transfer_file")" == "$transferred" ]] ||
+		die "workspace report changed during transfer; the source was not changed"
 	[[ "$(git -C "$source_root" hash-object -- "$deliverable")" == "$source_blob" ]] ||
 		die "source deliverable changed before transfer; preserve the workspace"
-	mv "$transfer_file" "$source_target"
+	mv "$transfer_file" "$source_target" || die "cannot replace the source deliverable; the source was not changed"
+	# From here the pending record is the only evidence of delivery: keep it.
 	transfer_file=""
-	cmp -s "$sandbox_target" "$source_target" || die "transferred deliverable does not match the workspace"
+	pending_cleanup=""
 	trap - EXIT
-	write_receipt "$source_target"
+	[[ "$(git -C "$source_root" hash-object -- "$deliverable")" == "$transferred" ]] ||
+		die_delivered "the source report was replaced but no longer holds the transferred bytes; delivery is unconfirmed: run $0 receipt --sandbox '$sandbox_root'"
+	publish_receipt "" ||
+		die_delivered "the report was delivered but its receipt was not recorded: run $0 receipt --sandbox '$sandbox_root' to record it"
 	cat "$state_dir/$receipt_name"
 }
 
 # Delivery evidence for the owner: fails until a transfer has succeeded, and
-# whenever the source or workspace no longer holds the transferred bytes.
+# whenever the source or workspace no longer holds the transferred bytes. It
+# also records an interrupted delivery whose bytes are intact in both places.
 show_receipt() {
 	parse_sandbox_arg "$@"
 	load_state "$sandbox_arg"
 	local receipt="$state_dir/$receipt_name"
-	local transferred current
-	[[ -f "$receipt" && ! -L "$receipt" ]] ||
+	local pending="$state_dir/$pending_name"
+	local transferred source_now workspace_now
+	source_now="$(git -C "$source_root" hash-object -- "$deliverable")"
+	workspace_now="$(git -C "$sandbox_root" hash-object -- "$deliverable")"
+	if [[ ! -e "$receipt" && -f "$pending" && ! -L "$pending" ]]; then
+		transferred="$(receipt_value "$pending" transferred_blob || true)"
+		if [[ "$source_now" == "$source_blob" ]]; then
+			# Interrupted before the rename: nothing was delivered.
+			rm -f "$pending"
+		elif [[ -n "$transferred" && "$source_now" == "$transferred" && "$workspace_now" == "$transferred" ]]; then
+			publish_receipt "recorded_by=receipt after an interrupted transfer" ||
+				die "the source holds the transferred report, but its receipt could not be recorded in $state_dir"
+		else
+			die "delivery uncertain: a transfer replaced the source report but was not recorded, and the bytes no longer agree (transferred ${transferred:-unknown}, source now $source_now, workspace now $workspace_now)"
+		fi
+	fi
+	if [[ ! -f "$receipt" || -L "$receipt" ]]; then
+		[[ "$source_now" == "$source_blob" || "$source_now" != "$workspace_now" ]] ||
+			die "no transfer receipt recorded, although the source holds this workspace's report; an older helper or a hand copy delivered it, and this helper cannot vouch for it"
 		die "no transfer receipt: the guarded transfer has not succeeded for this workspace; a report's transfer=pending attestation is verification evidence, not delivery"
+	fi
 	[[ "$(receipt_value "$receipt" transfer || true)" == succeeded ]] ||
 		die "transfer receipt does not record a successful transfer: $receipt"
 	transferred="$(receipt_value "$receipt" transferred_blob || true)"
 	[[ -n "$transferred" ]] || die "transfer receipt has no transferred_blob: $receipt"
-	current="$(git -C "$source_root" hash-object -- "$deliverable")"
-	[[ "$current" == "$transferred" ]] ||
-		die "source deliverable no longer matches the transferred report (transferred $transferred, source now $current); the receipt records only the earlier transfer"
-	current="$(git -C "$sandbox_root" hash-object -- "$deliverable")"
-	[[ "$current" == "$transferred" ]] ||
-		die "workspace deliverable changed after transfer (transferred $transferred, workspace now $current)"
+	[[ "$source_now" == "$transferred" ]] ||
+		die "source deliverable no longer matches the transferred report (transferred $transferred, source now $source_now); the receipt records only the earlier transfer"
+	[[ "$workspace_now" == "$transferred" ]] ||
+		die "workspace deliverable changed after transfer (transferred $transferred, workspace now $workspace_now)"
 	cat "$receipt"
 	printf 'delivery=confirmed\n'
 }
