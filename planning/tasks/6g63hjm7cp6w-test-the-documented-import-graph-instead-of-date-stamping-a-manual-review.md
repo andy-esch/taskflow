@@ -1,9 +1,9 @@
 ---
 schema: 1
 id: 6g63hjm7cp6w
-status: ready-to-start
+status: in-progress
 epic: 21-code-quality-architecture-hardening
-description: Replace ARCHITECTURE.md's hand-reviewed import graph with a test that diffs it against go list
+description: Verify the focused architecture guide’s exact production internal import map against default-host go list metadata.
 effort: 2-4 hours
 tier: 3
 priority: medium
@@ -11,41 +11,62 @@ autonomy_level: 3
 tags: [architecture, docs, go, dx]
 created: "2026-09-02"
 depends_on: [6g6x7e2ef37r]
-updated_at: "2026-10-12"
+updated_at: "2026-10-13"
 audit_sources: [2026-09-28-arch-hexagonal-boundaries]
+started_at: "2026-10-13"
 ---
 # Test the documented import graph instead of date-stamping a manual review
 
 ## Objective
 
-The current `docs/ARCHITECTURE.md` carries an explicit package dependency graph (the
-`domain -> id`, `core -> domain, id`, … block), historically under a dated review note.
-The composition extraction removes that stale date, but the map is still manual.
-The architecture restructuring task will choose its
-durable home before this task implements a checker. Wherever it lands, it is a manual
-snapshot of something `go list` can answer exactly, which means the doc is accurate only
-until the next import lands and nobody re-runs it by hand.
+Verify the descriptive import map in
+[boundaries](../../docs/architecture/boundaries.md#package-map) against real production
+imports. Replace its presentation/process shorthand with exact internal package paths;
+do not confuse an observed edge with permission to add that edge.
 
-`.golangci.yml` already makes the *stable* part of the direction executable, and
-that seam works well. The documented graph is broader than the lint rules — it
-includes concrete composition in `internal/appwiring`, permitted utility edges, and
-`tui -> configui` — so it cannot simply be deleted in favour of the linter. It
-should instead be verified the same way: parse the block, diff it against the
-real graph, fail on drift.
+The focused guide owns the map, `.golangci.yml` owns executable import policy, and the
+proposed dependency-policy ADR owns the remaining decisions. Those roles remain separate.
+The checker runs in the ordinary test suite and reports concrete drift instead of
+requiring another hand-review date.
 
-That turns the one-screen orientation doc from a claim into an assertion, and
-removes the review date as a thing a human has to refresh.
+## Coverage decision (2026-10-13)
+
+- Source rows: packages selected by `go list ./internal/...` with non-test Go or cgo
+  files, except `internal/testutil` and the `internal/tools` support namespace.
+  Include packages with no internal imports, so a new leaf package cannot disappear.
+  Wildcard-skipped directories and nested modules are not independently inventoried;
+  fail if a covered source imports a non-support internal target without a source row.
+- Targets: direct same-module `internal/` imports only. A production import into an
+  excluded support package still appears as an edge; exclusions apply to source rows.
+- Use ordinary native/default-build `go list` metadata, with workspace mode disabled,
+  process/persisted GOFLAGS overridden and module edits forbidden. Do not claim a custom-tag,
+  cross-platform union, or race-instrumented build inventory.
+- Exclude TestImports, XTestImports, transitive Deps, standard library and third-party
+  packages. Fail on malformed/incomplete metadata rather than comparing partial facts.
+- Parse one explicitly marked `internal-import-map:v1` block. Rows use literal
+  internal-relative paths, commas and an explicit no-import token; permit whitespace,
+  ordering, wrapped lists and comments, but reject duplicates or unexplained shorthand.
+- Compare both package inventory and edges, with deterministic added/removed diagnostics.
+  No new dependency policy, generator framework or documentation platform is introduced.
 
 ## Acceptance criteria
 
-- [ ] A test parses the dependency-graph block from the canonical focused architecture guide chosen
-      by the restructuring task and compares it to the production import graph from
-      `go list ./internal/...`.
-- [ ] Drift fails with a diff naming the added or removed edge, not just a boolean mismatch
-- [ ] Test-only imports are excluded, matching the existing golangci exemption for UI integration tests that construct `store.FS`
-- [ ] The manual map points to its executable checker rather than a review date
-  or pending task
-- [ ] The block's format is documented well enough (or the parser tolerant enough) that an editor cannot break the test with harmless prose edits
+- [x] A marked internal-import-map:v1 block in docs/architecture/boundaries.md
+  exactly matches default-host production internal package rows and direct
+  internal Imports from go list, including packages with no internal edges.
+- [x] Drift reports deterministic added/removed packages and edges with
+  owner/remediation guidance; malformed or incomplete metadata fails closed, and
+  meaningful drift regressions are tested.
+- [x] TestImports, XTestImports, transitive Deps, stdlib and third-party edges
+  are excluded. Source exclusions are internal/testutil and the internal/tools
+  namespace; production imports into them remain visible. No custom-tag or
+  cross-platform union is claimed.
+- [x] The focused map links to its executable checker instead of a review date
+  or pending task, keeping descriptive facts separate from depguard policy and
+  named exceptions.
+- [x] The marked-block grammar is documented and tested for harmless whitespace,
+  ordering, wrapping and comments; missing/malformed blocks, duplicate
+  declarations and unsupported shorthand fail clearly.
 
 ## Out of scope
 
@@ -73,3 +94,51 @@ Choose and document its covered edge set/normalization before an exact go-list c
 silently bless omitted edges or compare shorthand labels literally with package imports.
 The new architecture navigation check only checks routes and must not be mistaken for this task's
 import-drift enforcement. Update the focused guide when the checker lands; keep the root index short.
+
+## Implementation and validation (2026-10-13)
+
+The marked boundaries map now covers 26 production packages and 78 direct internal edges in the observed host build, including four leaf packages. The ordinary architecture test compares both source rows and edges, prints deterministic +/- drift, and routes remediation to the focused guide and actual depguard/named-exception policy. No import policy, product behavior, Go dependency or machine-contract revision changed.
+
+Parser regressions cover ordering, whitespace, comments and wrapped lists, plus missing/duplicate markers, malformed rows and duplicate declarations. Metadata fixtures pin exclusion of test/transitive/external imports, test-only/support sources, retention of production imports into support packages, cgo/leaf/root records and fail-closed incomplete/erroneous/truncated streams. A real throwaway module verifies that broken ambient GOWORK and GOFLAGS=-find cannot erase facts, and its module files remain unchanged.
+
+Owner probes removed core -> id from the map and added a blank editor -> domain production import. The latter passed go build ./internal/editor; each probe failed TestArchitectureImportMap with the intended named edge. Both were restored and the focused race suite passed. Full just test (race), just lint (0 issues), just build, just docs-check, planning lint --links and whitespace checks passed. The two new test files also received explicit untracked-file whitespace checks.
+
+At initial handoff the task remained in progress for focused adversarial review of
+coverage/parsing; checked criteria reflected owner evidence, not an independent
+verdict. No branch, commits or pushes had been made at that checkpoint.
+
+## Independent review handoff (2026-10-13)
+
+Prepared open, zero-finding audits for [Claude](../audits/6gkabd0b0bg6-2026-10-13-documented-import-map-implementation-claude.md) and [Antigravity](../audits/6gkabd0m1evb-2026-10-13-documented-import-map-implementation-antigravity.md). Claude leads discovery/coverage fidelity; Antigravity leads parser/comparator false passes, with bounded cross-checks. Both must capture this dirty/untracked implementation in separate clones, exercise the real native guard, kill a new compiler-valid implementation mutation, verify named evidence and transfer only their assigned audit. The previous review's false-pass and unverified-inventory lessons informed these requirements; no reviewer-specific finding quota or assumed verdict is imposed.
+
+At handoff, review had not run. Each brief and the captured implementation are the
+reviewer's independent baseline; do not edit an assigned audit while its reviewer
+is working. The task remains in progress pending findings triage.
+
+## Claude review triage (2026-10-13)
+
+Claude's three findings are accepted, with owner-authored regressions reproducing each
+failure before fixes. M1 now records the internal tree and module manifests in the test
+process so its cached pass is invalidated by production-source drift. An end-to-end
+throwaway-module regression first proves a warm cache hit, then requires an import edit,
+new leaf and removed leaf to fail through the actual checker without `-count=1`.
+
+L1 uses a non-empty GOFLAGS=-mod=readonly override instead of the empty value that falls
+back to go env -w configuration. The real module includes competing build-tag imports and
+a persisted GOENV file. Validation-before-filter tests also start with a valid row, so
+an empty-graph refusal cannot mask ignored erroneous support/test-only metadata.
+
+L2 refuses non-support internal targets with no covered source row and reports the
+target/importer and wildcard-selection limitation. Compiler-valid `_hidden`, testdata
+and nested-module fixtures pin this refusal without expanding the inventory into a
+transitive or all-platform union. The guide and coverage decision now state that limit.
+
+Removing cache-input recording, restoring empty GOFLAGS, moving metadata validation
+after filtering, and disabling uncovered-target refusal each compiled and failed its
+intended regression. Every probe was restored. Final full just test (race), just lint
+(0 issues), just build, just docs-check, planning lint --links and whitespace checks
+passed. All three findings are marked fixed and Claude's audit is closed.
+The exact CI race/coverage invocation also passed with its coverage output outside
+the checkout: `go test -p 4 -race -coverprofile=/private/tmp/taskflow-import-map-coverage.out ./...`.
+Antigravity's report is still pending;
+Claude's findings and owner verification do not stand in for that independent review.

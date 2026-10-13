@@ -95,3 +95,17 @@ and broader reconciliation still belong to the sequenced tasks. Claude's four Lo
 verified and fixed; Antigravity's useful probes do not support its exhaustive all-falsified claim.
 The guard now rejects non-navigable decoys and checks retained anchors referenced by tasks/Threads.
 Both audits are settled with explicit evidence limits, not treated as completion of downstream slices.
+
+## Import-map checkpoint (2026-10-13)
+
+The import-map task is in progress with a scoped checker implemented for exact default-build
+production internal package/edge facts. The guide's presentation shorthand is replaced with
+literal paths and explicit leaf rows; support/test sources are excluded without hiding production
+imports into them. Native probes detect real edge drift, while formatting and metadata fixtures
+pin the coverage limits. This is descriptive verification, not acceptance of the pending policy
+ADR or completion of the pure-layer guard, package contracts, examples or reconciliation tasks.
+
+Claude's import-map review found three real gaps, now fixed with warm-cache, persisted
+GOFLAGS and compiler-valid uncovered-target regressions. Its audit is closed; the task
+stays in progress pending Antigravity. Wildcard discovery limits are explicit rather
+than overstated as universal production coverage, and import policy remains separate.
