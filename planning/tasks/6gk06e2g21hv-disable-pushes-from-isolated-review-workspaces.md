@@ -126,3 +126,17 @@ The same review round found related source-safety gaps, all fixed on this branch
 - `git diff` refreshed a stat-dirty source index (M1).
 - Push destinations set in include or worktree config, or in legacy remote files, passed `verify`
   (M2).
+
+## Fix-verification round (2026-10-13)
+
+A focused [second review](../audits/6gka14zenf4x-2026-10-13-review-workspace-hardening-fixes-claude-fix-verification.md)
+confirmed all thirteen first-round fixes and found five more issues, all now fixed:
+
+- escaping symlinks and case-variant `.GIT` entries still reached the source;
+- a concurrent `verify` or `receipt` could corrupt a transfer receipt, a regression from the first
+  fixes;
+- a few push-guard configuration shapes slipped through;
+- two coverage survivors remained;
+- the new checks wrongly refused legitimate symlinks and bracketed paths, also a regression.
+
+Sandboxes now default to `/tmp` and are discarded once their review is processed.

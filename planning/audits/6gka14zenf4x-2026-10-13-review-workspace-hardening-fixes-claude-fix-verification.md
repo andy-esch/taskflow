@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gka14zenf4x
-bucket: open
+bucket: closed
 area: review-workspace-hardening-fixes-claude-fix-verification
 date: "2026-10-13"
 updated_at: "2026-10-13"
@@ -421,7 +421,7 @@ Validation run in the sandbox, all passing:
 
 ## Findings
 
-#### M1. Absolute symlinks and case-variant .GIT entries still bind the workspace to the source while verify passes · **Status:** open
+#### M1. Absolute symlinks and case-variant .GIT entries still bind the workspace to the source while verify passes · **Status:** fixed in 1e8332bf
 
 **File:** scripts/isolated-review-workspace.sh:131 | **Component:** scripts/isolated-review-workspace.sh
 **Effort:** M · **Urgency:** soon
@@ -440,7 +440,14 @@ Validation run in the sandbox, all passing:
 
 **Recommendation:** Refuse workspace symlinks that resolve outside the workspace (at least absolute and source-resolving ones), match .git case-insensitively, and scope the README isolation claim.
 
-#### M2. A concurrent receipt or verify deletes the live pending record, so transfer exits 0 with a field-less receipt that can never be confirmed · **Status:** open
+**Resolution:** refuse_external_bindings refuses any nested .git in any letter
+    case and any symlink whose target is absolute or climbs out of the
+    workspace, in create, verify, and transfer.
+    TestSymlinksLeadingOutOfTheWorkspaceAreRefused covers create-time and
+    planted links and a .GIT gitfile; disabling the escape check or the
+    case-insensitive match fails it.
+
+#### M2. A concurrent receipt or verify deletes the live pending record, so transfer exits 0 with a field-less receipt that can never be confirmed · **Status:** fixed in 5fafeab1
 
 **File:** scripts/isolated-review-workspace.sh:409 | **Component:** scripts/isolated-review-workspace.sh
 **Effort:** S · **Urgency:** soon
@@ -463,7 +470,14 @@ Validation run in the sandbox, all passing:
 
 **Recommendation:** Serialize verify/transfer/receipt state changes with a lock, make publish refuse unless the pending record names the expected blob and never overwrite a receipt, and validate the printed receipt.
 
-#### L1. Push-guard scope fix misses dormant conditional includes and symlinked legacy remotes, and some restore lines do not restore · **Status:** open
+**Resolution:** verify and receipt never delete a pending record and report
+    leftovers with restore lines; receipts are built complete from the pending
+    record and hard-linked without overwriting, idempotent for one blob.
+    TestConcurrentCommandsCannotCorruptATransfer and
+    TestKilledTransferLeavesRepairableState pin it; restoring the deletion or
+    the append-and-rename publish fails them.
+
+#### L1. Push-guard scope fix misses dormant conditional includes and symlinked legacy remotes, and some restore lines do not restore · **Status:** fixed in f2b7b068
 
 **File:** scripts/isolated-review-workspace.sh:233 | **Component:** scripts/isolated-review-workspace.sh
 **Effort:** S · **Urgency:** eventually
@@ -483,7 +497,12 @@ Validation run in the sandbox, all passing:
 
 **Recommendation:** Refuse include/includeIf keys and worktreeConfig in workspace config, refuse any non-directory entry under .git/remotes and .git/branches, and print --file restore lines for non-local pushurl origins.
 
-#### L2. Two fix-delta invariants survive compiler-valid mutations · **Status:** open
+**Resolution:** Conditional includes are refused, any non-directory legacy
+    remote entry is refused NUL-delimited, and push URLs from other workspace
+    scopes get --file restore lines. Four new weakening cases run their restore
+    lines; each mutation fails its case.
+
+#### L2. Two fix-delta invariants survive compiler-valid mutations · **Status:** fixed in 5fafeab1, 85df971e
 
 **File:** internal/tools/reviewworkspace/review_workspace_test.go:870 | **Component:** internal/tools/reviewworkspace
 **Effort:** XS · **Urgency:** eventually
@@ -497,7 +516,12 @@ Validation run in the sandbox, all passing:
 
 **Recommendation:** Require every generated helper call to start with the SOURCE_ROOT path, and add a staging-time workspace-edit case requiring exit 2 and an unchanged source.
 
-#### L3. New fail-closed checks refuse legitimate sources with misleading messages · **Status:** open
+**Resolution:** TestWorkspaceEditDuringStagingLeavesTheSourceUnchanged pins the
+    staged-copy re-hash (exit 2, source untouched), and the generator test now
+    requires every helper call to use the source copy; both reported survivors
+    are killed.
+
+#### L3. New fail-closed checks refuse legitimate sources with misleading messages · **Status:** fixed in 1e8332bf
 
 **File:** scripts/isolated-review-workspace.sh:110 | **Component:** scripts/isolated-review-workspace.sh
 **Effort:** XS · **Urgency:** eventually
@@ -508,3 +532,8 @@ Validation run in the sandbox, all passing:
 - **Brackets in the sandbox path.** `refuse_nested_git` (`:131`) passes the sandbox path to `find -path` as a pattern. With a sandbox parent `…/par[1]`, the workspace's own root `.git` is not pruned, and `create` refuses itself with "workspace contains nested Git metadata: …/par[1]/isolated-review.eB4Uha/.git". Parents containing `*` and `?` still detected a planted nested `.git` (no fail-open).
 
 **Recommendation:** Hash untracked symlinks by link text as git add does, and run the nested-metadata find relative to the workspace so path characters are not patterns.
+
+**Resolution:** Untracked symlinks are fingerprinted by link text, and the
+    nested-metadata scan runs from inside the workspace.
+    TestInTreeSymlinksAreAccepted and
+    TestPatternCharactersInTheSandboxParentPath pin both.
