@@ -80,8 +80,8 @@ Review the change against depguard and the named exceptions before editing the m
 
 The versioned markers delimit one fenced `text` block. Each row is
 `source -> target, target` with literal internal-relative paths (`.` for the root);
-`-` alone means no internal imports. Ordering, spacing, comments after `#` and
-comma-separated lists wrapped across lines are immaterial. Duplicate sources/targets,
+`-` alone on the right-hand side means no internal imports. Ordering, spacing,
+comments after `#` and comma-separated lists wrapped across lines are immaterial. Duplicate sources/targets,
 missing markers and shorthand are errors. The role table and rationale remain
 human-owned, not a mechanically inferred classification.
 

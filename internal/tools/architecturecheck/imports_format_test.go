@@ -18,6 +18,7 @@ func TestParseImportMapIgnoresPresentationChanges(t *testing.T) {
 	for name, content := range map[string]string{
 		"plain":                      markedImportMap("core -> domain, id\ncli/ports -> core\nleaf -> -"),
 		"wrapped reordered comments": "# A different guide heading\n" + markedImportMap("# explanatory comment\n leaf\t->\t-\ncli/ports->core\ncore -> id, # continue after comma\n  domain\n") + "\nExtra prose and other fenced examples.",
+		"CRLF":                       strings.ReplaceAll(markedImportMap("core -> domain, id\ncli/ports -> core\nleaf -> -"), "\n", "\r\n"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			got, err := parseImportMap(content)
@@ -30,22 +31,24 @@ func TestParseImportMapIgnoresPresentationChanges(t *testing.T) {
 
 func TestParseImportMapRejectsAmbiguousOrMissingFacts(t *testing.T) {
 	for name, content := range map[string]string{
-		"no markers":             "```text\ncore -> domain\n```",
-		"missing close":          importMapStart + "\n```text\ncore -> domain\n```",
-		"reversed markers":       importMapEnd + "\n" + importMapStart,
-		"duplicate block":        markedImportMap("core -> domain") + markedImportMap("core -> domain"),
-		"missing fence":          importMapStart + "\ncore -> domain\n" + importMapEnd,
-		"empty":                  markedImportMap("# only commentary"),
-		"missing targets":        markedImportMap("core ->"),
-		"trailing comma":         markedImportMap("core -> domain,"),
-		"duplicate source":       markedImportMap("core -> domain\ncore -> id"),
-		"duplicate target":       markedImportMap("core -> domain, domain"),
-		"shorthand":              markedImportMap("core -> domain + utilities"),
-		"mixed leaf declaration": markedImportMap("core -> -, domain"),
-		"stray continuation":     markedImportMap("domain\ncore -> id"),
-		"extra arrow":            markedImportMap("core -> domain -> id"),
-		"invalid source":         markedImportMap("../core -> domain"),
-		"invalid target":         markedImportMap("core -> /domain"),
+		"no markers":               "```text\ncore -> domain\n```",
+		"missing close":            importMapStart + "\n```text\ncore -> domain\n```",
+		"reversed markers":         importMapEnd + "\n" + importMapStart,
+		"duplicate block":          markedImportMap("core -> domain") + markedImportMap("core -> domain"),
+		"missing fence":            importMapStart + "\ncore -> domain\n" + importMapEnd,
+		"empty":                    markedImportMap("# only commentary"),
+		"missing targets":          markedImportMap("core ->"),
+		"trailing comma":           markedImportMap("core -> domain,"),
+		"duplicate source":         markedImportMap("core -> domain\ncore -> id"),
+		"duplicate target":         markedImportMap("core -> domain, domain"),
+		"shorthand":                markedImportMap("core -> domain + utilities"),
+		"mixed leaf declaration":   markedImportMap("core -> -, domain"),
+		"leaf token as source":     markedImportMap("- -> core"),
+		"leaf token on both sides": markedImportMap("- -> -"),
+		"stray continuation":       markedImportMap("domain\ncore -> id"),
+		"extra arrow":              markedImportMap("core -> domain -> id"),
+		"invalid source":           markedImportMap("../core -> domain"),
+		"invalid target":           markedImportMap("core -> /domain"),
 	} {
 		t.Run(name, func(t *testing.T) {
 			if _, err := parseImportMap(content); err == nil {
@@ -129,15 +132,19 @@ func TestProductionImportProjectionFailsClosed(t *testing.T) {
 func TestProductionImportGraphUsesDefaultModuleBuildWithoutEdits(t *testing.T) {
 	root := t.TempDir()
 	files := map[string]string{
-		"go.mod":                       "module example.test/mapfixture\n\ngo 1.20\n",
-		"internal/a/a.go":              "package a\nimport (_ \"example.test/mapfixture/internal/b\"; _ \"example.test/mapfixture/internal/testutil\"; _ \"example.test/mapfixture/internal/tools\")\n",
-		"internal/a/a_test.go":         "package a\nimport _ \"example.test/mapfixture/internal/testutil\"\n",
-		"internal/b/b.go":              "package b\n",
-		"internal/testutil/f.go":       "package testutil\nimport _ \"example.test/mapfixture/internal/b\"\n",
-		"internal/tools/helper.go":     "package tools\nimport _ \"example.test/mapfixture/internal/b\"\n",
-		"internal/onlytests/t_test.go": "package onlytests\nimport _ \"example.test/mapfixture/internal/a\"\n",
-		"internal/tagged/default.go":   "//go:build !reviewtag\n\npackage tagged\nimport _ \"example.test/mapfixture/internal/b\"\n",
-		"internal/tagged/custom.go":    "//go:build reviewtag\n\npackage tagged\nimport _ \"example.test/mapfixture/internal/testutil\"\n",
+		"go.mod":                        "module example.test/mapfixture\n\ngo 1.20\n",
+		"internal/a/a.go":               "package a\nimport (_ \"example.test/mapfixture/internal/b\"; _ \"example.test/mapfixture/internal/testutil\"; _ \"example.test/mapfixture/internal/tools\"; _ \"example.test/mapfixture/internal/tools/sub\")\n",
+		"internal/a/a_test.go":          "package a\nimport _ \"example.test/mapfixture/internal/testutil\"\n",
+		"internal/b/b.go":               "package b\n",
+		"internal/testutil/f.go":        "package testutil\nimport _ \"example.test/mapfixture/internal/b\"\n",
+		"internal/tools/helper.go":      "package tools\nimport _ \"example.test/mapfixture/internal/b\"\n",
+		"internal/tools/sub/helper.go":  "package sub\nimport _ \"example.test/mapfixture/internal/b\"\n",
+		"internal/shared.go":            "package shared\nimport _ \"example.test/mapfixture/internal/b\"\n",
+		"internal/testutils/helpers.go": "package testutils\n",
+		"internal/toolsmith/tools.go":   "package toolsmith\nimport _ \"example.test/mapfixture/internal/b\"\n",
+		"internal/onlytests/t_test.go":  "package onlytests\nimport _ \"example.test/mapfixture/internal/a\"\n",
+		"internal/tagged/default.go":    "//go:build !reviewtag\n\npackage tagged\nimport _ \"example.test/mapfixture/internal/b\"\n",
+		"internal/tagged/custom.go":     "//go:build reviewtag\n\npackage tagged\nimport _ \"example.test/mapfixture/internal/testutil\"\n",
 	}
 	writeImportFixture(t, root, files)
 	goenv := filepath.Join(root, "goenv")
@@ -145,11 +152,16 @@ func TestProductionImportGraphUsesDefaultModuleBuildWithoutEdits(t *testing.T) {
 	// Neither an unrelated/broken workspace nor -find may erase production facts.
 	t.Setenv("GOWORK", filepath.Join(root, "missing.go.work"))
 	t.Setenv("GOENV", goenv)
+	// Compile the root, support targets and near-collision names, not only
+	// their synthetic metadata representations.
+	if output, err := fixtureGo(root, "build", "./internal/..."); err != nil {
+		t.Fatalf("real-module fixture is not compiler-valid: %v\n%s", err, output)
+	}
 	for _, flags := range []string{"-find", ""} {
 		t.Run("GOFLAGS="+flags, func(t *testing.T) {
 			t.Setenv("GOFLAGS", flags)
 			got, err := productionImportGraph(root)
-			want := importGraph{"a": {"b", "testutil", "tools"}, "b": nil, "tagged": {"b"}}
+			want := importGraph{".": {"b"}, "a": {"b", "testutil", "tools", "tools/sub"}, "b": nil, "tagged": {"b"}, "testutils": nil, "toolsmith": {"b"}}
 			if err != nil || !reflect.DeepEqual(got, want) {
 				t.Fatalf("graph = %#v, error = %v; want %#v", got, err, want)
 			}

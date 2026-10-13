@@ -96,7 +96,7 @@ func parseImportMap(content string) (importGraph, error) {
 		}
 		source, targetList, _ := strings.Cut(row, "->")
 		source, targetList = strings.TrimSpace(source), strings.TrimSpace(targetList)
-		if !validInternalPackageName(source) {
+		if source == "-" || !validInternalPackageName(source) {
 			return fmt.Errorf("invalid import-map source %q", source)
 		}
 		if _, exists := graph[source]; exists {
