@@ -45,14 +45,15 @@ compatibility. The [architecture navigation test](../internal/tools/architecture
 runs with `just test` and checks the index, focused guides, root contributor routes
 and linked package-comment return paths, plus task/Thread links to retained index
 anchors. It ignores fenced/inline-code examples and does not prove semantic prose
-or implement every Markdown dialect. Selective package overviews, compiled examples and the executable
-import-map check are [sequenced work](../planning/threads/6g9czp7g9pt3-make-documentation-layered-executable-and-agent-navigable.md),
-not claimed complete by this extraction.
+or implement every Markdown dialect. The [import-map check](../internal/tools/architecturecheck/imports_test.go)
+also verifies the focused guide's production import facts. Selective package overviews,
+compiled examples and broader reconciliation remain
+[sequenced work](../planning/threads/6g9czp7g9pt3-make-documentation-layered-executable-and-agent-navigable.md).
 
 ## Current package map and dependency direction
 
 The [boundaries guide](architecture/boundaries.md#package-map) owns the role table
-and descriptive import map. The map is still manual; its checker follows this split.
+and checked descriptive import map. Observed imports do not replace dependency policy.
 
 ## Planning-data change checklist
 
