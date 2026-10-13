@@ -53,7 +53,7 @@ regenerate with `just gifs`.
 | **[`cmd/tskflwctl/`](./cmd/tskflwctl/)** | The CLI entrypoint (thin composition root). |
 | **[`internal/`](./internal/)** | `domain` (pure) · `core` (use cases) · `store` (markdown adapter) · `cli` (cobra) · `tui` (Bubble Tea) · `config`/`userconfig` · `spacehealth` · `spacestore`/`workspacestore`. |
 | **[`planning/`](./planning/)** | This repo's own epics, tasks, Threads, and research (self-hosted). |
-| **[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)** | Package map and detailed architecture reference. |
+| **[`docs/ARCHITECTURE.md`](./docs/ARCHITECTURE.md)** | Architecture index, focused guides, and code/test contract routes. |
 
 ## Install
 

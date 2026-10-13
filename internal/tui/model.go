@@ -3,7 +3,7 @@
 // read runs as a tea.Cmd against the service (commands.go), so Update and View
 // stay I/O-free. Entities (tasks/epics/Threads/audits/research) are declared in a registry
 // (entity.go); the lists live-reload via fsnotify (watch.go). See
-// docs/ARCHITECTURE.md for the subsystem map.
+// docs/architecture/tui.md for shell, session, and presentation relationships.
 package tui
 
 import (

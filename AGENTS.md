@@ -21,7 +21,7 @@ for humans and coding agents, not a tool-specific policy copy.
 - Use adapter-established stable record identities; an untrusted declaration or opaque
   `Location` is not identity or permission to open a path. Preserve coherent snapshots,
   explicit capability/policy binding, guarded persistence, and committed/partial receipts.
-  Use the [planning-data checklist](docs/ARCHITECTURE.md#planning-data-change-checklist)
+  Use the [planning-data checklist](docs/architecture/planning-data.md#change-checklist)
   for the detailed contracts and required regressions.
 - Use existing guarded/atomic persistence helpers; preserve unknown frontmatter,
   comments, and key order. Wrap domain error sentinels rather than inventing
@@ -75,13 +75,18 @@ than silently rewritten ([ADR-0001](planning/adrs/0001-adopt-adrs.md)).
 
 | Change | Start here, then follow relevant links |
 | --- | --- |
-| Planning reads/writes, identity, diagnostics, recovery | [Planning-data checklist](docs/ARCHITECTURE.md#planning-data-change-checklist), owning ports/type comments and their regressions. |
-| Dependency direction or composition | [Architecture package map](docs/ARCHITECTURE.md#current-package-map-and-dependency-direction), named exceptions and `.golangci.yml`. |
+| Planning reads/writes, identity, diagnostics, recovery | [Planning-data checklist](docs/architecture/planning-data.md#change-checklist), owning ports/type comments and their regressions. |
+| Dependency direction or composition | [Boundaries guide](docs/architecture/boundaries.md), named exceptions and `.golangci.yml`. |
 | CLI flags/help, JSON or tabular contracts | Command source, [CLI reference](docs/cli/tskflwctl.md), [wire](internal/wire/), ADR-0008 and related tests. |
-| TUI interactions or watching | [TUI architecture](docs/ARCHITECTURE.md#the-tui-internaltui), local model/command contracts and navigation/watch tests. |
+| TUI interactions or watching | [TUI architecture](docs/architecture/tui.md), local model/command contracts and navigation/watch tests. |
 | Release or compiler/linter changes | [Releasing](docs/RELEASING.md), its configuration links and toolchain checks. |
 | Demos or review tooling | [Assets guide](assets/README.md) or [scripts guide](scripts/README.md). External reviews require isolated sandboxes, not the shared worktree. |
 | Documentation | The ownership table above; update the owner alongside the change and link from summaries. Keep useful examples, remove confirmed dead/duplicate guidance. |
+
+When a contract changes, update its owning code comment and relevant focused guide together.
+Guides link to owning source and regression evidence; package comments point back with a
+repository-relative guide path, and Go API references use symbol links. Navigation tests catch
+broken routes, not semantic drift; don't copy method lists or add comment-only behavior promises.
 
 Nested agent instructions are only for genuinely local constraints and should link to owning
 contracts, not duplicate this guide or weaken its safety rules. Do not rely on identical nested

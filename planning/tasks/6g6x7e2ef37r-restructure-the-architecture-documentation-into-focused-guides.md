@@ -55,3 +55,46 @@ Keep the planning-data checklist's owner and old incoming links explicit during 
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
 - Thread [Make documentation layered, executable, and agent-navigable](../threads/6g9czp7g9pt3-make-documentation-layered-executable-and-agent-navigable.md)
 - Follows [Establish documentation ownership and agent routing](6g9cz5saenme-establish-documentation-ownership-and-agent-routing.md)
+
+## Archived architecture snapshot
+
+The following is the old `Status (2026-08-25)` section as found at baseline 4fdf6fcc, not a verified snapshot of that date; later edits had accumulated beneath its dated heading. Preserved as history rather than current implementation guidance.
+
+```markdown
+## Status (2026-08-25)
+
+The layered shape now has two substantial primary consumers and several reusable
+application seams; it is no longer architecture held in reserve for a hypothetical UI:
+
+- The CLI exposes full task lifecycle and body mutation, epic/audit/research authoring,
+  schema and wire discovery, configuration lifecycle, planning-space registry verbs,
+  global `--space` selection, and the cross-space `status --all` overview.
+- The Bubble Tea app provides its dashboard plus task/epic/audit/research tabs,
+  a cross-space atlas with reversible entry-point navigation, filtering/sorting/find,
+  structured navigation, task and audit lifecycle actions, task field editing,
+  active-space filesystem reloads, and the embedded configuration editor. Reads and
+  writes remain asynchronous commands over core services; production TUI code does not
+  open planning/config stores.
+- The configuration and cross-space features have dedicated core services and composite
+  filesystem adapters. `SpaceRegistryService` owns catalog/selection/mutation policy and
+  `SpaceOverviewService` owns cross-space summaries; Cobra is one primary adapter over
+  both rather than the owner of either use case.
+- Writes use atomic replacement/exclusive create, a repo-wide lock, content-version CAS,
+  bounded retry for agent mutations, and parse-before-accept editor loops. Machine output
+  is a versioned `internal/wire` contract with generated JSON Schema and golden coverage.
+- The planning model's closed vocabularies now have write verbs rather than only linters.
+  An acceptance criterion carries a state and a reason (`task ac`), an audit finding
+  carries a status, resolution paragraph, and optional versioned candidate projection
+  (`audit finding`), and the words the two
+  share are declared once in `domain/resolution.go`. Two invariants are enforced at write
+  time rather than reported after: `task complete` refuses a task with an unexplained
+  unmet criterion, mirroring `audit close` requiring terminal findings and complete parsing.
+
+The atlas decision has now activated the narrow reusable workspace-opening boundary:
+`core.WorkspaceService` and `internal/workspacestore` can open an explicit local entry
+point for a primary adapter without exposing discovery or concrete persistence. The
+broader `doctor`/fix promotion remains deferred because the atlas does not consume it.
+Thread `context.Context` when an HTTP request path exists; reshape findings pagination
+when a web findings view is scoped. Until those triggers occur, package movement or
+speculative interfaces are out of scope.
+```
