@@ -11,7 +11,7 @@ autonomy_level: 3
 tags: [cli, refactor, architecture]
 created: "2026-09-02"
 audited: "2026-10-11"
-updated_at: "2026-10-11"
+updated_at: "2026-10-12"
 ---
 # Collapse the zero-variance cross-entity CLI verbs behind the existing factory
 
@@ -29,8 +29,8 @@ The codebase already owns the fix and uses it in six places — `newTransitionCm
 entity, never *across* entities.
 
 This is deliberately NOT the data-driven collapse that
-`docs/ARCHITECTURE.md` considered and declined ("for five heterogeneous entities
-it trades clarity for machinery"). That reasoning is right for `list`/`show`/`set`,
+[the boundary rationale](../../docs/architecture/boundaries.md#why-these-boundaries)
+declines for differently shaped entities. That reasoning is right for `list`/`show`/`set`,
 where the entities genuinely differ — tasks carry status/tier/priority, audits
 carry findings/buckets, research has no lifecycle at all. It does not hold for
 verbs whose per-entity variance is *zero*. The job here is to identify that subset
@@ -42,7 +42,10 @@ honestly and leave everything else alone.
 - [ ] Each candidate verb is assessed for genuine per-entity variance before being folded in; the ones with real variance are listed and left alone with a one-line reason
 - [ ] Per-entity help text, examples, and completions stay exactly as specific as they are today — the factory takes them as parameters rather than generating generic prose
 - [ ] No change to any command's observable output, `--json` envelope, or exit code; existing goldens pass unchanged
-- [ ] `docs/ARCHITECTURE.md`'s fan-out paragraph is updated to distinguish zero-variance verbs from the shaped ones it correctly declines to collapse
+- [ ] docs/architecture/boundaries.md#why-these-boundaries is reconciled with
+  implementation evidence, distinguishing zero-variance CLI mechanics from
+  genuinely different entity contracts without claiming shaped verbs were
+  collapsed.
 
 ## Out of scope
 
@@ -84,3 +87,7 @@ re-verified against current code, so the task stands exactly as written.
 edit `internal/`): `emitPath`'s doc comment says "Shared by task/epic/audit path", but it
 is shared by all five, including research and thread. It is the kind of undercount the
 factory in this task would make structurally impossible to repeat.
+
+## Architecture review handoff (2026-10-12)
+
+The architecture extraction supersedes the old monolith references in the 2026-10-11 sweep above. The current rationale is [Why these boundaries](../../docs/architecture/boundaries.md#why-these-boundaries); the quoted sentence and line number are historical evidence, not a current target. The guide now labels this factory work as proposed and queued. AC5 points to that owner and remains unchecked: the extraction did not implement or validate the factory. Preserve typed entity differences while measuring genuine zero-variance mechanics.

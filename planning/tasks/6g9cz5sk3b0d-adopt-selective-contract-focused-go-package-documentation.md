@@ -11,7 +11,7 @@ autonomy_level: 4
 tags: [documentation, go, architecture, godoc]
 created: "2026-09-12"
 depends_on: [6g9cz5saenme]
-updated_at: "2026-09-13"
+updated_at: "2026-10-12"
 ---
 # Adopt selective, contract-focused Go package documentation
 
@@ -45,3 +45,17 @@ Taskflow currently has package comments in arbitrary implementation files. This 
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
 - Thread [Make documentation layered, executable, and agent-navigable](../threads/6g9czp7g9pt3-make-documentation-layered-executable-and-agent-navigable.md)
 - Reference reviewed: `../desirelines/packages/{shared,dispatcher,apigateway}`
+
+## Architecture extraction handoff (2026-10-12)
+
+Focused [architecture guides](../../docs/ARCHITECTURE.md) now own cross-package explanations and link
+to owning source/regression evidence. Existing package comments in core, store, appwiring, config,
+cli, wire and tui route back to the relevant guide; their paths are repository source-navigation
+cues, not local Markdown links resolved by go doc. The navigation test derives the participating
+source routes from guide links without a second package inventory. No doc.go standard or complete
+package-comment audit was delivered by that extraction. Preserve those two-way links as this task
+chooses selective package overviews, and do not duplicate the focused manuals inside comments.
+
+## Review correction handoff (2026-10-12)
+
+Userconfig is now an eighth guide-linked package overview: its comment points to the [preferences/registry owner](../../docs/architecture/configuration-and-spaces.md#preferences-and-home-registry) and correctly credits depguard, not the compiler, for the config-to-userconfig ban. Preserve that route during selective doc.go work. This small correction does not constitute the broader package-comment audit or documentation standard.

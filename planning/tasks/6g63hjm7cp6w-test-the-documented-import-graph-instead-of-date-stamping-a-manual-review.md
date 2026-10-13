@@ -11,7 +11,7 @@ autonomy_level: 3
 tags: [architecture, docs, go, dx]
 created: "2026-09-02"
 depends_on: [6g6x7e2ef37r]
-updated_at: "2026-10-03"
+updated_at: "2026-10-12"
 audit_sources: [2026-09-28-arch-hexagonal-boundaries]
 ---
 # Test the documented import graph instead of date-stamping a manual review
@@ -63,3 +63,13 @@ The [composition-isolation task](6gcwcf8rxe72-isolate-cli-composition-wiring-and
 now owns audit M1's default-deny policy and L1's recursive coverage. This task independently verifies
 the descriptive graph, including the new `cli/ports` and `appwiring` roles. It remains complementary
 to depguard and to the [proposed policy ADR](6gg7e59mm68g-record-the-hexagonal-dependency-policy-and-composition-exceptions-in-an-adr.md).
+
+## Architecture extraction handoff (2026-10-12)
+
+The canonical descriptive map now lives in [boundaries](../../docs/architecture/boundaries.md#package-map).
+The role table and named exceptions remain human judgments. The map retains explanatory shorthand
+for presentation/process edges and is explicitly not a complete machine-generated inventory.
+Choose and document its covered edge set/normalization before an exact go-list comparison; do not
+silently bless omitted edges or compare shorthand labels literally with package imports.
+The new architecture navigation check only checks routes and must not be mistaken for this task's
+import-drift enforcement. Update the focused guide when the checker lands; keep the root index short.
