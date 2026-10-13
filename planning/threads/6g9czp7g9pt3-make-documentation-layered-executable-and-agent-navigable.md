@@ -106,6 +106,9 @@ pin the coverage limits. This is descriptive verification, not acceptance of the
 ADR or completion of the pure-layer guard, package contracts, examples or reconciliation tasks.
 
 Claude's import-map review found three real gaps, now fixed with warm-cache, persisted
-GOFLAGS and compiler-valid uncovered-target regressions. Its audit is closed; the task
-stays in progress pending Antigravity. Wildcard discovery limits are explicit rather
-than overstated as universal production coverage, and import policy remains separate.
+GOFLAGS and compiler-valid uncovered-target regressions. Antigravity's follow-up adds
+source-token rejection, CRLF equivalence and real-module root/support/near-collision
+coverage. Both audits are closed and the import-map task is completed. Wildcard limits
+are explicit rather than overstated as universal production coverage; import policy
+remains separate. The healthy frontier has selective package contracts and the policy
+ADR eligible next, while reconciliation still waits on its other prerequisites.

@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6g63hjm7cp6w
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Verify the focused architecture guide’s exact production internal import map against default-host go list metadata.
 effort: 2-4 hours
@@ -14,6 +14,7 @@ depends_on: [6g6x7e2ef37r]
 updated_at: "2026-10-13"
 audit_sources: [2026-09-28-arch-hexagonal-boundaries]
 started_at: "2026-10-13"
+completed_at: "2026-10-13"
 ---
 # Test the documented import graph instead of date-stamping a manual review
 
@@ -140,5 +141,25 @@ intended regression. Every probe was restored. Final full just test (race), just
 passed. All three findings are marked fixed and Claude's audit is closed.
 The exact CI race/coverage invocation also passed with its coverage output outside
 the checkout: `go test -p 4 -race -coverprofile=/private/tmp/taskflow-import-map-coverage.out ./...`.
-Antigravity's report is still pending;
-Claude's findings and owner verification do not stand in for that independent review.
+At this checkpoint Antigravity's report was still pending; Claude's findings and
+owner verification did not stand in for that independent review.
+
+## Antigravity follow-up and closeout (2026-10-13)
+
+Antigravity's report landed while the owner waited for the requested follow-up check.
+Its Low parser-token finding is valid: Go rejects a directory named `-`, while the
+parser previously accepted `- -> core` and `- -> -`. Both malformed-row regressions
+failed before the source-token rejection was added. CRLF equivalence is now explicit.
+
+The real-module coverage suggestion partly overlaps the Claude fixes rather than
+demonstrating another implementation bug. Extended the compiler-valid fixture with
+the internal root, support subpackages and testutils/toolsmith near-collisions; actual
+discovery must retain those rows/target edges without admitting support-source rows.
+The review's broad soundness claim is limited to its uncached probes; it does not
+disprove Claude's separate warm-cache and persisted-configuration findings.
+
+Final focused/full race suites, CI-equivalent coverage, lint (0 issues), build,
+docs-check and planning link lint passed. Both audits are closed with all findings
+fixed; the task is completed. The healthy Thread still exposes selective package
+contracts and the dependency-policy ADR as its two eligible next tasks. No additional
+follow-up ticket or policy/wire change was needed for these in-scope review refinements.
