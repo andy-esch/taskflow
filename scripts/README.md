@@ -49,6 +49,11 @@ record nothing. Exit 3 means the source report had already been replaced when a 
 In that case run `receipt`: it records the delivery if the source and workspace both still hold the
 transferred bytes, and otherwise reports the delivery as uncertain rather than confirmed. A report
 copied by hand, or by a helper version without receipts, is reported as not vouched for.
+`verify` and `receipt` never delete a pending record, because a running transfer still needs it.
+While the source is unchanged, they report it as a transfer in progress or one killed before its
+rename, with `restore:` lines that remove its leftovers, including any staged copy beside the
+source deliverable. A receipt is linked into place without overwriting, so two publishers of the
+same transfer cannot replace each other's receipt.
 
 A clone's `origin` would otherwise push to the live source checkout, so `create` sets every sandbox
 push URL to `isolated-review-push-disabled://source-is-read-only`. Git has no transport for that

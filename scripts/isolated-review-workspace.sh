@@ -342,8 +342,7 @@ load_workspace() {
 	if [[ -e "$state_dir/$pending_name" ]]; then
 		[[ "$source_now" == "$source_blob" ]] ||
 			die "a transfer replaced the source report but its receipt was not recorded; resolve it with: $0 receipt --sandbox '$sandbox_root'"
-		# Interrupted before the rename: nothing was delivered.
-		rm -f "$state_dir/$pending_name"
+		refuse_unresolved_pending
 	fi
 	[[ -s "$sandbox_root/$deliverable" ]] || die "workspace deliverable must not be empty: $deliverable"
 	[[ "$(git -C "$sandbox_root" rev-parse HEAD)" == "$baseline" ]] || die "workspace HEAD changed; reviewer commits are not permitted"
@@ -369,6 +368,18 @@ load_workspace() {
 	fi
 	deliverable_changed=false
 	git -C "$sandbox_root" diff --quiet --exit-code -- "$deliverable" || deliverable_changed=true
+}
+
+# A pending record with the source still unchanged means a transfer is running,
+# or was killed before its rename. Neither verify nor receipt may delete it: a
+# running transfer still needs it. Print the owner's cleanup for a killed one.
+refuse_unresolved_pending() {
+	local message staged
+	message="a transfer is in progress, or one was interrupted before replacing the source report, which is unchanged; if no transfer is running, remove its leftovers and retry"$'\n'"$(restore_line rm -f -- "$state_dir/$pending_name")"
+	while IFS= read -r -d '' staged; do
+		message="$message"$'\n'"$(restore_line rm -f -- "$staged")"
+	done < <(find "$(dirname "$source_root/$deliverable")" -maxdepth 1 -name "$(basename "$deliverable").review-transfer.*" -print0 2>/dev/null)
+	die "$message"
 }
 
 # Only called after load_workspace passed, so verification has succeeded.
@@ -398,15 +409,32 @@ write_pending() {
 	fi
 }
 
-# Publishes the pending record as the receipt once the source holds its bytes.
-# Returns nonzero rather than dying: the caller knows whether delivery happened.
+# Publishes a complete receipt built from the pending record for this blob. It
+# is linked into place without overwriting, so concurrent publishers of one
+# transfer cannot replace each other, and a missing pending record fails rather
+# than producing an empty receipt. Returns nonzero rather than dying: the caller
+# knows whether delivery happened.
 publish_receipt() {
-	local note="$1"
+	local transferred="$1"
+	local note="$2"
 	local pending="$state_dir/$pending_name"
-	{
-		printf 'transferred_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-		[[ -z "$note" ]] || printf '%s\n' "$note"
-	} >>"$pending" && mv "$pending" "$state_dir/$receipt_name"
+	local receipt="$state_dir/$receipt_name"
+	local temporary
+	if [[ -f "$pending" && ! -L "$pending" && "$(receipt_value "$pending" transferred_blob || true)" == "$transferred" ]]; then
+		temporary="$(mktemp "$receipt.XXXXXX")" || return 1
+		if {
+			cat "$pending" &&
+				printf 'transferred_at=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" &&
+				{ [[ -z "$note" ]] || printf '%s\n' "$note"; }
+		} >"$temporary" && ln "$temporary" "$receipt" 2>/dev/null; then
+			rm -f "$temporary" "$pending"
+			return 0
+		fi
+		rm -f "$temporary"
+	fi
+	# Another publisher of this same transfer may have won the race.
+	[[ -f "$receipt" && "$(receipt_value "$receipt" transferred_blob || true)" == "$transferred" ]] &&
+		rm -f "$pending"
 }
 
 receipt_value() {
@@ -466,7 +494,7 @@ transfer_deliverable() {
 	trap - EXIT
 	[[ "$(git -C "$source_root" hash-object -- "$deliverable")" == "$transferred" ]] ||
 		die_delivered "the source report was replaced but no longer holds the transferred bytes; delivery is unconfirmed: run $0 receipt --sandbox '$sandbox_root'"
-	publish_receipt "" ||
+	publish_receipt "$transferred" "" ||
 		die_delivered "the report was delivered but its receipt was not recorded: run $0 receipt --sandbox '$sandbox_root' to record it"
 	cat "$state_dir/$receipt_name"
 }
@@ -485,10 +513,9 @@ show_receipt() {
 	if [[ ! -e "$receipt" && -f "$pending" && ! -L "$pending" ]]; then
 		transferred="$(receipt_value "$pending" transferred_blob || true)"
 		if [[ "$source_now" == "$source_blob" ]]; then
-			# Interrupted before the rename: nothing was delivered.
-			rm -f "$pending"
+			refuse_unresolved_pending
 		elif [[ -n "$transferred" && "$source_now" == "$transferred" && "$workspace_now" == "$transferred" ]]; then
-			publish_receipt "recorded_by=receipt after an interrupted transfer" ||
+			publish_receipt "$transferred" "recorded_by=receipt after an interrupted transfer" ||
 				die "the source holds the transferred report, but its receipt could not be recorded in $state_dir"
 		else
 			die "delivery uncertain: a transfer replaced the source report but was not recorded, and the bytes no longer agree (transferred ${transferred:-unknown}, source now $source_now, workspace now $workspace_now)"

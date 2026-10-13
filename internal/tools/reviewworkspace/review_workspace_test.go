@@ -713,27 +713,57 @@ func TestFailedTransfersRecordNoReceipt(t *testing.T) {
 	}
 }
 
-// withMvShim returns a fixture whose helper runs a PATH mv that can fail the
-// receipt publish or simulate an editor saving into the source just after the
-// rename: the two post-rename failures the reviewers reproduced.
-func (f fixture) withMvShim(t *testing.T, env ...string) fixture {
+// withShims returns a fixture whose helper runs PATH cp, mv, and ln shims that
+// inject the races and failures the reviewers reproduced at exact points:
+//   - EDIT_BEFORE_STAGE: append to the workspace report just before staging;
+//   - RUN_BEFORE_STAGE / RUN_AFTER_RENAME: run a concurrent helper command;
+//   - KILL_AT_STAGE: SIGKILL the transfer mid-staging, so no trap runs;
+//   - EDIT_AFTER_RENAME: an editor saves into the source after the rename;
+//   - FAIL_RECEIPT_PUBLISH: the receipt cannot be linked into place.
+func (f fixture) withShims(t *testing.T, env ...string) fixture {
 	t.Helper()
-	realMv, err := exec.LookPath("mv")
-	if err != nil {
-		t.Fatal(err)
+	shimDir := filepath.Join(f.root, "shims")
+	shimmed := f
+	shimmed.env = append(append([]string{}, f.env...), "PATH="+shimDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	for _, tool := range []string{"cp", "mv", "ln"} {
+		real, err := exec.LookPath(tool)
+		if err != nil {
+			t.Fatal(err)
+		}
+		shimmed.env = append(shimmed.env, "REAL_"+strings.ToUpper(tool)+"="+real)
 	}
-	shimDir := filepath.Join(f.root, "mv-shim")
+	writeFile(t, filepath.Join(shimDir, "cp"), `#!/usr/bin/env bash
+for destination; do :; done
+if [[ "$destination" == *.review-transfer.* ]]; then
+	source="${@: -2:1}"
+	[[ -z "${EDIT_BEFORE_STAGE:-}" ]] || printf 'late edit\n' >>"$source"
+	[[ -z "${RUN_BEFORE_STAGE:-}" ]] || bash -c "$RUN_BEFORE_STAGE" >>"$SHIM_LOG" 2>&1 || true
+	[[ -z "${KILL_AT_STAGE:-}" ]] || { "$REAL_CP" "$@"; kill -9 "$PPID"; exit 1; }
+fi
+exec "$REAL_CP" "$@"
+`, 0o755)
 	writeFile(t, filepath.Join(shimDir, "mv"), `#!/usr/bin/env bash
 for destination; do :; done
-if [[ -n "${FAIL_RECEIPT_PUBLISH:-}" && "$destination" == */transfer-receipt ]]; then exit 1; fi
 "$REAL_MV" "$@" || exit
-if [[ -n "${EDIT_AFTER_RENAME:-}" && "$destination" == "$EDIT_AFTER_RENAME" ]]; then printf 'owner save\n' >>"$destination"; fi
+if [[ "$destination" == "${SOURCE_REPORT:-}" ]]; then
+	[[ -z "${EDIT_AFTER_RENAME:-}" ]] || printf 'owner save\n' >>"$destination"
+	[[ -z "${RUN_AFTER_RENAME:-}" ]] || bash -c "$RUN_AFTER_RENAME" >>"$SHIM_LOG" 2>&1 || true
+fi
 `, 0o755)
-	shimmed := f
-	shimmed.env = append(append([]string{}, f.env...),
-		"PATH="+shimDir+string(os.PathListSeparator)+os.Getenv("PATH"), "REAL_MV="+realMv)
+	writeFile(t, filepath.Join(shimDir, "ln"), `#!/usr/bin/env bash
+for destination; do :; done
+if [[ -n "${FAIL_RECEIPT_PUBLISH:-}" && "$destination" == */transfer-receipt ]]; then exit 1; fi
+exec "$REAL_LN" "$@"
+`, 0o755)
+	shimmed.env = append(shimmed.env,
+		"SOURCE_REPORT="+filepath.Join(f.source, deliverableRel), "SHIM_LOG="+filepath.Join(f.root, "shim.log"))
 	shimmed.env = append(shimmed.env, env...)
 	return shimmed
+}
+
+// helperCommand is a shell command that runs the source copy of the helper.
+func (f fixture) helperCommand(command, sandbox string) string {
+	return fmt.Sprintf("bash %q %s --sandbox %q", filepath.Join(f.source, "scripts", "isolated-review-workspace.sh"), command, sandbox)
 }
 
 func exitCode(err error) int {
@@ -750,7 +780,7 @@ func TestInterruptedTransferIsRecordedByReceipt(t *testing.T) {
 	f := newFixture(t)
 	sandbox := f.create(t)
 	appendFile(t, filepath.Join(sandbox, deliverableRel), "\nNo findings.\n")
-	output, err := f.withMvShim(t, "FAIL_RECEIPT_PUBLISH=1").workspace(sandbox, "transfer")
+	output, err := f.withShims(t, "FAIL_RECEIPT_PUBLISH=1").workspace(sandbox, "transfer")
 	if exitCode(err) != 3 || !strings.Contains(output, "receipt was not recorded") {
 		t.Fatalf("transfer should exit 3 after delivering without a receipt; err=%v output:\n%s", err, output)
 	}
@@ -780,7 +810,7 @@ func TestUnconfirmedTransferIsNeverReportedAsDelivered(t *testing.T) {
 	f := newFixture(t)
 	sandbox := f.create(t)
 	appendFile(t, filepath.Join(sandbox, deliverableRel), "\nNo findings.\n")
-	shimmed := f.withMvShim(t, "EDIT_AFTER_RENAME="+filepath.Join(f.source, deliverableRel))
+	shimmed := f.withShims(t, "EDIT_AFTER_RENAME=1")
 	output, err := shimmed.workspace(sandbox, "transfer")
 	if exitCode(err) != 3 || !strings.Contains(output, "no longer holds the transferred bytes") {
 		t.Fatalf("transfer should exit 3 when the delivered bytes changed; err=%v output:\n%s", err, output)
@@ -791,6 +821,85 @@ func TestUnconfirmedTransferIsNeverReportedAsDelivered(t *testing.T) {
 	}
 	if output, err := f.workspace(sandbox, "transfer"); err == nil || !strings.Contains(output, "receipt was not recorded") {
 		t.Fatalf("a retry should point to receipt; err=%v output:\n%s", err, output)
+	}
+}
+
+// A concurrent receipt or verify used to delete the live pending record, so the
+// transfer published an empty, unconfirmable receipt. Neither may now touch it,
+// and publishing never overwrites a receipt another publisher recorded.
+func TestConcurrentCommandsCannotCorruptATransfer(t *testing.T) {
+	for _, tc := range []struct{ name, hook, command string }{
+		{"receipt during staging", "RUN_BEFORE_STAGE", "receipt"},
+		{"verify during staging", "RUN_BEFORE_STAGE", "verify"},
+		{"receipt right after the rename", "RUN_AFTER_RENAME", "receipt"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newFixture(t)
+			sandbox := f.create(t)
+			appendFile(t, filepath.Join(sandbox, deliverableRel), "\nNo findings.\n")
+			shimmed := f.withShims(t, tc.hook+"="+f.helperCommand(tc.command, sandbox))
+			output, err := shimmed.workspace(sandbox, "transfer")
+			delivered := f.git(t, f.source, "hash-object", "--", deliverableRel)
+			if err != nil || !strings.Contains(output, "transfer=succeeded") || !strings.Contains(output, "transferred_blob="+delivered) {
+				t.Fatalf("transfer should publish a complete receipt despite a concurrent %s; err=%v output:\n%s\nconcurrent:\n%s",
+					tc.command, err, output, readFile(t, filepath.Join(f.root, "shim.log")))
+			}
+			if output, err := f.workspace(sandbox, "receipt"); err != nil || !strings.Contains(output, "delivery=confirmed") {
+				t.Fatalf("receipt after the race: err=%v output:\n%s", err, output)
+			}
+		})
+	}
+}
+
+// A transfer killed mid-staging runs no cleanup. Its leftovers must be reported
+// with working restore lines rather than silently discarded or blamed on drift.
+func TestKilledTransferLeavesRepairableState(t *testing.T) {
+	f := newFixture(t)
+	sandbox := f.create(t)
+	appendFile(t, filepath.Join(sandbox, deliverableRel), "\nNo findings.\n")
+	original := readFile(t, filepath.Join(f.source, deliverableRel))
+	if _, err := f.withShims(t, "KILL_AT_STAGE=1").workspace(sandbox, "transfer"); err == nil {
+		t.Fatal("the killed transfer reported success")
+	}
+	if readFile(t, filepath.Join(f.source, deliverableRel)) != original {
+		t.Fatal("a transfer killed before its rename changed the source report")
+	}
+	output, err := f.workspace(sandbox, "verify")
+	if err == nil || !strings.Contains(output, "interrupted before replacing the source report") || !strings.Contains(output, ".review-transfer.") {
+		t.Fatalf("verify should report the leftovers; err=%v output:\n%s", err, output)
+	}
+	for _, line := range strings.Split(output, "\n") {
+		if command, ok := strings.CutPrefix(line, "restore: "); ok {
+			if out, err := f.runShell(command); err != nil {
+				t.Fatalf("restore line %q failed: %v\n%s", command, err, out)
+			}
+		}
+	}
+	if output, err := f.workspace(sandbox, "transfer"); err != nil || !strings.Contains(output, "transfer=succeeded") {
+		t.Fatalf("transfer after cleanup: err=%v output:\n%s", err, output)
+	}
+	if strays, _ := filepath.Glob(filepath.Join(f.source, deliverableRel) + ".review-transfer.*"); len(strays) != 0 {
+		t.Fatalf("staged copies left in the source: %v", strays)
+	}
+}
+
+// A workspace edit between hashing and staging must be refused before the
+// source is touched (exit 2), not discovered after the rename (exit 3).
+func TestWorkspaceEditDuringStagingLeavesTheSourceUnchanged(t *testing.T) {
+	f := newFixture(t)
+	sandbox := f.create(t)
+	appendFile(t, filepath.Join(sandbox, deliverableRel), "\nNo findings.\n")
+	original := readFile(t, filepath.Join(f.source, deliverableRel))
+	output, err := f.withShims(t, "EDIT_BEFORE_STAGE=1").workspace(sandbox, "transfer")
+	if exitCode(err) != 2 || !strings.Contains(output, "workspace report changed during transfer") {
+		t.Fatalf("transfer should refuse with exit 2; err=%v output:\n%s", err, output)
+	}
+	if readFile(t, filepath.Join(f.source, deliverableRel)) != original {
+		t.Fatal("a refused transfer changed the source report")
+	}
+	requireNoReceipt(t, f, sandbox)
+	if strays, _ := filepath.Glob(filepath.Join(f.source, deliverableRel) + ".review-transfer.*"); len(strays) != 0 {
+		t.Fatalf("staged copies left in the source: %v", strays)
 	}
 }
 
