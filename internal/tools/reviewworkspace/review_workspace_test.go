@@ -111,8 +111,8 @@ func (f fixture) git(t *testing.T, dir string, args ...string) string {
 	return output
 }
 
-// helper runs the copy of the script inside root, as the protocol does: create
-// uses the source checkout's copy, verify and transfer use the sandbox's copy.
+// helper runs the copy of the script inside root. The protocol always runs the
+// source checkout's copy, which reviewers cannot mutate from their sandbox.
 func (f fixture) helper(root string, args ...string) (string, error) {
 	command := exec.Command("/usr/bin/env", append([]string{"bash", filepath.Join(root, "scripts", "isolated-review-workspace.sh")}, args...)...)
 	command.Dir = f.root
@@ -141,7 +141,7 @@ func (f fixture) createFrom(t *testing.T, source string) string {
 }
 
 func (f fixture) workspace(sandbox, command string) (string, error) {
-	return f.helper(sandbox, command, "--sandbox", sandbox)
+	return f.helper(f.source, command, "--sandbox", sandbox)
 }
 
 // sharedAdmin captures the shared repository's refs, worktree registry and
@@ -809,9 +809,19 @@ func TestHandCopiedReportIsNotVouchedFor(t *testing.T) {
 	}
 }
 
-// The generated brief is the reviewer's literal instructions. Its helper calls
-// must follow the order the receipt contract needs, and it must not again ask the
-// report to record a transfer that can only happen after the report is final.
+// runShell runs a script the way a reviewer's shell would, in the fixture root.
+func (f fixture) runShell(script string) (string, error) {
+	command := exec.Command("/usr/bin/env", "bash", "-c", script)
+	command.Dir = f.root
+	command.Env = f.env
+	output, err := command.CombinedOutput()
+	return string(output), err
+}
+
+// The generated brief is the reviewer's literal instructions. The generator runs
+// for real with a fake CLI, and its handoff values and shell blocks are executed
+// verbatim: once with a failing create, which must never fall through to the
+// shared checkout, and once as a complete compliant walkthrough.
 func TestGeneratedBriefFollowsTheReceiptContract(t *testing.T) {
 	f := newFixture(t)
 	repositoryRoot, err := filepath.Abs(filepath.Join("..", "..", ".."))
@@ -820,7 +830,16 @@ func TestGeneratedBriefFollowsTheReceiptContract(t *testing.T) {
 	}
 	capture := filepath.Join(f.root, "generated-brief.md")
 	fakeCLI := filepath.Join(f.root, "fake-tskflwctl")
-	writeFile(t, fakeCLI, "#!/usr/bin/env bash\nwhile (($# > 0)); do\n\tif [[ \"$1\" == --body-file ]]; then cp \"$2\" \"$CAPTURE\"; exit 0; fi\n\tshift\ndone\n", 0o755)
+	writeFile(t, fakeCLI, `#!/usr/bin/env bash
+case " $* " in
+*" audit path "*) printf '%s\n' "$FAKE_AUDIT_PATH"; exit 0 ;;
+*" audit lint "*) exit 0 ;;
+esac
+while (($# > 0)); do
+	if [[ "$1" == --body-file ]]; then cp "$2" "$CAPTURE"; fi
+	shift
+done
+`, 0o755)
 	brief := filepath.Join(f.root, "brief.md")
 	writeFile(t, brief, strings.Join([]string{
 		"## Review brief", "Require a consumer inventory and one mutation probe.",
@@ -830,13 +849,61 @@ func TestGeneratedBriefFollowsTheReceiptContract(t *testing.T) {
 
 	command := exec.Command("/usr/bin/env", "bash", filepath.Join(repositoryRoot, "scripts", "prepare-adversarial-review-audits.sh"),
 		"--area", "receipt-contract", "--title", "Receipt contract", "--brief-file", brief,
-		"--reviewer", "claude", "--date", "2026-10-12", "-C", f.root, "--dry-run")
+		"--reviewer", "claude", "--date", "2026-10-12", "-C", f.root)
 	command.Dir = f.root
-	command.Env = append(f.env, "TSKFLWCTL="+fakeCLI, "CAPTURE="+capture)
-	if output, err := command.CombinedOutput(); err != nil || !strings.Contains(string(output), "preflight ok") {
-		t.Fatalf("generator dry run: %v\n%s", err, output)
+	command.Env = append(append([]string{}, f.env...), "TSKFLWCTL="+fakeCLI, "CAPTURE="+capture,
+		"FAKE_AUDIT_PATH="+filepath.Join(f.source, deliverableRel))
+	handoffBytes, err := command.CombinedOutput()
+	handoff := string(handoffBytes)
+	if err != nil {
+		t.Fatalf("generator: %v\n%s", err, handoff)
+	}
+	for _, want := range []string{
+		"SOURCE_ROOT=" + f.source + "\n", "AUDIT_REL=" + deliverableRel + "\n",
+		"transfer receipt in your handoff message", "[delivery]", "source checkout's `scripts/isolated-review-workspace.sh receipt",
+	} {
+		if !strings.Contains(handoff, want) {
+			t.Errorf("handoff omitted %q:\n%s", want, handoff)
+		}
 	}
 	generated := readFile(t, capture)
+	if strings.Contains(generated, `"$SANDBOX/scripts/isolated-review-workspace.sh"`) {
+		t.Error("the brief runs the reviewer-mutable sandbox copy of the helper")
+	}
+
+	var blocks []string
+	for _, part := range strings.Split(generated, "```sh\n")[1:] {
+		blocks = append(blocks, part[:strings.Index(part, "\n```")])
+	}
+	if len(blocks) != 3 {
+		t.Fatalf("generated brief has %d shell blocks, want create, verify, and transfer:\n%s", len(blocks), generated)
+	}
+	fill := func(block, auditRel string) string {
+		block = strings.ReplaceAll(block, "<SOURCE_ROOT from your handoff prompt>", f.source)
+		return strings.ReplaceAll(block, "<AUDIT_REL from your handoff prompt>", auditRel)
+	}
+
+	// The historical mistake: the absolute path the prompt also prints.
+	failed := fill(blocks[0], filepath.Join(f.source, deliverableRel))
+	if output, err := f.runShell(failed); err == nil {
+		t.Fatalf("a failing create block exited 0:\n%s", output)
+	}
+	later := "SANDBOX=\nSOURCE_ROOT=" + f.source + "\nAUDIT_REL=" + deliverableRel + "\n" + blocks[1]
+	if output, err := f.runShell(later); err == nil || !strings.Contains(output, "create failed") || strings.Contains(output, "diff --git") {
+		t.Fatalf("a later block ran without a sandbox; err=%v output:\n%s", err, output)
+	}
+
+	walkthrough := strings.Join([]string{
+		"set -e",
+		fill(blocks[0], deliverableRel),
+		`printf '\nWalkthrough report.\n' >>"$SANDBOX/$AUDIT_REL"`,
+		blocks[1], blocks[2],
+		`"$SOURCE_ROOT/scripts/isolated-review-workspace.sh" receipt --sandbox "$SANDBOX"`,
+	}, "\n")
+	if output, err := f.runShell(walkthrough); err != nil || !strings.Contains(output, "transfer=succeeded") ||
+		!strings.Contains(output, "delivery=confirmed") {
+		t.Fatalf("the literal walkthrough failed: %v\n%s", err, output)
+	}
 
 	var calls []string
 	for _, line := range strings.Split(generated, "\n") {

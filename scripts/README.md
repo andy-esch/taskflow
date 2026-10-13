@@ -9,13 +9,18 @@ taskflow's Go packages, CLI, planning schema, or audit layout:
 ```sh
 SOURCE_ROOT="$(git rev-parse --show-toplevel)"
 DELIVERABLE="path/to/review-report.md"
-SANDBOX="$(scripts/isolated-review-workspace.sh create \
-  --source "$SOURCE_ROOT" --deliverable "$DELIVERABLE" --print-path)"
+HELPER="$SOURCE_ROOT/scripts/isolated-review-workspace.sh"
+SANDBOX="$("$HELPER" create \
+  --source "$SOURCE_ROOT" --deliverable "$DELIVERABLE" --print-path)" &&
+  cd "${SANDBOX:?create failed}"
 
-"$SANDBOX/scripts/isolated-review-workspace.sh" verify --sandbox "$SANDBOX"
-"$SANDBOX/scripts/isolated-review-workspace.sh" transfer --sandbox "$SANDBOX"
-"$SANDBOX/scripts/isolated-review-workspace.sh" receipt --sandbox "$SANDBOX"
+"$HELPER" verify --sandbox "$SANDBOX"
+"$HELPER" transfer --sandbox "$SANDBOX"
+"$HELPER" receipt --sandbox "$SANDBOX"
 ```
+
+Run every command with the source checkout's copy of the helper. A reviewer probing the helper
+mutates the sandbox's copy, and a mutated verifier could attest its own changes.
 
 `create` makes an independent `--no-hardlinks` clone, overlays the current staged, unstaged,
 untracked, and deleted state, rejects a source that changes during capture, and makes one local
@@ -153,7 +158,9 @@ Use `--dry-run` to validate the brief, names, and audit collisions without creat
 an interim standalone-audit workflow; it does not decide the task-attached review storage and
 verdict questions tracked by epic 27.
 
-The generated handoff prompt includes the absolute audit path. Each reviewer translates that to the
-repository-relative deliverable used by the helper. If its source hash changes while review is
-underway, the reviewer must leave the sandbox intact and report the conflict rather than overwrite
-or merge in the shared checkout.
+The generated handoff prompt prints the absolute audit path together with the exact `SOURCE_ROOT`
+(the repository holding the audit) and repository-relative `AUDIT_REL` that the brief's commands
+use. Reviewers never derive either from their own working directory. Each generated shell block
+is guarded with `${SANDBOX:?…}`, so a failed `create` stops instead of falling through to the shared
+checkout. If the source hash changes while a review is underway, the reviewer must leave the sandbox
+intact and report the conflict rather than overwrite or merge in the shared checkout.
