@@ -154,29 +154,72 @@ assert_independent_clone() {
 	[[ -z "$(git -C "$sandbox" config --get core.worktree || true)" ]] || die "workspace has core.worktree configured"
 }
 
+# One command for the reviewer to run, quoted with printf %q so a name with
+# spaces, quotes, or glob characters stays a single argument in bash or zsh.
+restore_line() {
+	local word line="restore:"
+	for word in "$@"; do
+		line="$line $(printf '%q' "$word")"
+	done
+	printf '%s' "$line"
+}
+
+# Workspace-scoped settings for one key pattern, as NUL-delimited origin and
+# key/value records: the local file, its include/includeIf files, and
+# config.worktree. User-wide and system scopes are documented limits.
+workspace_config() {
+	local sandbox="$1"
+	local pattern="$2"
+	local scope
+	for scope in --local --worktree; do
+		git -C "$sandbox" config -z --show-origin --includes "$scope" --get-regexp "$pattern" 2>/dev/null || true
+	done
+}
+
+origin_file() {
+	local path="${2#file:}"
+	[[ "$path" == /* ]] || path="$1/$path"
+	printf '%s' "$path"
+}
+
 # Every remote must push only to the disabled URL after Git's own insteadOf
-# expansion, and no workspace push-destination setting may name a path or URL
-# instead of such a remote. This catches accidental reconfiguration; explicit-URL
-# pushes and user-wide or command-line overrides are outside a local check.
+# expansion, and no workspace setting may name a push destination other than a
+# guarded remote. This catches accidental reconfiguration; explicit-URL pushes
+# and user-wide or command-line overrides are outside a workspace check.
 check_push_guard() {
 	local sandbox="$1"
 	local source_root="$2"
-	local remotes remote urls key value
+	local remotes remote urls origin entry key value rule rules legacy
 	remotes="$(git -C "$sandbox" remote)"
 	[[ $'\n'"$remotes"$'\n' == *$'\n'origin$'\n'* ]] ||
-		die "push guard missing: remote 'origin' was removed; restore it with: git -C '$sandbox' remote add origin '$source_root' && git -C '$sandbox' remote set-url --push origin '$push_guard_url'"
+		die "push guard missing: remote 'origin' was removed"$'\n'"$(restore_line git -C "$sandbox" remote add origin "$source_root")"$'\n'"$(restore_line git -C "$sandbox" remote set-url --push origin "$push_guard_url")"
 	while IFS= read -r remote; do
 		[[ -n "$remote" ]] || continue
 		urls="$(git -C "$sandbox" remote get-url --push --all "$remote" 2>&1)" ||
 			die "push guard unreadable for remote '$remote': $urls"
-		[[ "$urls" == "$push_guard_url" ]] ||
-			die "push guard weakened: remote '$remote' would push to: $(printf '%s' "$urls" | tr '\n' ' '); restore it with: git -C '$sandbox' config --replace-all remote.$remote.pushurl '$push_guard_url' (and remove any url.*.insteadOf rule that rewrites it)"
+		[[ "$urls" != "$push_guard_url" ]] || continue
+		rules=""
+		while IFS= read -r -d '' origin && IFS= read -r -d '' entry; do
+			key="${entry%%$'\n'*}"
+			value=""
+			[[ "$entry" != *$'\n'* ]] || value="${entry#*$'\n'}"
+			[[ -n "$value" && "$push_guard_url" == "$value"* ]] || continue
+			# --worktree reads the local file again unless worktreeConfig is on.
+			rule="$(restore_line git config --file "$(origin_file "$sandbox" "$origin")" --unset-all "$key")"
+			[[ "$rules"$'\n' == *$'\n'"$rule"$'\n'* ]] || rules="$rules"$'\n'"$rule"
+		done < <(workspace_config "$sandbox" '^url\..*\.insteadof$')
+		die "push guard weakened: remote '$remote' would push to: $(printf '%s' "$urls" | tr '\n' ' ')"$'\n'"$(restore_line git -C "$sandbox" config --replace-all "remote.$remote.pushurl" "$push_guard_url")$rules"
 	done <<<"$remotes"
-	while IFS=' ' read -r key value; do
-		[[ -n "$key" ]] || continue
-		[[ "$value" == "." || $'\n'"$remotes"$'\n' == *$'\n'"$value"$'\n'* ]] ||
-			die "push guard bypassed: $key names '$value' rather than a guarded remote; remove it with: git -C '$sandbox' config --unset '$key'"
-	done < <(git -C "$sandbox" config --local --get-regexp '^(remote\.pushdefault|branch\..*\.(pushremote|remote))$' || true)
+	while IFS= read -r -d '' origin && IFS= read -r -d '' entry; do
+		key="${entry%%$'\n'*}"
+		value=""
+		[[ "$entry" != *$'\n'* ]] || value="${entry#*$'\n'}"
+		[[ "$value" != *$'\n'* ]] && [[ "$value" == "." || $'\n'"$remotes"$'\n' == *$'\n'"$value"$'\n'* ]] ||
+			die "push guard bypassed: $key names '$value' rather than a guarded remote"$'\n'"$(restore_line git config --file "$(origin_file "$sandbox" "$origin")" --unset-all "$key")"
+	done < <(workspace_config "$sandbox" '^(remote\.pushdefault|branch\..*\.(pushremote|remote))$')
+	legacy="$(find "$sandbox/.git/remotes" "$sandbox/.git/branches" -type f 2>/dev/null | head -n 1 || true)"
+	[[ -z "$legacy" ]] ||
+		die "push guard bypassed: legacy remote file $legacy can name a push URL that git remote does not list"$'\n'"$(restore_line rm -- "$legacy")"
 }
 
 create_workspace() {

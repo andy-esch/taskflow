@@ -43,9 +43,12 @@ A clone's `origin` would otherwise push to the live source checkout, so `create`
 push URL to `isolated-review-push-disabled://source-is-read-only`. Git has no transport for that
 scheme, so `git push`, `git push origin …`, and branch, `--all`, or tag pushes fail before contacting
 the source; fetching from `origin` still reads it. `verify` and `transfer` refuse a removed `origin`,
-any remote whose effective push URL (after `insteadOf` expansion) is anything else, and a workspace
+any remote whose effective push URL (after `insteadOf` expansion) is anything else, and a
 `remote.pushDefault` or `branch.<name>.pushRemote`/`remote` setting that names a path or URL instead
-of a guarded remote. Each refusal prints the `git -C <sandbox> …` command that restores the guard.
+of a guarded remote. These settings are read from every workspace scope: the local file, its
+`include.path`/`includeIf` files, and `config.worktree`. Legacy `.git/remotes` and `.git/branches`
+files are refused, because `git remote` does not list them. Each refusal prints one or more
+`restore:` lines, quoted for the shell, that restore the guard when run as written.
 
 The guard prevents accidents; it is not a security boundary. A push that names the source path or
 URL explicitly, a `git -c`/environment override, or user-wide or system Git configuration bypasses

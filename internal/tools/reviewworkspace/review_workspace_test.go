@@ -240,34 +240,69 @@ func TestPushGuardRefusesOrdinaryPushesWithoutChangingSource(t *testing.T) {
 	}
 }
 
+// Every refusal must also be repairable: the printed restore lines are run
+// literally and verify must then pass, so advice cannot silently rot.
 func TestVerifyAndTransferRejectAWeakenedPushGuard(t *testing.T) {
+	config := func(args ...string) func(t *testing.T, f fixture, sandbox string) {
+		return func(t *testing.T, f fixture, sandbox string) {
+			f.git(t, sandbox, append([]string{"config"}, args...)...)
+		}
+	}
+	include := func(key string) func(t *testing.T, f fixture, sandbox string) {
+		return func(t *testing.T, f fixture, sandbox string) {
+			file := filepath.Join(f.root, "included.gitconfig")
+			writeFile(t, file, "[remote]\n\tpushDefault = "+f.source+"\n", 0o644)
+			f.git(t, sandbox, "config", key, file)
+		}
+	}
 	for _, tc := range []struct {
 		name   string
-		weaken func(f fixture, sandbox string) []string
+		weaken func(t *testing.T, f fixture, sandbox string)
 	}{
-		{"push URL removed", func(f fixture, sandbox string) []string {
-			return []string{"config", "--unset-all", "remote.origin.pushurl"}
+		{"push URL removed", config("--unset-all", "remote.origin.pushurl")},
+		{"push URL repointed at source", func(t *testing.T, f fixture, sandbox string) {
+			f.git(t, sandbox, "remote", "set-url", "--push", "origin", f.source)
 		}},
-		{"push URL repointed at source", func(f fixture, sandbox string) []string {
-			return []string{"remote", "set-url", "--push", "origin", f.source}
+		{"second push URL", func(t *testing.T, f fixture, sandbox string) {
+			f.git(t, sandbox, "config", "--add", "remote.origin.pushurl", f.source)
 		}},
-		{"second push URL", func(f fixture, sandbox string) []string {
-			return []string{"config", "--add", "remote.origin.pushurl", f.source}
+		{"disabled URL rewritten", func(t *testing.T, f fixture, sandbox string) {
+			f.git(t, sandbox, "config", "url."+f.source+".insteadOf", pushGuardURL)
 		}},
-		{"disabled URL rewritten", func(f fixture, sandbox string) []string {
-			return []string{"config", "url." + f.source + ".insteadOf", pushGuardURL}
+		{"unguarded remote added", func(t *testing.T, f fixture, sandbox string) {
+			f.git(t, sandbox, "remote", "add", "leak", f.source)
 		}},
-		{"unguarded remote added", func(f fixture, sandbox string) []string {
-			return []string{"remote", "add", "leak", f.source}
+		{"unguarded remote with a space in its name", func(t *testing.T, f fixture, sandbox string) {
+			f.git(t, sandbox, "config", "remote.a b.url", f.source)
 		}},
-		{"origin removed", func(f fixture, sandbox string) []string {
-			return []string{"remote", "remove", "origin"}
+		{"origin removed", func(t *testing.T, f fixture, sandbox string) {
+			f.git(t, sandbox, "remote", "remove", "origin")
 		}},
-		{"push default names a path", func(f fixture, sandbox string) []string {
-			return []string{"config", "remote.pushDefault", f.source}
+		{"push default names a path", func(t *testing.T, f fixture, sandbox string) {
+			f.git(t, sandbox, "config", "remote.pushDefault", f.source)
 		}},
-		{"branch push remote names a path", func(f fixture, sandbox string) []string {
-			return []string{"config", "branch.main.pushRemote", f.source}
+		{"two push defaults", func(t *testing.T, f fixture, sandbox string) {
+			f.git(t, sandbox, "config", "--add", "remote.pushDefault", "origin")
+			f.git(t, sandbox, "config", "--add", "remote.pushDefault", f.source)
+		}},
+		{"branch push remote names a path", func(t *testing.T, f fixture, sandbox string) {
+			f.git(t, sandbox, "config", "branch.main.pushRemote", f.source)
+		}},
+		{"branch remote names a path", func(t *testing.T, f fixture, sandbox string) {
+			f.git(t, sandbox, "config", "branch.main.remote", f.source)
+		}},
+		{"branch name with an apostrophe", func(t *testing.T, f fixture, sandbox string) {
+			f.git(t, sandbox, "config", "branch.it's.pushRemote", f.source)
+		}},
+		{"included push default", include("include.path")},
+		{"conditionally included push default", include("includeIf.onbranch:main.path")},
+		{"worktree-scoped push default", func(t *testing.T, f fixture, sandbox string) {
+			f.git(t, sandbox, "config", "core.repositoryFormatVersion", "1")
+			f.git(t, sandbox, "config", "extensions.worktreeConfig", "true")
+			f.git(t, sandbox, "config", "--worktree", "remote.pushDefault", f.source)
+		}},
+		{"legacy remotes file", func(t *testing.T, f fixture, sandbox string) {
+			writeFile(t, filepath.Join(sandbox, ".git", "remotes", "src"), "URL: "+f.source+"\n", 0o644)
 		}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -279,17 +314,39 @@ func TestVerifyAndTransferRejectAWeakenedPushGuard(t *testing.T) {
 			}
 			globalBefore := readFile(t, f.globalConfig)
 			before := f.sourceState(t)
-			f.git(t, sandbox, tc.weaken(f, sandbox)...)
+			tc.weaken(t, f, sandbox)
 
+			var restore []string
 			for _, command := range []string{"verify", "transfer"} {
 				output, err := f.workspace(sandbox, command)
-				if err == nil || !strings.Contains(output, "push guard") || !strings.Contains(output, "git -C '"+sandbox+"'") {
-					t.Errorf("%s should reject the weakened guard with a remediation command; err=%v output:\n%s", command, err, output)
+				if err == nil || !strings.Contains(output, "push guard") {
+					t.Fatalf("%s should reject the weakened guard; err=%v output:\n%s", command, err, output)
+				}
+				restore = restore[:0]
+				for _, line := range strings.Split(output, "\n") {
+					if command, ok := strings.CutPrefix(line, "restore: "); ok {
+						restore = append(restore, command)
+					}
+				}
+				if len(restore) == 0 {
+					t.Fatalf("%s printed no restore command:\n%s", command, output)
 				}
 			}
 			requireSameSource(t, before, f.sourceState(t))
 			if readFile(t, f.globalConfig) != globalBefore {
 				t.Error("user-global Git configuration changed")
+			}
+
+			for _, command := range restore {
+				shell := exec.Command("/usr/bin/env", "bash", "-c", command)
+				shell.Dir = f.root
+				shell.Env = f.env
+				if output, err := shell.CombinedOutput(); err != nil {
+					t.Fatalf("printed restore command failed: %s\n%v\n%s", command, err, output)
+				}
+			}
+			if output, err := f.workspace(sandbox, "verify"); err != nil {
+				t.Fatalf("verify still refuses after running the printed restore commands %q: %v\n%s", restore, err, output)
 			}
 		})
 	}
