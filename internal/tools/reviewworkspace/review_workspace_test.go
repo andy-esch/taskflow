@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"testing"
+	"time"
 )
 
 const (
@@ -77,6 +78,7 @@ func newFixture(t *testing.T) fixture {
 	writeFile(t, filepath.Join(f.source, "src", "kept.txt"), "kept\n", 0o644)
 	writeFile(t, filepath.Join(f.source, "src", "staged.txt"), "staged\n", 0o644)
 	writeFile(t, filepath.Join(f.source, "src", "deleted.txt"), "deleted\n", 0o644)
+	writeFile(t, filepath.Join(f.source, ".gitignore"), "ignored/\n", 0o644)
 	f.git(t, f.source, "init", "-q", "-b", "main")
 	f.git(t, f.source, "add", ".")
 	f.git(t, f.source, "commit", "-qm", "fixture")
@@ -140,6 +142,24 @@ func (f fixture) createFrom(t *testing.T, source string) string {
 
 func (f fixture) workspace(sandbox, command string) (string, error) {
 	return f.helper(sandbox, command, "--sandbox", sandbox)
+}
+
+// sharedAdmin captures the shared repository's refs, worktree registry and
+// per-worktree administration, index, and objects, using only Git reads that
+// never refresh an index, so a snapshot cannot cause the change it detects.
+func (f fixture) sharedAdmin(t *testing.T) string {
+	t.Helper()
+	gitDir := filepath.Join(f.source, ".git")
+	parts := []string{
+		f.git(t, f.source, "--no-optional-locks", "for-each-ref", "--format=%(objectname) %(refname)"),
+		f.git(t, f.source, "--no-optional-locks", "worktree", "list", "--porcelain"),
+		readFile(t, filepath.Join(gitDir, "index")),
+		treeDigest(t, filepath.Join(gitDir, "objects")),
+	}
+	if _, err := os.Stat(filepath.Join(gitDir, "worktrees")); err == nil {
+		parts = append(parts, treeDigest(t, filepath.Join(gitDir, "worktrees")))
+	}
+	return strings.Join(parts, "\n--\n")
 }
 
 // sourceState captures everything a push or a stray write could change in the
@@ -288,21 +308,10 @@ func TestLinkedWorktreeSourceStaysIndependent(t *testing.T) {
 	linkedHead := f.git(t, linked, "rev-parse", "HEAD")
 	mainReport := readFile(t, filepath.Join(f.source, deliverableRel))
 
-	sharedGitDir := filepath.Join(f.source, ".git")
-	shared := func() string {
-		return strings.Join([]string{
-			f.git(t, f.source, "for-each-ref", "--format=%(objectname) %(refname)"),
-			f.git(t, f.source, "worktree", "list", "--porcelain"),
-			f.git(t, linked, "status", "--porcelain=v1", "--untracked-files=all"),
-			readFile(t, filepath.Join(sharedGitDir, "index")),
-			treeDigest(t, filepath.Join(sharedGitDir, "worktrees")),
-			treeDigest(t, filepath.Join(sharedGitDir, "objects")),
-		}, "\n--\n")
-	}
-	before := shared()
+	before := f.sharedAdmin(t)
 
 	sandbox := f.createFrom(t, linked)
-	if after := shared(); after != before {
+	if after := f.sharedAdmin(t); after != before {
 		t.Fatalf("creating a workspace from a linked worktree changed the shared repository:\nbefore:\n%s\nafter:\n%s", before, after)
 	}
 	if info, err := os.Lstat(filepath.Join(sandbox, ".git")); err != nil || !info.IsDir() {
@@ -332,6 +341,123 @@ func TestLinkedWorktreeSourceStaysIndependent(t *testing.T) {
 	}
 	if got := readFile(t, filepath.Join(f.source, deliverableRel)); got != mainReport {
 		t.Errorf("transfer wrote the main checkout's report instead of the linked worktree's: %q", got)
+	}
+}
+
+// An ignored nested worktree (like this repository's .claude/worktrees/*) holds
+// a .git file naming the shared repository. Its content may be copied, but never
+// that metadata, and verify must refuse it if it reappears in the workspace.
+func TestNestedWorktreeIsCopiedWithoutItsGitMetadata(t *testing.T) {
+	f := newFixture(t)
+	nested := filepath.Join(f.source, "ignored", "other")
+	f.git(t, f.source, "worktree", "add", "-q", "-b", "other-work", nested)
+	before := f.sharedAdmin(t)
+
+	sandbox := f.create(t)
+	copied := filepath.Join(sandbox, "ignored", "other")
+	if _, err := os.Stat(filepath.Join(copied, "src", "kept.txt")); err != nil {
+		t.Fatalf("ignored nested content was not copied: %v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(copied, ".git")); !os.IsNotExist(err) {
+		t.Fatalf("nested .git was copied into the workspace: %v", err)
+	}
+	// Without its .git, a Git command there resolves to the workspace itself.
+	if got := f.git(t, copied, "rev-parse", "--show-toplevel"); got != sandbox {
+		t.Fatalf("nested copy resolves to %q, want the workspace %q", got, sandbox)
+	}
+	appendFile(t, filepath.Join(sandbox, deliverableRel), "\nReviewed.\n")
+	if output, err := f.workspace(sandbox, "verify"); err != nil {
+		t.Fatalf("verify: %v\n%s", err, output)
+	}
+
+	// A reviewer accidentally restores the pointer: verify must not attest it.
+	writeFile(t, filepath.Join(copied, ".git"), readFile(t, filepath.Join(nested, ".git")), 0o644)
+	for _, command := range []string{"verify", "transfer"} {
+		output, err := f.workspace(sandbox, command)
+		if err == nil || !strings.Contains(output, "nested Git metadata") {
+			t.Errorf("%s should refuse nested Git metadata; err=%v output:\n%s", command, err, output)
+		}
+	}
+	if after := f.sharedAdmin(t); after != before {
+		t.Fatalf("the shared repository changed:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+}
+
+// A non-ignored nested repository cannot be fingerprinted or reproduced, so
+// create must refuse it outright rather than skip it and attest a capture.
+func TestNestedRepositoryInTheSourceIsRefused(t *testing.T) {
+	f := newFixture(t)
+	f.git(t, f.source, "worktree", "add", "-q", "-b", "nested-work", filepath.Join(f.source, "nested"))
+	before := f.sharedAdmin(t)
+	output, err := f.helper(f.source, "create", "--source", f.source, "--deliverable", deliverableRel,
+		"--sandbox-parent", f.parent, "--print-path")
+	if err == nil || !strings.Contains(output, "cannot fingerprint the source") {
+		t.Fatalf("create should refuse a nested repository; err=%v output:\n%s", err, output)
+	}
+	if entries, err := os.ReadDir(f.parent); err != nil || len(entries) != 0 {
+		t.Fatalf("a refused create left a workspace behind: %v %v", entries, err)
+	}
+	if after := f.sharedAdmin(t); after != before {
+		t.Fatalf("the shared repository changed:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+}
+
+// A content-identical but stat-dirty tracked file makes porcelain diff rewrite
+// the index. Capturing the source must leave its index bytes untouched, both
+// for a plain checkout and for a linked worktree's shared administration.
+func TestCreateLeavesAStatDirtySourceIndexUntouched(t *testing.T) {
+	f := newFixture(t)
+	linked := filepath.Join(f.root, "linked")
+	f.git(t, f.source, "worktree", "add", "-q", "-b", "review-branch", linked)
+	later := time.Now().Add(2 * time.Hour)
+	for _, root := range []string{f.source, linked} {
+		if err := os.Chtimes(filepath.Join(root, "scripts", "isolated-review-workspace.sh"), later, later); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, source := range []struct{ root, index string }{
+		{f.source, filepath.Join(f.source, ".git", "index")},
+		{linked, filepath.Join(f.source, ".git", "worktrees", "linked", "index")},
+	} {
+		before := readFile(t, source.index)
+		f.createFrom(t, source.root)
+		if readFile(t, source.index) != before {
+			t.Errorf("create from %s rewrote the source index %s", source.root, source.index)
+		}
+	}
+}
+
+// Before the fix, an overlay could replace the clone's .git with a linked
+// worktree's .git file; GNU rsync does this with the old exclude. A shim
+// reproduces that on any platform: create must stop before its first Git write.
+func TestReplacedGitDirectoryIsCaughtBeforeAnyWorkspaceWrite(t *testing.T) {
+	realRsync, err := exec.LookPath("rsync")
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := newFixture(t)
+	linked := filepath.Join(f.root, "linked")
+	f.git(t, f.source, "worktree", "add", "-q", "-b", "review-branch", linked)
+	shimDir := filepath.Join(f.root, "rsync-shim")
+	writeFile(t, filepath.Join(shimDir, "rsync"), "#!/usr/bin/env bash\nset -e\n\"$REAL_RSYNC\" \"$@\"\nfor destination; do :; done\nrm -rf \"$destination/.git\"\ncp \"$REPLACEMENT_GIT_FILE\" \"$destination/.git\"\n", 0o755)
+	shimmed := f
+	shimmed.env = append(append([]string{}, f.env...),
+		"PATH="+shimDir+string(os.PathListSeparator)+os.Getenv("PATH"),
+		"REAL_RSYNC="+realRsync,
+		"REPLACEMENT_GIT_FILE="+filepath.Join(linked, ".git"),
+	)
+	before := f.sharedAdmin(t)
+
+	output, err := shimmed.helper(linked, "create", "--source", linked, "--deliverable", deliverableRel,
+		"--sandbox-parent", f.parent, "--print-path")
+	if err == nil || !strings.Contains(output, "not an independent in-tree .git directory") {
+		t.Fatalf("create should stop at the independence check; err=%v output:\n%s", err, output)
+	}
+	if after := f.sharedAdmin(t); after != before {
+		t.Fatalf("the baseline reached the shared repository:\nbefore:\n%s\nafter:\n%s", before, after)
+	}
+	if entries, err := os.ReadDir(f.parent); err != nil || len(entries) != 0 {
+		t.Fatalf("a refused create left a workspace behind: %v %v", entries, err)
 	}
 }
 

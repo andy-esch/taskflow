@@ -72,22 +72,53 @@ validate_target() {
 	[[ "$parent" == "$root" || "$parent" == "$root/"* ]] || die "deliverable resolves outside repository: $target"
 }
 
+# Reads of the source must not write it. Porcelain diff otherwise rewrites a
+# stat-dirty index (for a linked worktree, the shared repository's copy).
+read_git() {
+	local root="$1"
+	shift
+	git --no-optional-locks --no-pager -C "$root" -c diff.autoRefreshIndex=false "$@"
+}
+
 # HEAD plus the net tracked diff and non-ignored untracked content. Comparing it
-# before/after the overlay catches an owner changing the handoff mid-copy.
+# before/after the overlay catches an owner changing the handoff mid-copy. Each
+# step is checked explicitly: bash 3.2 suspends errexit inside $(...), and an
+# unhashable path such as a nested repository must fail rather than be skipped.
 source_fingerprint() {
 	local root="$1"
-	local record relative
-	record="$(mktemp "${TMPDIR:-/tmp}/isolated-review-fingerprint.XXXXXX")"
-	{
-		git -C "$root" rev-parse HEAD
-		git -C "$root" --no-pager diff --binary --full-index --no-ext-diff HEAD --
+	local record untracked relative ok=true
+	record="$(mktemp "${TMPDIR:-/tmp}/isolated-review-fingerprint.XXXXXX")" || return 1
+	untracked="$record.untracked"
+	if read_git "$root" rev-parse HEAD >"$record" &&
+		read_git "$root" diff --binary --full-index --no-ext-diff HEAD -- >>"$record" &&
+		read_git "$root" ls-files --others --exclude-standard -z >"$untracked"; then
 		while IFS= read -r -d '' relative; do
-			printf 'untracked\0%s\0' "$relative"
-			git -C "$root" hash-object -- "$relative"
-		done < <(git -C "$root" ls-files --others --exclude-standard -z)
-	} >"$record"
-	git hash-object "$record"
-	rm -f "$record"
+			printf 'untracked\0%s\0' "$relative" >>"$record"
+			read_git "$root" hash-object -- "$relative" >>"$record" || {
+				ok=false
+				break
+			}
+		done <"$untracked"
+	else
+		ok=false
+	fi
+	if $ok; then
+		git hash-object "$record" || ok=false
+	fi
+	rm -f "$record" "$untracked"
+	$ok
+}
+
+# Only the workspace's own root .git may exist. A copied linked-worktree .git
+# file, submodule, or nested repository would bind part of the workspace to
+# another repository's administration while the root still looks independent.
+refuse_nested_git() {
+	local sandbox="$1"
+	local found
+	found="$(find "$sandbox" -path "$sandbox/.git" -prune -o -name .git -print)" ||
+		die "cannot scan the workspace for nested Git metadata"
+	[[ -z "$found" ]] ||
+		die "workspace contains nested Git metadata: ${found%%$'\n'*}; it can act on another repository, so move it outside the workspace"
 }
 
 write_state() {
@@ -175,19 +206,22 @@ create_workspace() {
 
 	local source_blob before sandbox after sandbox_state baseline git_dir state_dir
 	source_blob="$(git -C "$source_root" hash-object -- "$deliverable")"
-	before="$(source_fingerprint "$source_root")"
+	before="$(source_fingerprint "$source_root")" ||
+		die "cannot fingerprint the source working state (an unhashable path such as a nested repository?)"
 	sandbox="$(mktemp -d "$parent/isolated-review.XXXXXX")"
 	trap 'if [[ -n "${sandbox:-}" && -d "$sandbox" ]]; then rm -rf "$sandbox"; fi' EXIT
 	git clone --quiet --no-hardlinks "$source_root" "$sandbox"
 	git -C "$sandbox" remote set-url --push origin "$push_guard_url"
-	# A linked-worktree source has a .git file naming the shared repository, so
-	# exclude the root .git of either type rather than only a directory.
-	rsync -a --delete --exclude='/.git' "$source_root/" "$sandbox/"
-	# Re-check before any workspace Git write: an overlay that replaced .git would
-	# otherwise stage and commit the baseline into the source repository.
+	# Exclude every .git, file or directory, at any depth: a linked-worktree source
+	# has a root .git file, and nested worktrees carry their own .git files, all
+	# naming the shared repository's administration.
+	rsync -a --delete --exclude='.git' "$source_root/" "$sandbox/"
+	# Re-check before any workspace Git write: an overlay that replaced or nested
+	# .git would otherwise stage and commit the baseline into another repository.
+	refuse_nested_git "$sandbox"
 	assert_independent_clone "$sandbox" "$(git -C "$sandbox" rev-parse --absolute-git-dir)"
-	after="$(source_fingerprint "$source_root")"
-	sandbox_state="$(source_fingerprint "$sandbox")"
+	after="$(source_fingerprint "$source_root")" || die "cannot fingerprint the source working state after the copy"
+	sandbox_state="$(source_fingerprint "$sandbox")" || die "cannot fingerprint the workspace overlay"
 	[[ "$before" == "$after" ]] || die "source working state changed during the copy; freeze the handoff and retry"
 	[[ "$after" == "$sandbox_state" ]] || die "workspace overlay does not match the source working state"
 
@@ -250,6 +284,7 @@ load_workspace() {
 	[[ -s "$sandbox_root/$deliverable" ]] || die "workspace deliverable must not be empty: $deliverable"
 	[[ "$(git -C "$sandbox_root" rev-parse HEAD)" == "$baseline" ]] || die "workspace HEAD changed; reviewer commits are not permitted"
 	git -C "$sandbox_root" diff --cached --quiet --exit-code -- || die "workspace has staged changes"
+	refuse_nested_git "$sandbox_root"
 	check_push_guard "$sandbox_root" "$source_root"
 
 	local dirty=0 invalid="" entry status relative
