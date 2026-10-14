@@ -21,35 +21,69 @@ own API details; [.golangci.yml](../../.golangci.yml) owns enforceable import po
 | Test/tool support | `testutil`, `tools/*` | Fixture or one-off executable dependencies, not runtime layers |
 
 Names above are under `internal/` unless explicitly prefixed with `cmd/`.
-The descriptive map below intentionally summarizes presentation edges; it is not
-the lint allowlist or a complete machine-generated import inventory.
+The map records direct module-internal imports for production packages selected by
+`go list ./internal/...`, including leaves. Source rows exclude `testutil`, the
+`tools` namespace and test-only packages;
+imports *into* support packages are not hidden. Standard-library/third-party imports,
+test imports and transitive dependencies are outside this inventory.
+Go's wildcard skips `_`/`.` directories, `testdata` and nested modules. A non-support
+target without a source row fails with a named coverage diagnostic rather than
+silently blessing a partial graph; unreferenced skipped packages remain outside scope.
 
+<!-- taskflow:internal-import-map:v1 -->
 ```text
-domain      -> id
-core        -> domain, id
-wire        -> core, domain
-store       -> core, domain, id
-config      -> domain, id, tomledit
-userconfig  -> tomledit
-spacehealth -> config, domain, userconfig
-configstore -> core, config, userconfig
-spacestore  -> config, core, domain, spacehealth, store, userconfig
-workspacestore -> config, core, domain, store
-configui    -> core + presentation utilities
-tui         -> core, domain, configui + presentation/process utilities
-cli/render  -> core, domain, wire + presentation utilities
-cli/ports   -> core, design
-cli         -> cli/ports, core, domain, wire + presentation/process utilities
-               config only in init.go and workspace.go (named local exceptions)
-graphfmt    -> core
-appwiring   -> cli/ports, core, design, config, configstore, spacestore,
-               userconfig, workspacestore, tui, configui
+appwiring        -> cli/ports, config, configstore, configui, core, design, spacestore, tui,
+                    userconfig, workspacestore
+cli              -> cli/ports, cli/prompt, cli/render, config, core, design, domain, editor,
+                    graphfmt, id, wire
+cli/ports        -> core, design
+cli/prompt       -> design
+cli/render       -> core, design, domain, progressbar, theme, themepreview, wire
+config           -> domain, id, tomledit
+configstore      -> config, core, userconfig
+configui         -> core, design, themepreview
+core             -> domain, id
+design           -> theme
+domain           -> id
+editor           -> -
+graphfmt         -> core
+id               -> -
+listfilter       -> -
+progressbar      -> design, theme
+spacehealth      -> config, domain, userconfig
+spacestore       -> config, core, domain, spacehealth, store, userconfig
+store            -> core, domain, id
+theme            -> domain
+themepreview     -> design, progressbar, theme
+tomledit         -> -
+tui              -> configui, core, design, domain, editor, listfilter, progressbar, theme
+userconfig       -> tomledit
+wire             -> core, domain
+workspacestore   -> config, core, domain, store
 ```
+<!-- /taskflow:internal-import-map:v1 -->
 
-The [import-map task](../../planning/tasks/6g63hjm7cp6w-test-the-documented-import-graph-instead-of-date-stamping-a-manual-review.md)
-will verify this descriptive map after choosing its parser/representation. Until
-then it remains a manual projection; do not replace its policy distinctions with
-a date saying someone reviewed it.
+[The import-map check](../../internal/tools/architecturecheck/imports_test.go)
+compares both rows and edges with default-build `go list` metadata for the current
+GOOS/GOARCH. It disables workspace mode and overrides both process and persisted
+GOFLAGS with `-mod=readonly`, uses
+[read-only module mode](https://go.dev/ref/mod#build-commands),
+and fails on incomplete metadata; this is not a custom-tag or all-platform union.
+Run `go test ./internal/tools/architecturecheck -run '^TestArchitectureImportMap$' -count=1`
+(or `just test`). Drift prints removed documented facts and added code facts.
+The [warm-cache regression](../../internal/tools/architecturecheck/imports_cache_test.go)
+pins source edits and added/removed leaves: the test records internal-tree and module
+metadata because Go's result cache cannot observe its child process's file access.
+Use the explicit `-count=1` command for a fresh scan after changing toolchain/build context.
+Review the change against depguard and the named exceptions before editing the map:
+**observed imports are not an allowlist**. File-specific exceptions remain below.
+
+The versioned markers delimit one fenced `text` block. Each row is
+`source -> target, target` with literal internal-relative paths (`.` for the root);
+`-` alone on the right-hand side means no internal imports. Ordering, spacing,
+comments after `#` and comma-separated lists wrapped across lines are immaterial. Duplicate sources/targets,
+missing markers and shorthand are errors. The role table and rationale remain
+human-owned, not a mechanically inferred classification.
 
 ## Enforced fitness rules
 
