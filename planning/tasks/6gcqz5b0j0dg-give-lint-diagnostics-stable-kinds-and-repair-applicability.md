@@ -12,7 +12,7 @@ tags: [lint, diagnostics, json, agents]
 created: "2026-09-22"
 audit_sources: [planning/audits/6gc7jd9aq1q9-2026-09-21-arch-failure-and-recovery.md]
 depends_on: [6fkkz41cax80, 6gcqz5aefjjf]
-updated_at: "2026-09-22"
+updated_at: "2026-10-13"
 ---
 
 # Give lint diagnostics stable kinds and repair applicability
@@ -68,3 +68,5 @@ safe to repair automatically.
 - Policy gate [frontmatter-schema ADR questions](6fkkz41cax80-adr-close-frontmatter-schema-policy-questions.md)
 - Diagnostic predecessor [adapter-neutral lint load diagnostics](6g5vm4efjcdv-make-repository-lint-load-diagnostics-adapter-neutral.md)
 - Rule predecessor [unreadable cross-kind ID collisions](6gcqz5aefjjf-lint-cross-kind-task-and-thread-id-collisions-on-unreadable-records.md)
+
+Cross-referenced by audit 2026-10-13-correctness-and-errors, finding M2 (partial overlap): `store/flatname.go` reports a case-only entity-id defect as a Crockford exclusion and advises replacing the identity, so this task's applicability vocabulary would classify a mechanically fixable rename as `refused`. Fixing M2 first keeps the wrong disposition out of the machine contract.
