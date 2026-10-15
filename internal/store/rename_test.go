@@ -354,7 +354,7 @@ func TestRenameTask_ReplansAfterCooperatingCascadeDocumentWrite(t *testing.T) {
 		done <- outcome{result: result, err: err}
 	}()
 	<-ready
-	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("b", map[string]any{"priority": "low"}, false); err != nil {
+	if _, err := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations()))).SetFields("b", map[string]any{"priority": "low"}, false, false); err != nil {
 		t.Fatal(err)
 	}
 	close(release)
@@ -399,7 +399,7 @@ func TestRenameTask_RejectsSourceChangedWhileWaitingBeforeCascadeWrites(t *testi
 		done <- renameOutcome{result: result, err: err}
 	}()
 	<-ready
-	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("old", map[string]any{"priority": "low"}, false); err != nil {
+	if _, err := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations()))).SetFields("old", map[string]any{"priority": "low"}, false, false); err != nil {
 		t.Fatal(err)
 	}
 	close(release)

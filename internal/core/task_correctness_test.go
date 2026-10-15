@@ -30,9 +30,9 @@ func (s *criterionIdentityStore) ReadTask(ref string) (LoadedRecord[TaskWithBody
 	return record, nil
 }
 
-func (s *criterionIdentityStore) TransformTaskBody(ref string, _ time.Time, dryRun bool, transform func(string) (string, error)) (domain.Task, string, bool, error) {
+func (s *criterionIdentityStore) TransformTaskBody(target TaskMutationTarget, _ time.Time, dryRun bool, transform func(string) (string, error)) (domain.Task, string, bool, error) {
 	s.transforms++
-	s.transformRef = ref
+	s.transformRef = target.ID
 	next, err := transform(s.body)
 	if err != nil {
 		return domain.Task{}, "", false, err
@@ -100,6 +100,21 @@ func TestCriteriaTrackingPreservesCanonicalResolutionErrors(t *testing.T) {
 					t.Fatalf("canonical resolution error was masked or reached effects: err=%v changed=%v transforms=%d body=%q", err, changed, st.transforms, st.body)
 				}
 			})
+		}
+	}
+}
+
+func TestCriteriaTrackingDoesNotMisreportCanonicalFallbackAsSelf(t *testing.T) {
+	sourceID := testutil.TaskID("source")
+	for _, dry := range []bool{false, true} {
+		record := LoadedRecord[TaskWithBody]{Source: RecordSource{ID: sourceID}}
+		st := &criterionIdentityStore{records: map[string]LoadedRecord[TaskWithBody]{
+			"source": record, "same-source-alias": record,
+			sourceID: {Source: RecordSource{ID: testutil.TaskID("impostor")}},
+		}}
+		_, _, _, err := MustNewService(st).SetCriteriaTracked("source", []int{1}, "same-source-alias", "follow up", dry)
+		if !errors.Is(err, domain.ErrNotFound) || strings.Contains(err.Error(), "its own task") || st.transforms != 0 {
+			t.Fatalf("canonical fallback was misreported or reached mutation: err=%v transforms=%d", err, st.transforms)
 		}
 	}
 }

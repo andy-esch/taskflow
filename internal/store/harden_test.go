@@ -80,7 +80,7 @@ func TestFS_SetFields_ConflictsWhenEditedConcurrently(t *testing.T) {
 	}
 	defer func() { testHookBeforeSetFieldsWrite = nil }()
 
-	_, err := fs.SetFields("alpha", map[string]any{"priority": "high"}, false)
+	_, err := fs.SetFields(core.TaskMutationTarget{ID: testutil.TaskID("alpha")}, map[string]any{"priority": "high"}, false)
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("want ErrConflict for a concurrently-edited task, got %v", err)
 	}
@@ -127,7 +127,7 @@ func TestFS_SetFields_CRLFRoundTrip(t *testing.T) {
 	path, out := testutil.TaskFixture(root, "ready-to-start", "alpha.md", crlf)
 	testutil.Write(t, path, out)
 
-	task, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("alpha", map[string]any{"description": "new desc"}, false)
+	task, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields(core.TaskMutationTarget{ID: testutil.TaskID("alpha")}, map[string]any{"description": "new desc"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,7 +169,7 @@ func TestFS_UnterminatedFrontmatterIsAProblemNotAnEmptyTask(t *testing.T) {
 		t.Errorf("problem should name the unterminated fence, got %q", problems[0].Message)
 	}
 
-	_, err = fs.SetFields("alpha", map[string]any{"priority": "high"}, false)
+	_, err = fs.SetFields(core.TaskMutationTarget{ID: testutil.TaskID("alpha")}, map[string]any{"priority": "high"}, false)
 	if err == nil {
 		t.Fatal("SetFields must refuse an unterminated-frontmatter file")
 	}

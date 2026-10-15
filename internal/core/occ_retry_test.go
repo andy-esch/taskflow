@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 // conflictStore returns domain.ErrConflict for the first `conflicts` calls to each mutating
@@ -36,15 +37,19 @@ func (c *conflictStore) errFor(n int) error {
 	return nil
 }
 
-func (c *conflictStore) SetFields(slug string, _ map[string]any, _ bool) (domain.Task, error) {
+func (c *conflictStore) ResolveTaskSource(ref string) (RecordSource, error) {
+	return RecordSource{ID: testutil.TaskID(ref)}, nil
+}
+
+func (c *conflictStore) SetFields(target TaskMutationTarget, _ map[string]any, _ bool) (domain.Task, error) {
 	c.setCalls++
-	return domain.Task{Slug: slug}, c.errFor(c.setCalls)
+	return domain.Task{ID: target.ID}, c.errFor(c.setCalls)
 }
-func (c *conflictStore) EditBody(slug, text string, _ bool, _ time.Time, _ bool) (domain.Task, string, error) {
+func (c *conflictStore) EditBody(target TaskMutationTarget, text string, _ bool, _ time.Time, _ bool) (domain.Task, string, error) {
 	c.bodyCalls++
-	return domain.Task{Slug: slug}, text, c.errFor(c.bodyCalls)
+	return domain.Task{ID: target.ID}, text, c.errFor(c.bodyCalls)
 }
-func (c *conflictStore) TransformTaskBody(slug string, _ time.Time, _ bool, transform func(string) (string, error)) (domain.Task, string, bool, error) {
+func (c *conflictStore) TransformTaskBody(target TaskMutationTarget, _ time.Time, _ bool, transform func(string) (string, error)) (domain.Task, string, bool, error) {
 	c.transformCalls++
 	body, err := transform("# Task\n\n## Acceptance criteria\n\n- [ ] works\n")
 	if err != nil {
@@ -53,7 +58,7 @@ func (c *conflictStore) TransformTaskBody(slug string, _ time.Time, _ bool, tran
 	if err := c.errFor(c.transformCalls); err != nil {
 		return domain.Task{}, "", false, err
 	}
-	return domain.Task{Slug: slug}, body, true, nil
+	return domain.Task{ID: target.ID}, body, true, nil
 }
 func (c *conflictStore) MoveAudit(slug string, _ domain.AuditBucket, _ bool) (domain.Audit, error) {
 	c.auditMoveCalls++

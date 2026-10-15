@@ -109,7 +109,7 @@ func TestBlockScalarFieldWritesPreserveValuesAndRefusalLeavesFileUntouched(t *te
 	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	want := fidelityValues(t, []byte(content))
 	for i := range 5 {
-		if _, err := fs.SetFields("probe", map[string]any{"tier": 2 + i%3}, false); err != nil {
+		if _, err := fs.SetFields(core.TaskMutationTarget{ID: testutil.TaskID("probe")}, map[string]any{"tier": 2 + i%3}, false); err != nil {
 			t.Fatal(err)
 		}
 		after, err := os.ReadFile(path)
@@ -122,7 +122,7 @@ func TestBlockScalarFieldWritesPreserveValuesAndRefusalLeavesFileUntouched(t *te
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := fs.SetFields("probe", map[string]any{"notes": "would break the alias"}, false); !errors.Is(err, domain.ErrValidation) {
+	if _, err := fs.SetFields(core.TaskMutationTarget{ID: testutil.TaskID("probe")}, map[string]any{"notes": "would break the alias"}, false); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("unsafe field write must fail closed: %v", err)
 	}
 	after, err := os.ReadFile(path)
@@ -199,7 +199,7 @@ func TestBlockScalarParagraphCommentsAllowFieldWrites(t *testing.T) {
 			before := []byte(content)
 			testutil.Write(t, path, content)
 			fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
-			if _, err := fs.SetFields("paragraph-comments", map[string]any{"tier": 3}, false); err != nil {
+			if _, err := fs.SetFields(core.TaskMutationTarget{ID: testutil.TaskID("paragraph-comments")}, map[string]any{"tier": 3}, false); err != nil {
 				t.Fatal(err)
 			}
 			after, err := os.ReadFile(path)

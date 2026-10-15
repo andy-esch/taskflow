@@ -70,6 +70,20 @@ func (s *FS) ReadTask(ref string) (core.LoadedRecord[core.TaskWithBody], error) 
 	return s.readTask(ref)
 }
 
+// ResolveTaskSource selects filename-established identity even when the document
+// cannot decode as a Task. SetFields validates its repaired bytes before writing;
+// body writes keep their own reload validation. Neither lookup grants authority.
+func (s *FS) ResolveTaskSource(ref string) (core.RecordSource, error) {
+	if err := s.rejectRepositoryPlannerCall(); err != nil {
+		return core.RecordSource{}, err
+	}
+	path, err := s.resolve(ref)
+	if err != nil {
+		return core.RecordSource{}, err
+	}
+	return taskSource(path), nil
+}
+
 func (s *FS) ReadEpics() (core.EpicRead, error) {
 	records, problems, err := s.scanEpics()
 	if err != nil {

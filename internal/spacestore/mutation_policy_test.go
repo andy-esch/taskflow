@@ -66,7 +66,7 @@ func TestSummaryPlanningStoresCannotInheritRegistryMutationPrivilege(t *testing.
 			t.Fatalf("read-only summary tasks=%v err=%v", tasks, err)
 		}
 		for _, dryRun := range []bool{true, false} {
-			if _, err := fs.SetFields("probe", map[string]any{"priority": "low"}, dryRun); !errors.Is(err, core.ErrReadOnlyPersistence) {
+			if _, err := fs.SetFields(core.TaskMutationTarget{}, map[string]any{"priority": "low"}, dryRun); !errors.Is(err, core.ErrReadOnlyPersistence) {
 				t.Fatalf("widened summary capability authorized mutation: %v", err)
 			}
 		}

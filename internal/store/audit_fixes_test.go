@@ -35,7 +35,7 @@ func TestFS_SetFields_RejectsEmptyTagsOnActiveTask(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "ready-to-start", "alpha.md",
 		"---\nstatus: ready-to-start\ndescription: a\ntags: [seed]\n---\n# Alpha\n")
-	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("alpha", map[string]any{"tags": []string{}}, false)
+	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields(core.TaskMutationTarget{ID: testutil.TaskID("alpha")}, map[string]any{"tags": []string{}}, false)
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("emptying tags on an active task must be rejected, got %v", err)
 	}
@@ -50,7 +50,7 @@ func TestFS_SetFields_RejectsClearedDescriptionOnActive(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "in-progress", "alpha.md",
 		"---\nstatus: in-progress\ndescription: a\ntags: [seed]\n---\n# Alpha\n")
-	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("alpha", map[string]any{"description": ""}, false); !errors.Is(err, domain.ErrValidation) {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields(core.TaskMutationTarget{ID: testutil.TaskID("alpha")}, map[string]any{"description": ""}, false); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("clearing the description of an in-progress task must be rejected, got %v", err)
 	}
 }
@@ -62,7 +62,7 @@ func TestFS_SetFields_AllowsUntaggedCompletedTask(t *testing.T) {
 	root := t.TempDir()
 	writeTask(t, root, "completed", "done.md",
 		"---\nstatus: completed\ndescription: d\n---\n# Done\n")
-	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("done", map[string]any{"priority": "high"}, false); err != nil {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields(core.TaskMutationTarget{ID: testutil.TaskID("done")}, map[string]any{"priority": "high"}, false); err != nil {
 		t.Fatalf("SetFields on an untagged completed task should succeed, got %v", err)
 	}
 }
@@ -154,7 +154,7 @@ func TestFS_SetFields_PreexistingCorruptionAttributedToFile(t *testing.T) {
 	// Duplicate top-level key: yaml.Node accepts it, but the typed decode rejects it.
 	writeTask(t, root, "ready-to-start", "dup.md",
 		"---\nstatus: ready-to-start\ntier: 2\ntier: 3\ntags: [x]\n---\n# Dup\n")
-	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("dup", map[string]any{"priority": "high"}, false)
+	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields(core.TaskMutationTarget{ID: testutil.TaskID("dup")}, map[string]any{"priority": "high"}, false)
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("want ErrValidation, got %v", err)
 	}
