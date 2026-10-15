@@ -1,10 +1,10 @@
 ---
 schema: 1
 id: 6gk9j6ff3ke9
-bucket: open
+bucket: closed
 area: correctness-and-errors
 date: "2026-10-13"
-updated_at: "2026-10-13"
+updated_at: "2026-10-14"
 ---
 
 # Audit: correctness-and-errors — 2026-10-13
@@ -28,7 +28,7 @@ updated_at: "2026-10-13"
 **Resolution:** <how it was resolved — written by `audit finding --note`, not by hand>
 ```
 
-#### M1. Self-track guard compares a resolved slug against an unresolved ref, so two of four ref shapes bypass it · **Status:** open
+#### M1. Self-track guard compares a resolved slug against an unresolved ref, so two of four ref shapes bypass it · **Status:** fixed
 
 **File:** internal/core/service_task.go:444 | **Component:** core/task-criteria
 **Effort:** XS · **Urgency:** soon
@@ -90,7 +90,13 @@ constructs the self-reference state in any ref shape, let alone a mismatched pai
 
 **Recommendation:** Resolve the source task first and compare stable ids: reject when destinationRecord.Source.ID equals the source record's Source.ID, not when destination.Slug equals the caller's ref.
 
-#### M2. A case-only entity-id defect is reported as non-Crockford and told to replace the identity · **Status:** open
+**Resolution:** Resolve both endpoints through ReadTask, require canonical
+    source evidence, compare RecordSource.ID and bind the body transform to the
+    resolved source ID. Portable drift/same-slug tests and 50 real CLI
+    alias/preview combinations pass. Fresh-binary ID/prefix self-tracking probes
+    exit 11 without changing the SHA-256; valid destination IDs survive rename.
+
+#### M2. A case-only entity-id defect is reported as non-Crockford and told to replace the identity · **Status:** fixed
 
 **File:** internal/store/flatname.go:62 | **Component:** store/identity-diagnostics
 **Effort:** S · **Urgency:** soon
@@ -155,7 +161,14 @@ for the fourth case has no test because nobody enumerated a fourth case.
 
 **Recommendation:** Branch on case before reaching the Crockford message: when strings.ToLower(cand) is id.Valid, report a case-only defect and suggest the lowercase rename; and gate the 'u has no canonical decode' clause on the id actually containing a u.
 
-#### M3. Map iteration makes task set's written key order and its rejection message nondeterministic · **Status:** open
+**Resolution:** Shared strict ID diagnostics distinguish casing from excluded
+    characters across filename, create and update paths. Case-only and mixed
+    alias advice preserves canonical spelling; u advice is conditional on actual
+    u/U. Automatic repair remains unchanged and refuses casing with accurate
+    manual advice. Real JSON/list/fix probes retain bytes and filename spelling;
+    focused and full race tests pass.
+
+#### M3. Map iteration makes task set's written key order and its rejection message nondeterministic · **Status:** fixed
 
 **File:** internal/store/frontmatter.go:141 | **Component:** store/frontmatter,core/task-set
 **Effort:** XS · **Urgency:** soon
@@ -230,7 +243,14 @@ it asserted over repeated runs.
 
 **Recommendation:** Iterate a sorted key slice in both loops (slices.Sorted(maps.Keys(updates))) so appended frontmatter keys land in a stable order and the first rejection is always the same field.
 
-#### L1. NewTask does not enforce the Next/Start exclusivity it documents; only cobra does · **Status:** open
+**Resolution:** Core validates update keys lexically; the shared YAML writer
+    applies keys lexically while replacing old keys in place. Repeated tests pin
+    deterministic errors/new-key order and LF/CRLF comments, block scalars and
+    body preservation. Fresh binary reports aaa for 10/10 invalid multi-field
+    calls without byte changes, and reversed custom updates append
+    alpha/beta/zeta.
+
+#### L1. NewTask does not enforce the Next/Start exclusivity it documents; only cobra does · **Status:** fixed
 
 **File:** internal/core/service_task.go:776 | **Component:** core/task-create
 **Effort:** XS · **Urgency:** eventually
@@ -265,6 +285,28 @@ notice the precedence — a core-level test passing both would simply observe
 `in-progress` and read as correct.
 
 **Recommendation:** Reject Next && Start in NewTask beside the existing templateBodyConflict check, so a second adapter gets the refusal rather than silent Start precedence.
+
+**Resolution:** NewTask rejects Next plus Start with ErrValidation before epic
+    reads, ID minting or creation, for both preview and write callers. Spy tests
+    demonstrate no effects and the explicit exclusivity refusal; existing
+    individual Next/Start regressions remain green. This is application
+    validation, not a Cobra-only guard.
+
+#### L2. ID-only criterion handoffs are writable but fail parsed lint · **Status:** tracked by 6gkkzvr92waq
+
+**File:** internal/core/service_task.go:456 | **Component:** core/domain/criteria
+**Effort:** S · **Urgency:** eventually
+
+Owner-discovered during the detour, not part of the external audit's initial four findings. The fresh binary in an unregistered throwaway space accepted task ac --tracked 1 --to valid-destination with no --reason (exit 0). Its JSON acceptance view contained a tracked_by ID and omitted reason. The immediate lint --links returned exit 11: criterion 1 is tracked with no reason. Repeating the handoff with explanatory prose made lint green.
+
+SetCriteriaTracked uses FormatTrackedReason to insert a by-ID prefix. SetCriteriaState sees nonempty raw text, but domain.TrackedDestination separates that ID from prose and lint checks the parsed explanation. The writer and linter consequently disagree. Existing comments/help and historic decisions do not unambiguously settle whether a resolved destination alone counts as explanation; the follow-up needs an explicit policy decision, not an assumed parser or wire change.
+
+**Recommendation:** Decide whether separate explanation is required, then make write validation and parsed lint agree.
+
+**Resolution:** Owner reproduced accepted ID-only handoff followed by lint
+    refusal in an unregistered throwaway space. Policy choice is explicitly
+    scoped to follow-up 6gkkzvr92waq after this detour, with no reason-contract
+    change here.
 
 ## Punch list
 
@@ -429,7 +471,8 @@ On the lens's own high-yield pattern — a `switch` over a closed domain vocabul
 <!-- candidate-tasks:v1 · ○ open · ● in-progress · ✔ fixed · → tracked · ◌ deferred · ◌ superseded · ✘ wontfix -->
 <!-- Add or replace one row with `tskflwctl audit finding <audit> <code> --candidate "<one line>"`; an empty value removes it. -->
 
-- ○ M1 · open — `tskflwctl task new "Compare stable ids in the criterion self-track guard" --epic 21-code-quality-architecture-hardening --tags core,criteria,correctness --tier 2 --priority medium --description "SetCriteriaTracked compares the destination slug to the unresolved source ref, so an id/slug or prefix/slug pair tracks a criterion to its own task."`
-- ○ M2 · open — `tskflwctl task new "Tell a case-only entity id apart from a non-Crockford one" --epic 26-frontmatter-schema-declared-validation-contract --tags store,diagnostics,identity --tier 2 --priority medium --description "An upper-cased filename id is reported as a Crockford exclusion and advised to be replaced deliberately, when the correct repair is an identity-preserving lowercase rename."`
-- ○ M3 · open — `tskflwctl task new "Make task set writes and rejections deterministic over the update map" --epic 21-code-quality-architecture-hardening --tags store,core,determinism --tier 2 --priority medium --description "updateFrontmatter and Service.SetFields range over map[string]any, so appending two or more new frontmatter keys produces a different file each run and a multi-unknown-field request blames an arbitrary one."`
-- ○ L1 · open — `tskflwctl task new "Enforce the documented Next/Start exclusivity inside NewTask" --epic 21-code-quality-architecture-hardening --tags core,validation --tier 4 --priority low --description "NewTaskParams documents Next and Start as mutually exclusive but only the cobra adapter enforces it; core silently lets Start win."`
+- ✔ M1 · fixed — Implemented in 6gkg89ay3b5b — canonical criterion identities
+- ✔ M2 · fixed — Implemented in 6gkg89ay3b5b — identity-preserving diagnostics
+- ✔ M3 · fixed — Implemented in 6gkg89ay3b5b — deterministic field operations
+- ✔ L1 · fixed — Implemented in 6gkg89ay3b5b — application lifecycle option validation
+- → L2 · tracked — Resolve in 6gkkzvr92waq after the canonical-identity detour
