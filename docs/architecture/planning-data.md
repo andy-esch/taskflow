@@ -50,6 +50,13 @@ retries keep its task ID while revalidating policy and impacts against fresh sna
 See [portable target tests](../../internal/core/task_target_test.go) and
 [real-store drift tests](../../internal/store/task_target_test.go).
 
+The guarantee begins at application selection, not an earlier interface selection.
+[Selected TUI actions](../../planning/tasks/6gkt3fq0pv26-preserve-selected-tui-task-identities-through-service-actions.md)
+still pass strings that can be interpreted as fresh references. The survey also
+confirmed remaining [non-task retry](../../planning/tasks/6gkt3fphx1ts-pin-non-task-mutation-retries-to-selected-source-identities.md)
+and [dependency/Thread replanning](../../planning/tasks/6gkt3fpsfdd7-keep-graph-and-thread-retry-endpoints-fixed-during-replanning.md)
+gaps. Neither canonical strings nor CAS alone establish end-to-end target binding.
+
 See [record tests](../../internal/core/entity_read_test.go),
 [source-boundary tests](../../internal/core/thread_source_boundary_test.go) and
 [wire mappings](../../internal/wire/envelopes_test.go).
