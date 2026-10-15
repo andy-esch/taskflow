@@ -6,6 +6,8 @@ package store
 import (
 	"bytes"
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -130,7 +132,10 @@ func updateFrontmatter(content []byte, updates map[string]any) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	for k, v := range updates {
+	// Replace existing keys in place; append only new keys in lexical order.
+	// Do not sort the mapping itself or the caller's semantic values.
+	for _, k := range slices.Sorted(maps.Keys(updates)) {
+		v := updates[k]
 		if _, unset := v.(domain.UnsetField); unset {
 			deleteMapNode(mapping, k)
 			continue

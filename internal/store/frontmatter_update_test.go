@@ -1,8 +1,12 @@
 package store
 
 import (
+	"bytes"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/andy-esch/taskflow/internal/domain"
 
 	yaml "go.yaml.in/yaml/v3"
 )
@@ -76,5 +80,41 @@ func TestUpdateFrontmatter_RejectsNonMapping(t *testing.T) {
 	in := []byte("---\n- a\n- b\n---\nbody\n")
 	if _, err := updateFrontmatter(in, map[string]any{"status": "in-progress"}); err == nil {
 		t.Fatal("expected error for non-mapping frontmatter, got nil")
+	}
+}
+
+func TestUpdateFrontmatterAppendsDeterministicallyWithoutSortingExistingKeys(t *testing.T) {
+	for _, eol := range []string{"\n", "\r\n"} {
+		in := []byte(strings.ReplaceAll("---\n# leading\nzeta: keep # zeta note\ntier: 2 # tier note\nuntouched: | # block note\n  first\n  second\nremove: drop\n---\n# Task\n\nbody bytes\n", "\n", eol))
+		updates := map[string]any{"gamma": 3, "alpha": 1, "epsilon": 5, "delta": 4, "beta": 2, "tier": 3, "remove": domain.UnsetField{}}
+		wantKeys := []string{"zeta", "tier", "untouched", "alpha", "beta", "delta", "epsilon", "gamma"}
+		var baseline []byte
+		for range 100 {
+			out, err := updateFrontmatter(in, updates)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fm, body := splitFrontmatter(out)
+			var doc yaml.Node
+			if err := yaml.Unmarshal(fm, &doc); err != nil {
+				t.Fatal(err)
+			}
+			var keys []string
+			for i := 0; i < len(doc.Content[0].Content); i += 2 {
+				keys = append(keys, doc.Content[0].Content[i].Value)
+			}
+			if !reflect.DeepEqual(keys, wantKeys) {
+				t.Fatalf("keys=%v, want %v\n%s", keys, wantKeys, out)
+			}
+			if string(body) != strings.ReplaceAll("# Task\n\nbody bytes\n", "\n", eol) ||
+				!bytes.Contains(out, []byte("# leading")) || !bytes.Contains(out, []byte("# tier note")) ||
+				!bytes.Contains(out, []byte(strings.ReplaceAll("untouched: | # block note\n  first\n  second\n", "\n", eol))) {
+				t.Fatalf("untouched evidence changed:\n%s", out)
+			}
+			if baseline != nil && !bytes.Equal(out, baseline) {
+				t.Fatal("identical updates produced different bytes")
+			}
+			baseline = out
+		}
 	}
 }

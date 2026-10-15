@@ -125,3 +125,28 @@ func TestNewTaskRejectsConflictingLifecycleOptionsBeforeEffects(t *testing.T) {
 		}
 	}
 }
+
+func TestSetFieldsValidationIsDeterministic(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		updates map[string]any
+		force   bool
+		want    string
+	}{
+		{"unknown fields", map[string]any{"zzz": "1", "aaa": "2"}, false, `unknown field "aaa"`},
+		{"unset fields", map[string]any{"zzz": domain.UnsetField{}, "aaa": domain.UnsetField{}}, false, `unknown field "aaa"`},
+		{"typed values", map[string]any{"tier": "bad", "autonomy_level": "bad"}, false, "autonomy_level must be an integer"},
+		{"owned fields with force", map[string]any{"status": "completed", "depends_on": []string{"other"}}, true, "depends_on is graph-owned"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			st := &conflictStore{}
+			svc := MustNewService(st)
+			for range 100 {
+				_, err := svc.SetFields("task", tc.updates, tc.force, false)
+				if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), tc.want) || st.setCalls != 0 {
+					t.Fatalf("validation changed or reached writes: err=%v writes=%d want=%q", err, st.setCalls, tc.want)
+				}
+			}
+		})
+	}
+}

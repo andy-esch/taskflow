@@ -4,6 +4,7 @@ import (
 	"cmp"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
@@ -665,11 +666,14 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 		return domain.Task{}, fmt.Errorf("%w: no fields given", domain.ErrValidation)
 	}
 	withMeta := make(map[string]any, len(updates)+1)
-	for field, val := range updates {
+	// Maps do not preserve CLI argument order. Choose stable lexical validation
+	// order so the same request reports the same first error before any write.
+	for _, field := range slices.Sorted(maps.Keys(updates)) {
+		val := updates[field]
 		// A dependency change is a repository-global graph mutation, not ordinary
 		// frontmatter surgery. Reject it before the known/custom-field and --force
-		// branches so neither spelling can bypass cycle/referential validation. The
-		// guarded commands land in the next production slice.
+		// branches so neither spelling can bypass cycle/referential validation.
+		// Use the guarded dependency operations instead of this field path.
 		if domain.IsGraphOwnedTaskField(field) {
 			return domain.Task{}, fmt.Errorf(
 				"%w: %s is graph-owned and cannot be changed with `task set` (including --force); use guarded dependency operations%s",
