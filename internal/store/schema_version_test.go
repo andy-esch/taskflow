@@ -54,7 +54,7 @@ func TestSchemaVersion_ParsesAndSurvivesEdits(t *testing.T) {
 	if _, _, err := fs.GetTask("keep"); err != nil {
 		t.Fatalf("a file with schema:1 should load: %v", err)
 	}
-	if _, err := fs.SetFields("keep", map[string]any{"tier": 3}, false); err != nil {
+	if _, err := fs.SetFields(core.TaskMutationTarget{ID: testutil.TaskID("keep")}, map[string]any{"tier": 3}, false); err != nil {
 		t.Fatal(err)
 	}
 	if got := readFile(t, path); !strings.Contains(got, "schema: 1") {
@@ -80,13 +80,13 @@ func TestSchemaVersion_SurvivesBodyEdit(t *testing.T) {
 	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	path := filepath.Join(root, domain.TasksDir, testutil.TaskID("keep")+"-keep.md")
 
-	if _, _, err := fs.EditBody("keep", "## Notes\n- x", true, bodyNow, false); err != nil { // append
+	if _, _, err := fs.EditBody(core.TaskMutationTarget{ID: testutil.TaskID("keep")}, "## Notes\n- x", true, bodyNow, false); err != nil { // append
 		t.Fatal(err)
 	}
 	if got := readFile(t, path); !strings.Contains(got, "schema: 1") {
 		t.Errorf("append dropped the reserved schema key:\n%s", got)
 	}
-	if _, _, err := fs.EditBody("keep", "# Rewritten", false, bodyNow, false); err != nil { // replace
+	if _, _, err := fs.EditBody(core.TaskMutationTarget{ID: testutil.TaskID("keep")}, "# Rewritten", false, bodyNow, false); err != nil { // replace
 		t.Fatal(err)
 	}
 	if got := readFile(t, path); !strings.Contains(got, "schema: 1") {

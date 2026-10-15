@@ -6,8 +6,8 @@ description: Make large Thread graphs comprehensible and shared TUI navigation p
 goal: Ship an evidence-backed large-graph experience and a coherent shared TUI navigation model.
 created: "2026-09-11"
 tags: [threads, tui, ux, dogfood]
-tasks: [6g6wdvfp2ksa, 6g86016qvk5d, 6g86c7y6hn41, 6g86g03zfj2f, 6g87qn72901g, 6g8vxbv3d4xn, 6g8vxcnezktm, 6g914ybs9t87, 6g9150nrt4p9, 6g95fc3aj4ye, 6g9g37bvetjy, 6g9g37c50qp1, 6g9mz2shwmb0, 6ggkdbg0816h, 6gjn7axv0gmy]
-updated_at: "2026-10-11"
+tasks: [6g6wdvfp2ksa, 6g86016qvk5d, 6g86c7y6hn41, 6g86g03zfj2f, 6g87qn72901g, 6g8vxbv3d4xn, 6g8vxcnezktm, 6g914ybs9t87, 6g9150nrt4p9, 6g95fc3aj4ye, 6g9g37bvetjy, 6g9g37c50qp1, 6g9mz2shwmb0, 6ggkdbg0816h, 6gjn7axv0gmy, 6gkt3fq0pv26]
+updated_at: "2026-10-14"
 started_at: "2026-09-11"
 ---
 # Thread: Refine Thread and TUI navigation
@@ -50,3 +50,12 @@ the only member of a completed Thread can drop its core-owned advice because no
 downstream task impacts exist. It follows the shared core warning contract and
 can proceed independently of graph/navigation design. Preserve cleanup warnings
 and reloads; do not turn this small feedback fix into a new notification system.
+
+## Selected-action safety follow-up (2026-10-14)
+
+[Preserve selected TUI task identities](../tasks/6gkt3fq0pv26-preserve-selected-tui-task-identities-through-service-actions.md)
+tracks a reproduced queued-action gap: after the selected task disappears, its ID
+string can resolve as another task's human slug at Service entry and edit that record.
+It follows the strict task-write identity contract as a genuine prerequisite while
+keeping initial CLI reference ergonomics unchanged. This is action-target safety,
+not a graph-presentation redesign or a reason to reopen the completed adapter Thread.

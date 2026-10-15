@@ -254,7 +254,7 @@ func (s *FS) readTask(slug string) (core.LoadedRecord[core.TaskWithBody], error)
 
 // SetFields surgically updates frontmatter fields on a task (no status/dir
 // change) and writes the file atomically in place.
-func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain.Task, error) {
+func (s *FS) SetFields(target core.TaskMutationTarget, updates map[string]any, dryRun bool) (domain.Task, error) {
 	if err := s.authorizeMutation(); err != nil {
 		return domain.Task{}, err
 	}
@@ -271,7 +271,7 @@ func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain
 			return domain.Task{}, fmt.Errorf("%w: %s is graph-owned — use guarded dependency operations", domain.ErrValidation, field)
 		}
 	}
-	path, err := s.resolve(slug)
+	path, err := s.resolveTaskMutationTarget(target)
 	if err != nil {
 		return domain.Task{}, err
 	}
@@ -322,11 +322,10 @@ func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain
 		return domain.Task{}, err
 	}
 	defer unlock()
-	// Version-CAS immediately before the write: verifyUnchanged re-resolves (a concurrent
 	// Re-resolve and re-hash the source immediately before replacement so a rename or
 	// concurrent in-place edit cannot be overwritten. Atomicity guards torn writes,
-	// not lost updates. ifVersion is the hash of the bytes read above.
-	if err := verifyUnchanged(s.resolvePath, slug, path, hashContent(content), "task", "update"); err != nil {
+	// not lost updates. The expected version is the hash of the bytes read above.
+	if err := verifyUnchanged(s.resolvePath, target.ID, path, hashContent(content), "task", "update"); err != nil {
 		return domain.Task{}, err
 	}
 	if err := writeFileAtomic(path, newContent, 0o644); err != nil {
@@ -339,6 +338,19 @@ func (s *FS) SetFields(slug string, updates map[string]any, dryRun bool) (domain
 // compare-and-swap re-resolve — the seam tests use to interleave a concurrent
 // Move. Nil outside tests.
 var testHookBeforeSetFieldsWrite func()
+
+// resolveTaskMutationTarget never treats a selected ID as a human reference.
+// Authorization stays at each mutation entry, before lookup or any callback.
+func (s *FS) resolveTaskMutationTarget(target core.TaskMutationTarget) (string, error) {
+	if err := validEntityID(target.ID); err != nil {
+		return "", err
+	}
+	path, err := s.resolvePath(target.ID)
+	if err != nil {
+		return "", fmt.Errorf("task identity %q: %w", target.ID, err)
+	}
+	return path, nil
+}
 
 // resolve finds a task file by slug — exact first, then fuzzy (unique
 // case-insensitive prefix, then substring) via resolveID, matching on the stable

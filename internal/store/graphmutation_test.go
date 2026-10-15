@@ -307,7 +307,10 @@ func TestMutateTaskGraphRejectsPlannerStoreCallsAndNestedMutationWithoutHanging(
 			if _, _, err := fs.GetTask(aID); !errors.Is(err, domain.ErrConflict) {
 				return core.TaskGraphMutationPlan{}, fmt.Errorf("nested read error = %v", err)
 			}
-			if _, err := fs.SetFields(aID, map[string]any{"priority": "low"}, false); !errors.Is(err, domain.ErrConflict) {
+			if _, err := fs.ResolveTaskSource(aID); !errors.Is(err, domain.ErrConflict) {
+				return core.TaskGraphMutationPlan{}, fmt.Errorf("nested task identity lookup error = %v", err)
+			}
+			if _, err := fs.SetFields(core.TaskMutationTarget{ID: aID}, map[string]any{"priority": "low"}, false); !errors.Is(err, domain.ErrConflict) {
 				return core.TaskGraphMutationPlan{}, fmt.Errorf("nested write error = %v", err)
 			}
 			if _, err := fs.MutateTaskGraph(graphMutationNow, false, func(*core.TaskGraph) (core.TaskGraphMutationPlan, error) {
@@ -319,7 +322,10 @@ func TestMutateTaskGraphRejectsPlannerStoreCallsAndNestedMutationWithoutHanging(
 			if _, _, err := second.GetTask(aID); !errors.Is(err, domain.ErrConflict) {
 				return core.TaskGraphMutationPlan{}, fmt.Errorf("second-store nested read error = %v", err)
 			}
-			if _, err := second.SetFields(aID, map[string]any{"priority": "low"}, false); !errors.Is(err, domain.ErrConflict) {
+			if _, err := second.ResolveTaskSource(aID); !errors.Is(err, domain.ErrConflict) {
+				return core.TaskGraphMutationPlan{}, fmt.Errorf("second-store task identity lookup error = %v", err)
+			}
+			if _, err := second.SetFields(core.TaskMutationTarget{ID: aID}, map[string]any{"priority": "low"}, false); !errors.Is(err, domain.ErrConflict) {
 				return core.TaskGraphMutationPlan{}, fmt.Errorf("second-store nested write error = %v", err)
 			}
 			if _, err := second.DanglingLinks(); !errors.Is(err, domain.ErrConflict) {
@@ -387,7 +393,7 @@ func TestMutateTaskGraphPlannerPanicReleasesGuard(t *testing.T) {
 			panic("planner failed")
 		})
 	}()
-	if _, err := fs.SetFields(aID, map[string]any{"priority": "low"}, false); err != nil {
+	if _, err := fs.SetFields(core.TaskMutationTarget{ID: aID}, map[string]any{"priority": "low"}, false); err != nil {
 		t.Fatalf("repository guard remained held after panic: %v", err)
 	}
 }

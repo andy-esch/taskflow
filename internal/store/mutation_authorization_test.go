@@ -22,6 +22,7 @@ type authorizationMutation struct {
 // Share the entry inventory between absent and populated fixtures, but make
 // callback/no-op behavior observable rather than treating a missing record as proof.
 func authorizationMutations(now time.Time, ref string, callback func()) []authorizationMutation {
+	target := core.TaskMutationTarget{ID: testutil.TaskID(ref)}
 	return []authorizationMutation{
 		{"CreateTask", func(s *FS, dryRun bool) error {
 			_, err := s.CreateTask(domain.Task{ID: "6fjangd7kvh0", Slug: "probe", Status: domain.StatusReadyToStart, Created: "2026-09-22"}, "", dryRun)
@@ -48,7 +49,7 @@ func authorizationMutations(now time.Time, ref string, callback func()) []author
 			return err
 		}},
 		{"EditBody", func(s *FS, dryRun bool) error {
-			_, _, err := s.EditBody(ref, "", true, now, dryRun)
+			_, _, err := s.EditBody(target, "", true, now, dryRun)
 			return err
 		}},
 		{"TransformAuditBody", func(s *FS, dryRun bool) error {
@@ -56,7 +57,7 @@ func authorizationMutations(now time.Time, ref string, callback func()) []author
 			return err
 		}},
 		{"TransformTaskBody", func(s *FS, dryRun bool) error {
-			_, _, _, err := s.TransformTaskBody(ref, now, dryRun, func(body string) (string, error) { callback(); return body, nil })
+			_, _, _, err := s.TransformTaskBody(target, now, dryRun, func(body string) (string, error) { callback(); return body, nil })
 			return err
 		}},
 		{"EditTask", func(s *FS, _ bool) error {
@@ -72,7 +73,7 @@ func authorizationMutations(now time.Time, ref string, callback func()) []author
 			return err
 		}},
 		{"SetFields", func(s *FS, dryRun bool) error {
-			_, err := s.SetFields(ref, map[string]any{}, dryRun)
+			_, err := s.SetFields(target, map[string]any{}, dryRun)
 			return err
 		}},
 		{"RenameTask", func(s *FS, dryRun bool) error {

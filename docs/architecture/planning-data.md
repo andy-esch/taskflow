@@ -28,19 +28,34 @@ within-kind duplicate IDs, and recoverable unreadable task/Thread cross-kind
 collisions retain per-occurrence diagnostics; ownership evidence does not establish
 valid membership.
 
-Criterion handoffs resolve both tasks' source IDs before checking self-tracking and
-use the resolved source ID as the mutation query, following source renames rather than
-re-resolving its old alias. Slug aliases and declarations cannot substitute for those
-IDs. Equal IDs are resolved canonically before self-track refusal so a duplicate-ID
-ambiguity is not misreported as a self-handoff. Body CAS remains a single-record
-guarantee, not an atomic cross-task transaction or a guarantee that the destination
-cannot later disappear.
+Task body/criterion/field writes resolve a user reference once, then carry a
+[TaskMutationTarget](../../internal/core/store.go) containing its established source
+ID. Persistence matches that ID exactly before callbacks, previews and no-ops; deletion
+or duplication cannot redirect a retry onto a human slug. Single-task selection
+conflicts and subsequent writes share one bounded retry budget and captured timestamp.
+Whole-body replacement uses the same strict target but remains non-retried.
+Initial identity selection uses the parse-free `TaskStore.ResolveTaskSource` port,
+not a typed task read or local path capability: `task set` can repair malformed typed
+fields while persistence still validates the updated document before any write or
+successful preview. Unrelated corruption remains an attributed validation failure.
+See [CLI repair regressions](../../internal/cli/task_set_repair_test.go).
 
-Known action-selection gap: other task-body/field retries still reuse raw aliases,
-and even an ID query can fall back to a human slug if that ID disappears. The CAS
-guard then protects the newly selected record, not necessarily the original intent.
-[Strict identity-bound task retries](../../planning/tasks/6gkmexz4vh23-bind-task-mutation-retries-to-strict-source-identities.md)
-owns the correction; passing an ID string alone is not a complete action guarantee.
+Criterion handoffs resolve both endpoint IDs before self-tracking checks. Equal IDs
+receive a canonical resolution check so a duplicate-ID ambiguity is not misreported
+as self-tracking. Endpoint-resolution errors remain unretried; body-write conflicts
+retry only the selected source. This is not
+an atomic cross-task transaction or a guarantee that the destination stays present.
+Task lifecycle selection remains inside the guarded graph; after the first plan,
+retries keep its task ID while revalidating policy and impacts against fresh snapshots.
+See [portable target tests](../../internal/core/task_target_test.go) and
+[real-store drift tests](../../internal/store/task_target_test.go).
+
+The guarantee begins at application selection, not an earlier interface selection.
+[Selected TUI actions](../../planning/tasks/6gkt3fq0pv26-preserve-selected-tui-task-identities-through-service-actions.md)
+still pass strings that can be interpreted as fresh references. The survey also
+confirmed remaining [non-task retry](../../planning/tasks/6gkt3fphx1ts-pin-non-task-mutation-retries-to-selected-source-identities.md)
+and [dependency/Thread replanning](../../planning/tasks/6gkt3fpsfdd7-keep-graph-and-thread-retry-endpoints-fixed-during-replanning.md)
+gaps. Neither canonical strings nor CAS alone establish end-to-end target binding.
 
 See [record tests](../../internal/core/entity_read_test.go),
 [source-boundary tests](../../internal/core/thread_source_boundary_test.go) and

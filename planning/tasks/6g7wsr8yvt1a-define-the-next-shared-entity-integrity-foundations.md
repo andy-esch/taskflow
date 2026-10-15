@@ -67,6 +67,13 @@ a deliberate sequence. This task owns design and scoping, not the implementation
    record after rename, and even an ID string can fall back to a human slug after
    deletion. Reconcile its explicit selected-identity boundary with the shared retry
    contract; this design pass must not block that bounded production fix.
+   Its implementation survey also reproduced
+   [ordinary non-task retry drift](6gkt3fphx1ts-pin-non-task-mutation-retries-to-selected-source-identities.md),
+   [graph/Thread endpoint reselection](6gkt3fpsfdd7-keep-graph-and-thread-retry-endpoints-fixed-during-replanning.md),
+   and [already-selected TUI actions restarting human-reference lookup](6gkt3fq0pv26-preserve-selected-tui-task-identities-through-service-actions.md).
+   Preserve the distinction between initial user selection, strict selected identity,
+   fresh policy recomputation and durability; these are concrete scoped fixes, not
+   evidence that a universal mutation framework should be built first.
 
 ## Design constraints
 

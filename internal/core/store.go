@@ -16,16 +16,31 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
+// TaskMutationTarget identifies a task already selected through adapter-established
+// RecordSource.ID. It is not a user reference: an adapter must match ID exactly,
+// refusing missing or duplicate identities before callbacks, previews and no-ops.
+// It carries neither a declaration nor a location, revision or authorization token.
+// This prevents a retry from falling back to another record's human label.
+type TaskMutationTarget struct {
+	ID string
+}
+
 // TaskStore is the task mutation and selected-read port. Repository-wide task
 // reads use TaskGraphSource so list, board, graph, and Thread projections share
 // one authoritative snapshot rather than rescanning through the aggregate store.
 type TaskStore interface {
 	ReadTasks() (TaskRead, error)
 	ReadTask(ref string) (LoadedRecord[TaskWithBody], error)
+	// ResolveTaskSource applies normal user-reference matching without requiring
+	// a typed task decode. It returns adapter-established identity, not mutation
+	// authorization or a source revision. Field writes must remain able to repair
+	// malformed typed values; their adapter validates the updated document.
+	// Selected actions still check exact, unique ownership before any effects.
+	ResolveTaskSource(ref string) (RecordSource, error)
 	// Ordinary task mutations take dryRun: true runs every validation and returns
 	// the would-be result but stops short of disk. Lifecycle changes are deliberately
 	// absent: TaskLifecycleMutationStore is the only status-write capability.
-	SetFields(slug string, updates map[string]any, dryRun bool) (domain.Task, error)
+	SetFields(target TaskMutationTarget, updates map[string]any, dryRun bool) (domain.Task, error)
 	CreateTask(t domain.Task, body string, dryRun bool) (TaskCreationReceipt, error)
 	// EditTask hands the current file content to edit (which runs the caller's
 	// editor) and accepts the result only if it still parses as a task —
@@ -36,13 +51,13 @@ type TaskStore interface {
 	// body in one atomic, validated write, preserving the frontmatter and stamping
 	// updated_at. The agent face of body editing, beside EditTask's editor. Returns
 	// the reloaded task and the resulting body (so a --json caller can echo it).
-	EditBody(slug, text string, appendMode bool, now time.Time, dryRun bool) (domain.Task, string, error)
+	EditBody(target TaskMutationTarget, text string, appendMode bool, now time.Time, dryRun bool) (domain.Task, string, error)
 	// TransformTaskBody is the read-modify-write counterpart to EditBody. The store
 	// passes transform the body from the exact source snapshot its content CAS
 	// protects, so a semantic edit can be safely re-applied after contention rather
 	// than replacing a concurrent write with bytes derived from an earlier read.
 	// transform is pure application logic and must not call back into the Store.
-	TransformTaskBody(slug string, now time.Time, dryRun bool, transform func(current string) (string, error)) (domain.Task, string, bool, error)
+	TransformTaskBody(target TaskMutationTarget, now time.Time, dryRun bool, transform func(current string) (string, error)) (domain.Task, string, bool, error)
 	// RenameTask re-titles a task: a new slug from newTitle, the file renamed (id kept),
 	// the body H1 rewritten, and every inbound relative-path markdown link across the tree
 	// repointed to the new filename. Its result records a durable multi-document prefix
@@ -120,7 +135,8 @@ type TaskLifecyclePlanner func(*TaskGraph) (TaskLifecyclePlan, error)
 // A committing transition revalidates the whole task+Thread source snapshot and
 // its target before writing, so raw edits cannot leave authorized impact receipts
 // based on detected stale evidence. This does not eliminate a raw editor's final
-// verify-to-write race.
+// verify-to-write race. A successful planner's selected Plan is retained on later
+// errors; core retries that identity, not the original human reference.
 type TaskLifecycleMutationStore interface {
 	MutateTaskLifecycle(now time.Time, dryRun bool, planner TaskLifecyclePlanner) (TaskLifecycleMutationResult, error)
 }

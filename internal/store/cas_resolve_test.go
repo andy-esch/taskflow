@@ -8,15 +8,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 	"github.com/andy-esch/taskflow/internal/testutil"
-
-	// writeDuplicateIDTasks lays down two task files that both claim ONE stable id,
-	// with distinct slugs so the caller's own query still resolves uniquely and the
-	// write actually reaches the version-CAS guard.
-	"github.com/andy-esch/taskflow/internal/core"
 )
 
+// writeDuplicateIDTasks retains two physical occurrences with the same ID.
 func writeDuplicateIDTasks(t *testing.T, dup string) string {
 	t.Helper()
 	root := t.TempDir()
@@ -44,9 +41,11 @@ func TestVerifyUnchanged_DuplicateIDSurfacesAsAmbiguous(t *testing.T) {
 	const dup = "6fjangd7kvc1"
 	root := writeDuplicateIDTasks(t, dup)
 
-	// "alpha" resolves uniquely by slug, so the write starts; the guard's exact-id
-	// re-resolve is where the duplicate is discovered.
-	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("alpha", map[string]any{"priority": "low"}, false)
+	// Exercise the CAS guard directly: selected-identity mutation entries now
+	// reject a pre-existing duplicate before even reaching this check.
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
+	path := filepath.Join(root, "tasks", dup+"-alpha.md")
+	err := verifyUnchanged(fs.resolvePath, "alpha", path, hashContent([]byte(readFile(t, path))), "task", "update")
 	if err == nil {
 		t.Fatal("a duplicate stable id must not be written through")
 	}
@@ -63,12 +62,11 @@ func TestVerifyUnchanged_DuplicateIDSurfacesAsAmbiguous(t *testing.T) {
 	}
 }
 
-// TestVerifyUnchanged_BodyWriteAlsoReportsTheAmbiguity exercises a second write
-// path, so the split is pinned in the shared guard rather than in one caller.
+// The body entry also refuses duplicates before any preview or write.
 func TestVerifyUnchanged_BodyWriteAlsoReportsTheAmbiguity(t *testing.T) {
 	root := writeDuplicateIDTasks(t, "6fjangd7kvc2")
 
-	_, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).EditBody("alpha", "## Notes\n", true, time.Now(), false)
+	_, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).EditBody(core.TaskMutationTarget{ID: "6fjangd7kvc2"}, "## Notes\n", true, time.Now(), false)
 	if errors.Is(err, domain.ErrConflict) || !errors.Is(err, domain.ErrAmbiguous) {
 		t.Fatalf("a body write should report the duplicate id as an ambiguity, got %v", err)
 	}
@@ -98,7 +96,7 @@ func TestVerifyUnchanged_VanishedFileIsStillAConflict(t *testing.T) {
 		testHookBeforeSetFieldsWrite = orig // fire once
 	}
 
-	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("gone", map[string]any{"priority": "low"}, false)
+	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields(core.TaskMutationTarget{ID: id}, map[string]any{"priority": "low"}, false)
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a file that vanished under us is a genuine conflict, got %v", err)
 	}

@@ -34,7 +34,7 @@ func TestSetFields_ConflictsOnConcurrentContentEdit(t *testing.T) {
 		testHookBeforeSetFieldsWrite = orig // fire once
 	}
 
-	if _, err := fs.SetFields("c", map[string]any{"priority": "low"}, false); !errors.Is(err, domain.ErrConflict) {
+	if _, err := fs.SetFields(core.TaskMutationTarget{ID: testutil.TaskID("c")}, map[string]any{"priority": "low"}, false); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a concurrent in-place edit must conflict (exit 14), got %v", err)
 	}
 	b, _ := os.ReadFile(p)
@@ -69,7 +69,7 @@ func TestVerifyUnchanged_SlugEqualsAnotherID(t *testing.T) {
 
 	// A write to Task A runs verifyUnchanged, which re-resolves A's id (== collide). The
 	// exact-id resolve returns A alone, so the write lands — no spurious conflict/lockout.
-	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields("alpha", map[string]any{"priority": "low"}, false); err != nil {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetFields(core.TaskMutationTarget{ID: collide}, map[string]any{"priority": "low"}, false); err != nil {
 		t.Fatalf("a sibling whose slug equals A's id must not lock A out of writes: %v", err)
 	}
 }
@@ -171,7 +171,7 @@ func TestEditBody_ConflictsOnConcurrentContentEdit(t *testing.T) {
 		_ = os.WriteFile(p, []byte("---\nid: 6fjangd7kvb1\nstatus: ready-to-start\nepic: e1\npriority: high\n---\n# CONCURRENT\n"), 0o644)
 		testHookBeforeBodyWrite = orig
 	}
-	if _, _, err := fs.EditBody("b", "appended text", true, time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC), false); !errors.Is(err, domain.ErrConflict) {
+	if _, _, err := fs.EditBody(core.TaskMutationTarget{ID: testutil.TaskID("b")}, "appended text", true, time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC), false); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a concurrent edit during append must conflict, got %v", err)
 	}
 	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "CONCURRENT") || strings.Contains(string(b), "appended text") {
@@ -220,7 +220,7 @@ func TestSetFields_FuzzyQueryDoesNotSpuriouslyConflict(t *testing.T) {
 			"---\nid: 6fjangd7kvf2\nstatus: ready-to-start\nepic: e1\n---\n# g\n")
 		testHookBeforeSetFieldsWrite = orig
 	}
-	if _, err := fs.SetFields("billing", map[string]any{"priority": "low"}, false); err != nil {
+	if _, err := core.MustNewService(fs).SetFields("billing", map[string]any{"priority": "low"}, false, false); err != nil {
 		t.Fatalf("an unrelated concurrent same-prefix creation must NOT conflict; got %v", err)
 	}
 	if b, _ := os.ReadFile(filepath.Join(root, "tasks", testutil.TaskID("billing-system")+"-billing-system.md")); !strings.Contains(string(b), "priority: low") {
@@ -290,7 +290,7 @@ func TestSetFields_DryRunSkipsWriteCriticalSection(t *testing.T) {
 	defer func() { testHookBeforeSetFieldsWrite = orig }()
 	testHookBeforeSetFieldsWrite = func() { fired = true }
 
-	if _, err := fs.SetFields("d", map[string]any{"priority": "low"}, true); err != nil { // dryRun=true
+	if _, err := fs.SetFields(core.TaskMutationTarget{ID: testutil.TaskID("d")}, map[string]any{"priority": "low"}, true); err != nil { // dryRun=true
 		t.Fatalf("dry-run should validate + preview without error: %v", err)
 	}
 	if fired {
@@ -320,7 +320,7 @@ func TestConcurrentAppends_NoLostUpdates(t *testing.T) {
 			// Retry on conflict (mirrors core.Service's auto-retry), with a small backoff so
 			// N goroutines don't livelock. The store itself doesn't retry — that's core's job.
 			for attempt := 0; attempt < 300; attempt++ {
-				if _, _, err := fs.EditBody("race", fmt.Sprintf("marker-%d", i), true, time.Unix(0, 0), false); err == nil {
+				if _, _, err := fs.EditBody(core.TaskMutationTarget{ID: testutil.TaskID("race")}, fmt.Sprintf("marker-%d", i), true, time.Unix(0, 0), false); err == nil {
 					atomic.AddInt64(&succ, 1)
 					return
 				} else if !errors.Is(err, domain.ErrConflict) {

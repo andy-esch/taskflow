@@ -74,7 +74,9 @@ type TaskLifecycleAnalysis struct {
 
 // TaskLifecycleMutationResult is the store-owned guarded operation result.
 // Changed means the semantic task document differs; dry runs report the same
-// result without a durable replacement.
+// result without a durable replacement. Once the planner succeeds, Plan must be
+// retained even on a pre-commit error so core can keep its selected task identity
+// across retries. A failure before planning may return an empty Plan.
 type TaskLifecycleMutationResult struct {
 	Plan TaskLifecyclePlan
 	Task domain.Task

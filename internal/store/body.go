@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
@@ -142,14 +143,14 @@ func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (dom
 // the human `task edit`. The frontmatter is preserved surgically (unknown keys,
 // comments, and key order survive) and updated_at is stamped. The shared write tail
 // lives in writeBody. Returns the reloaded task and the resulting (LF) body.
-func (s *FS) EditBody(slug, text string, appendMode bool, now time.Time, dryRun bool) (domain.Task, string, error) {
+func (s *FS) EditBody(target core.TaskMutationTarget, text string, appendMode bool, now time.Time, dryRun bool) (domain.Task, string, error) {
 	if err := s.authorizeMutation(); err != nil {
 		return domain.Task{}, "", err
 	}
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Task{}, "", err
 	}
-	path, err := s.resolve(slug)
+	path, err := s.resolveTaskMutationTarget(target)
 	if err != nil {
 		return domain.Task{}, "", err
 	}
@@ -171,7 +172,9 @@ func (s *FS) EditBody(slug, text string, appendMode bool, now time.Time, dryRun 
 		func(c []byte, nb string) ([]byte, error) { return replaceBodyStamped(c, nb, updatedAt) },
 		func(c []byte) (domain.Task, error) { return parseTask(c, path) },
 		s.writeLock,
-		func() error { return verifyUnchanged(s.resolvePath, slug, path, hashContent(content), "task", "edit") },
+		func() error {
+			return verifyUnchanged(s.resolvePath, target.ID, path, hashContent(content), "task", "edit")
+		},
 		dryRun,
 	)
 }
@@ -247,7 +250,7 @@ func (s *FS) TransformAuditBody(
 // point transform receives fresh body text instead of stale precomputed bytes.
 // An unchanged normalized body is a no-op and does not stamp updated_at.
 func (s *FS) TransformTaskBody(
-	slug string,
+	target core.TaskMutationTarget,
 	now time.Time,
 	dryRun bool,
 	transform func(current string) (string, error),
@@ -258,7 +261,7 @@ func (s *FS) TransformTaskBody(
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Task{}, "", false, err
 	}
-	path, err := s.resolve(slug)
+	path, err := s.resolveTaskMutationTarget(target)
 	if err != nil {
 		return domain.Task{}, "", false, err
 	}
@@ -289,7 +292,9 @@ func (s *FS) TransformTaskBody(
 		func(c []byte, nb string) ([]byte, error) { return replaceBodyStamped(c, nb, updatedAt) },
 		func(c []byte) (domain.Task, error) { return parseTask(c, path) },
 		s.writeLock,
-		func() error { return verifyUnchanged(s.resolvePath, slug, path, hashContent(content), "task", "edit") },
+		func() error {
+			return verifyUnchanged(s.resolvePath, target.ID, path, hashContent(content), "task", "edit")
+		},
 		dryRun,
 	)
 	if err != nil {

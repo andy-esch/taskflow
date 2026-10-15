@@ -64,6 +64,16 @@ must not be blindly retried. See [retry tests](../../internal/core/occ_retry_tes
 and [recovery tests](../../internal/core/dependency_recovery_test.go). A general shared
 retry/durability policy remains [design work](../../planning/tasks/6g7wsr8yvt1a-define-the-next-shared-entity-integrity-foundations.md).
 
+Task body/field ports take an explicit selected identity, not a fuzzy reference.
+Their initial lookup and CAS both use exact ID ownership; a missing ID is not permission
+to try another record's slug. Core requests initial user-reference resolution through
+the adapter's parse-free source lookup, preserving field repair without treating a
+malformed typed value as missing identity. Field writes validate the updated document;
+body writes still require their resulting task to decode.
+[Target regressions](../../internal/store/task_target_test.go) exercise rename, old-alias
+reuse, disappearance, collisions and preview/no-op boundaries. Other entity/graph
+retry gaps remain explicit in the [planning-data guide](planning-data.md).
+
 ## Ordinary create and task rename
 
 [Ordinary creation](../../internal/store/create.go) holds the canonical guard before

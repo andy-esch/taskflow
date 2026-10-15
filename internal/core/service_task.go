@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
 )
@@ -429,9 +430,8 @@ func (s *Service) SetCriteriaState(slug string, ns []int, state domain.Criterion
 // The id is recorded rather than the reference the caller typed, so a later `task rename`
 // (which cascades body links, not criterion reasons) cannot break the pointer.
 // Both endpoints use adapter-established source IDs, not declarations/display slugs;
-// the mutation query uses the resolved source ID so it follows source renames.
-// This string-based port does not yet ensure identity-only lookup when that ID
-// disappears; see the tracked limitation in docs/architecture/planning-data.md.
+// the selected source identity is retained through retries without alias fallback.
+// Endpoint-resolution errors propagate directly; only source body conflicts retry.
 func (s *Service) SetCriteriaTracked(slug string, ns []int, trackedTo, reason string, dryRun bool) (domain.Task, string, bool, error) {
 	if strings.TrimSpace(trackedTo) == "" {
 		return domain.Task{}, "", false, fmt.Errorf(
@@ -454,13 +454,19 @@ func (s *Service) SetCriteriaTracked(slug string, ns []int, trackedTo, reason st
 	if destinationRecord.Source.ID == sourceRecord.Source.ID {
 		// Different aliases can resolve individually even when two records claim
 		// one ID. Preserve the store's actionable ambiguity before calling it self.
-		if _, err := s.store.ReadTask(sourceRecord.Source.ID); err != nil {
+		canonical, err := s.store.ReadTask(sourceRecord.Source.ID)
+		if err != nil {
 			return domain.Task{}, "", false, fmt.Errorf("resolve task identity %q: %w", sourceRecord.Source.ID, err)
+		}
+		if canonical.Source.ID != sourceRecord.Source.ID {
+			return domain.Task{}, "", false, fmt.Errorf("task identity %q no longer exists: %w", sourceRecord.Source.ID, domain.ErrNotFound)
 		}
 		return domain.Task{}, "", false, fmt.Errorf(
 			"%w: a criterion cannot be tracked to its own task", domain.ErrValidation)
 	}
-	return s.setCriteriaState(sourceRecord.Source.ID, ns, domain.CriterionTracked, domain.FormatTrackedReason(destinationRecord.Source.ID, reason), dryRun)
+	return s.transformTaskBodyAt(TaskMutationTarget{ID: sourceRecord.Source.ID}, dryRun, func(body string) (string, error) {
+		return domain.SetCriteriaState(body, ns, domain.CriterionTracked, domain.FormatTrackedReason(destinationRecord.Source.ID, reason))
+	})
 }
 
 func (s *Service) setCriteriaState(slug string, ns []int, state domain.CriterionState, reason string, dryRun bool) (domain.Task, string, bool, error) {
@@ -479,14 +485,60 @@ func (s *Service) EditCriteria(slug string, dryRun bool, edit func(body string) 
 
 func (s *Service) transformTaskBody(slug string, dryRun bool, transform func(body string) (string, error)) (domain.Task, string, bool, error) {
 	now := s.now()
-	type result struct {
-		task    domain.Task
-		body    string
-		changed bool
+	r, err := retryTaskMutation(s, slug, dryRun, func(target TaskMutationTarget) (taskBodyTransformResult, error) {
+		return s.transformTaskBodyOnce(target, now, dryRun, transform)
+	})
+	return r.task, r.body, r.changed, err
+}
+
+// Selection uses the caller's normal reference exactly once. Neither declarations
+// nor diagnostic locations can stand in for the adapter-established action ID.
+// Identity resolution is parse-free: a full ReadTask would prevent field writes
+// from repairing a malformed typed value before the adapter validates the result.
+func (s *Service) selectTaskMutationTarget(ref string) (TaskMutationTarget, error) {
+	source, err := s.store.ResolveTaskSource(ref)
+	if err != nil {
+		return TaskMutationTarget{}, err
 	}
-	r, err := retryOnConflict(s, dryRun, func() (result, error) {
-		task, body, changed, err := s.store.TransformTaskBody(slug, now, dryRun, transform)
-		return result{task: task, body: body, changed: changed}, err
+	if err := requireSourceID(EntityTask, source); err != nil {
+		return TaskMutationTarget{}, err
+	}
+	return TaskMutationTarget{ID: source.ID}, nil
+}
+
+// retryTaskMutation shares one retry budget between initial selection and writes.
+// A failed selection establishes no identity; once selected, neither subsequent
+// contention nor an empty error result can make the callback resolve the alias again.
+func retryTaskMutation[T any](s *Service, ref string, dryRun bool, mutate func(TaskMutationTarget) (T, error)) (T, error) {
+	var target TaskMutationTarget
+	return retryOnConflict(s, dryRun, func() (T, error) {
+		if target.ID == "" {
+			selected, err := s.selectTaskMutationTarget(ref)
+			if err != nil {
+				var zero T
+				return zero, err
+			}
+			target = selected
+		}
+		return mutate(target)
+	})
+}
+
+type taskBodyTransformResult struct {
+	task    domain.Task
+	body    string
+	changed bool
+}
+
+func (s *Service) transformTaskBodyOnce(target TaskMutationTarget, now time.Time, dryRun bool, transform func(string) (string, error)) (taskBodyTransformResult, error) {
+	task, body, changed, err := s.store.TransformTaskBody(target, now, dryRun, transform)
+	return taskBodyTransformResult{task: task, body: body, changed: changed}, err
+}
+
+func (s *Service) transformTaskBodyAt(target TaskMutationTarget, dryRun bool, transform func(body string) (string, error)) (domain.Task, string, bool, error) {
+	now := s.now()
+	r, err := retryOnConflict(s, dryRun, func() (taskBodyTransformResult, error) {
+		return s.transformTaskBodyOnce(target, now, dryRun, transform)
 	})
 	return r.task, r.body, r.changed, err
 }
@@ -505,7 +557,11 @@ func (s *Service) EditTask(slug string, edit func(current string, prevErr error)
 // Frontmatter is preserved surgically and updated_at is stamped. Returns the
 // reloaded task and the resulting body.
 func (s *Service) ReplaceBody(slug, body string, dryRun bool) (domain.Task, string, error) {
-	return s.store.EditBody(slug, body, false, s.now(), dryRun)
+	target, err := s.selectTaskMutationTarget(slug)
+	if err != nil {
+		return domain.Task{}, "", err
+	}
+	return s.store.EditBody(target, body, false, s.now(), dryRun)
 }
 
 // AppendBody appends a section to a task's markdown body (`task append`),
@@ -517,8 +573,8 @@ func (s *Service) AppendBody(slug, text string, dryRun bool) (domain.Task, strin
 		task domain.Task
 		body string
 	}
-	r, err := retryOnConflict(s, dryRun, func() (res, error) {
-		t, b, e := s.store.EditBody(slug, text, true, now, dryRun)
+	r, err := retryTaskMutation(s, slug, dryRun, func(target TaskMutationTarget) (res, error) {
+		t, b, e := s.store.EditBody(target, text, true, now, dryRun)
 		return res{t, b}, e
 	})
 	return r.task, r.body, err
@@ -567,9 +623,17 @@ func (s *Service) runTaskLifecycleMutation(dryRun bool, planner TaskLifecyclePla
 	now := s.now()
 	result, err := s.lifecycleMutations.MutateTaskLifecycle(now, dryRun, planner)
 	if !dryRun {
+		retryPlanner := planner
 		for attempt := 1; attempt <= s.maxRetries && errors.Is(err, domain.ErrConflict) && !result.Committed; attempt++ {
+			if result.Plan.TaskID != "" {
+				// Selection happened inside the authoritative guarded graph. Retain
+				// that plan's identity, but let the store revalidate eligibility and
+				// derive impacts from each fresh snapshot. Never re-run its raw ref.
+				plan := result.Plan
+				retryPlanner = func(*TaskGraph) (TaskLifecyclePlan, error) { return plan, nil }
+			}
 			s.retrySleep(attempt)
-			result, err = s.lifecycleMutations.MutateTaskLifecycle(now, dryRun, planner)
+			result, err = s.lifecycleMutations.MutateTaskLifecycle(now, dryRun, retryPlanner)
 		}
 	}
 	receipt := taskLifecycleReceipt(result)
@@ -727,8 +791,8 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 		}
 	}
 	withMeta["updated_at"] = s.now().Format("2006-01-02")
-	return retryOnConflict(s, dryRun, func() (domain.Task, error) {
-		return s.store.SetFields(slug, withMeta, dryRun)
+	return retryTaskMutation(s, slug, dryRun, func(target TaskMutationTarget) (domain.Task, error) {
+		return s.store.SetFields(target, withMeta, dryRun)
 	})
 }
 

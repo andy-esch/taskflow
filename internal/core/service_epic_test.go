@@ -36,6 +36,9 @@ func (nopStore) ReadTasks() (TaskRead, error) { return TaskRead{}, nil }
 func (nopStore) ReadTask(string) (LoadedRecord[TaskWithBody], error) {
 	return LoadedRecord[TaskWithBody]{}, domain.ErrNotFound
 }
+func (nopStore) ResolveTaskSource(string) (RecordSource, error) {
+	return RecordSource{}, domain.ErrNotFound
+}
 func (nopStore) ReadEpics() (EpicRead, error) { return EpicRead{}, nil }
 func (nopStore) ReadEpic(string) (LoadedRecord[EpicWithBody], error) {
 	return LoadedRecord[EpicWithBody]{}, domain.ErrNotFound
@@ -56,7 +59,7 @@ func (nopStore) GetTask(string) (domain.Task, string, error) {
 func (nopStore) ListTasksWithBodies() ([]TaskWithBody, []domain.FileProblem, error) {
 	return nil, nil, nil
 }
-func (nopStore) SetFields(string, map[string]any, bool) (domain.Task, error) {
+func (nopStore) SetFields(TaskMutationTarget, map[string]any, bool) (domain.Task, error) {
 	return domain.Task{}, nil
 }
 func (nopStore) CreateTask(domain.Task, string, bool) (TaskCreationReceipt, error) {
@@ -65,10 +68,10 @@ func (nopStore) CreateTask(domain.Task, string, bool) (TaskCreationReceipt, erro
 func (nopStore) EditTask(string, time.Time, func(string, error) (string, error)) (domain.Task, bool, error) {
 	return domain.Task{}, false, nil
 }
-func (nopStore) EditBody(string, string, bool, time.Time, bool) (domain.Task, string, error) {
+func (nopStore) EditBody(TaskMutationTarget, string, bool, time.Time, bool) (domain.Task, string, error) {
 	return domain.Task{}, "", nil
 }
-func (nopStore) TransformTaskBody(string, time.Time, bool, func(string) (string, error)) (domain.Task, string, bool, error) {
+func (nopStore) TransformTaskBody(TaskMutationTarget, time.Time, bool, func(string) (string, error)) (domain.Task, string, bool, error) {
 	return domain.Task{}, "", false, nil
 }
 func (nopStore) RenameTask(string, string, bool) (TaskRenameMutationResult, error) {
