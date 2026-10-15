@@ -427,25 +427,39 @@ func (s *Service) SetCriteriaState(slug string, ns []int, state domain.Criterion
 //
 // The id is recorded rather than the reference the caller typed, so a later `task rename`
 // (which cascades body links, not criterion reasons) cannot break the pointer.
+// Both endpoints use adapter-established source IDs, not declarations/display slugs;
+// the mutation query uses the resolved source ID so it follows source renames.
+// This string-based port does not yet ensure identity-only lookup when that ID
+// disappears; see the tracked limitation in docs/architecture/planning-data.md.
 func (s *Service) SetCriteriaTracked(slug string, ns []int, trackedTo, reason string, dryRun bool) (domain.Task, string, bool, error) {
 	if strings.TrimSpace(trackedTo) == "" {
 		return domain.Task{}, "", false, fmt.Errorf(
 			"%w: `tracked` needs a destination — pass --to <task> so the handoff can be followed", domain.ErrValidation)
 	}
+	sourceRecord, err := s.store.ReadTask(slug)
+	if err != nil {
+		return domain.Task{}, "", false, fmt.Errorf("resolve task %q: %w", slug, err)
+	}
+	if err := requireSourceID(EntityTask, sourceRecord.Source); err != nil {
+		return domain.Task{}, "", false, err
+	}
 	destinationRecord, err := s.store.ReadTask(trackedTo)
 	if err != nil {
 		return domain.Task{}, "", false, fmt.Errorf("resolve --to %q: %w", trackedTo, err)
 	}
-	destination := destinationRecord.Value.Task
-	if destinationRecord.Source.ID == "" {
-		return domain.Task{}, "", false, fmt.Errorf(
-			"%w: destination task %q has no stable id to track by", domain.ErrValidation, trackedTo)
+	if err := requireSourceID(EntityTask, destinationRecord.Source); err != nil {
+		return domain.Task{}, "", false, fmt.Errorf("resolve --to %q: %w", trackedTo, err)
 	}
-	if destination.Slug == slug {
+	if destinationRecord.Source.ID == sourceRecord.Source.ID {
+		// Different aliases can resolve individually even when two records claim
+		// one ID. Preserve the store's actionable ambiguity before calling it self.
+		if _, err := s.store.ReadTask(sourceRecord.Source.ID); err != nil {
+			return domain.Task{}, "", false, fmt.Errorf("resolve task identity %q: %w", sourceRecord.Source.ID, err)
+		}
 		return domain.Task{}, "", false, fmt.Errorf(
 			"%w: a criterion cannot be tracked to its own task", domain.ErrValidation)
 	}
-	return s.setCriteriaState(slug, ns, domain.CriterionTracked, domain.FormatTrackedReason(destinationRecord.Source.ID, reason), dryRun)
+	return s.setCriteriaState(sourceRecord.Source.ID, ns, domain.CriterionTracked, domain.FormatTrackedReason(destinationRecord.Source.ID, reason), dryRun)
 }
 
 func (s *Service) setCriteriaState(slug string, ns []int, state domain.CriterionState, reason string, dryRun bool) (domain.Task, string, bool, error) {
@@ -783,6 +797,9 @@ type NewTaskParams struct {
 // must exist; tier/autonomy/priority/description are validated. On any invalid
 // input it returns ErrValidation and nothing is written.
 func (s *Service) NewTask(p NewTaskParams) (TaskCreationReceipt, error) {
+	if p.Next && p.Start {
+		return TaskCreationReceipt{}, fmt.Errorf("%w: next and start are mutually exclusive", domain.ErrValidation)
+	}
 	if err := templateBodyConflict(p.Body, p.Template); err != nil {
 		return TaskCreationReceipt{}, err
 	}
