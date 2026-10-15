@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/andy-esch/taskflow/internal/domain"
+	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
 type selectedTaskStore struct {
@@ -146,6 +147,49 @@ func TestTaskMutationSelectionRefusesMissingEvidenceAndReadErrors(t *testing.T) 
 					}
 				})
 			}
+		}
+	}
+}
+
+type lifecycleTargetStore struct {
+	nopStore
+	calls int
+	plans []TaskLifecyclePlan
+}
+
+func (s *lifecycleTargetStore) MutateTaskLifecycle(_ time.Time, _ bool, planner TaskLifecyclePlanner) (TaskLifecycleMutationResult, error) {
+	s.calls++
+	// The middle contention happens before the callback and returns no plan. It
+	// must not erase the identity selected by the preceding attempt.
+	if s.calls == 2 {
+		return TaskLifecycleMutationResult{}, domain.ErrConflict
+	}
+	first := domain.Task{ID: testutil.TaskID("first"), Slug: "alpha", Status: domain.StatusReadyToStart}
+	sibling := domain.Task{ID: testutil.TaskID("sibling"), Slug: "alpha-two", Status: domain.StatusReadyToStart}
+	if s.calls > 1 {
+		first.Slug = "omega"
+	}
+	plan, err := planner(NewTaskGraph([]domain.Task{first, sibling}, nil))
+	if err != nil {
+		return TaskLifecycleMutationResult{}, err
+	}
+	s.plans = append(s.plans, plan)
+	if s.calls == 1 {
+		return TaskLifecycleMutationResult{Plan: plan}, domain.ErrConflict
+	}
+	return TaskLifecycleMutationResult{Plan: plan, Task: first, Committed: true}, nil
+}
+
+func TestTaskLifecycleRetryRetainsBindingAcrossUnplannedContention(t *testing.T) {
+	st := &lifecycleTargetStore{}
+	svc := MustNewService(st, WithRetry(2, noopSleep))
+	_, err := svc.DeferTask("alpha", "2026-12-01", false)
+	if err != nil || st.calls != 3 || len(st.plans) != 2 {
+		t.Fatalf("lifecycle retry did not converge: err=%v calls=%d plans=%+v", err, st.calls, st.plans)
+	}
+	for _, plan := range st.plans {
+		if plan.TaskID != testutil.TaskID("first") || plan.To != domain.StatusDeferred || plan.RevisitAt != "2026-12-01" || plan.Create != nil {
+			t.Fatalf("retry changed selected lifecycle intent: %+v", plan)
 		}
 	}
 }

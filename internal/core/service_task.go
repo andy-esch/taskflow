@@ -623,9 +623,17 @@ func (s *Service) runTaskLifecycleMutation(dryRun bool, planner TaskLifecyclePla
 	now := s.now()
 	result, err := s.lifecycleMutations.MutateTaskLifecycle(now, dryRun, planner)
 	if !dryRun {
+		retryPlanner := planner
 		for attempt := 1; attempt <= s.maxRetries && errors.Is(err, domain.ErrConflict) && !result.Committed; attempt++ {
+			if result.Plan.TaskID != "" {
+				// Selection happened inside the authoritative guarded graph. Retain
+				// that plan's identity, but let the store revalidate eligibility and
+				// derive impacts from each fresh snapshot. Never re-run its raw ref.
+				plan := result.Plan
+				retryPlanner = func(*TaskGraph) (TaskLifecyclePlan, error) { return plan, nil }
+			}
 			s.retrySleep(attempt)
-			result, err = s.lifecycleMutations.MutateTaskLifecycle(now, dryRun, planner)
+			result, err = s.lifecycleMutations.MutateTaskLifecycle(now, dryRun, retryPlanner)
 		}
 	}
 	receipt := taskLifecycleReceipt(result)

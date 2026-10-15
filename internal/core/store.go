@@ -135,7 +135,8 @@ type TaskLifecyclePlanner func(*TaskGraph) (TaskLifecyclePlan, error)
 // A committing transition revalidates the whole task+Thread source snapshot and
 // its target before writing, so raw edits cannot leave authorized impact receipts
 // based on detected stale evidence. This does not eliminate a raw editor's final
-// verify-to-write race.
+// verify-to-write race. A successful planner's selected Plan is retained on later
+// errors; core retries that identity, not the original human reference.
 type TaskLifecycleMutationStore interface {
 	MutateTaskLifecycle(now time.Time, dryRun bool, planner TaskLifecyclePlanner) (TaskLifecycleMutationResult, error)
 }

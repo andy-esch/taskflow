@@ -45,6 +45,8 @@ receive a canonical resolution check so a duplicate-ID ambiguity is not misrepor
 as self-tracking. Endpoint-resolution errors remain unretried; body-write conflicts
 retry only the selected source. This is not
 an atomic cross-task transaction or a guarantee that the destination stays present.
+Task lifecycle selection remains inside the guarded graph; after the first plan,
+retries keep its task ID while revalidating policy and impacts against fresh snapshots.
 See [portable target tests](../../internal/core/task_target_test.go) and
 [real-store drift tests](../../internal/store/task_target_test.go).
 

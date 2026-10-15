@@ -146,6 +146,53 @@ func TestTaskMutationRetryNeverFallsBackAfterSelectedIDDisappears(t *testing.T) 
 	}
 }
 
+func TestTaskLifecycleRetryKeepsFirstSelectedPlan(t *testing.T) {
+	for _, verb := range []string{"move", "defer"} {
+		for _, remove := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/remove=%v", verb, remove), func(t *testing.T) {
+				fs, source, sibling := taskTargetFixture(t)
+				beforeSibling := readFile(t, sibling)
+				renamed := filepath.Join(filepath.Dir(source), testutil.TaskID("alpha")+"-omega.md")
+				injected := false
+				testHookBeforeLifecycleVerify = func() {
+					if injected {
+						return
+					}
+					injected = true
+					var err error
+					if remove {
+						err = os.Remove(source)
+					} else {
+						err = os.Rename(source, renamed)
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+				}
+				t.Cleanup(func() { testHookBeforeLifecycleVerify = nil })
+				svc := core.MustNewService(fs, core.WithRetry(1, func(int) {}))
+				var receipt core.TaskLifecycleReceipt
+				var err error
+				if verb == "move" {
+					receipt, err = svc.Move("alpha", domain.StatusInProgress, false, core.TaskLifecycleOverrideNone)
+				} else {
+					receipt, err = svc.DeferTask("alpha", "2026-12-01", false)
+				}
+				if remove {
+					if !errors.Is(err, domain.ErrNotFound) || receipt.Committed {
+						t.Fatalf("missing lifecycle identity was not refused: receipt=%+v err=%v", receipt, err)
+					}
+				} else if err != nil || !receipt.Committed || receipt.Task.ID != testutil.TaskID("alpha") {
+					t.Fatalf("lifecycle retry lost target: receipt=%+v err=%v", receipt, err)
+				}
+				if !injected || readFile(t, sibling) != beforeSibling {
+					t.Fatal("lifecycle retry changed the sibling or failed to exercise drift")
+				}
+			})
+		}
+	}
+}
+
 func TestSelectedTaskPortsRefuseMissingDuplicateAndInvalidTargetsBeforeCallbacks(t *testing.T) {
 	operations := []struct {
 		name string
@@ -334,6 +381,42 @@ func TestTaskMutationCASStillRefusesAnIdentityDuplicatedAfterLookup(t *testing.T
 	}
 }
 
+func TestTaskLifecycleRetryRevalidatesEligibilityFromFreshGraph(t *testing.T) {
+	for _, force := range []bool{false, true} {
+		t.Run(fmt.Sprintf("force=%v", force), func(t *testing.T) {
+			fs, source, _ := taskTargetFixture(t)
+			injected := false
+			testHookBeforeLifecycleVerify = func() {
+				if injected {
+					return
+				}
+				injected = true
+				content := strings.Replace(readFile(t, source), "tier: 2\n", "tier: 2\ndepends_on: ["+testutil.TaskID("alpha-two")+"]\n", 1)
+				testutil.Write(t, source, content)
+			}
+			t.Cleanup(func() { testHookBeforeLifecycleVerify = nil })
+			override := core.TaskLifecycleOverrideNone
+			if force {
+				override = core.TaskLifecycleOverrideDependencyGate
+			}
+			receipt, err := core.MustNewService(fs, core.WithRetry(1, func(int) {})).Move("alpha", domain.StatusInProgress, false, override)
+			if !injected {
+				t.Fatal("fresh-policy race not exercised")
+			}
+			if force {
+				if err != nil || !receipt.Committed || !receipt.Forced || len(receipt.OutstandingBlockers) != 1 || receipt.OutstandingBlockers[0].TaskID != testutil.TaskID("alpha-two") || receipt.Before.Gate != core.GateBlocked {
+					t.Fatalf("forced retry did not use fresh blockers: receipt=%+v err=%v", receipt, err)
+				}
+			} else {
+				var eligibility *core.TaskEligibilityError
+				if !errors.As(err, &eligibility) || receipt.Committed || len(eligibility.Blockers) != 1 || strings.Contains(readFile(t, source), "status: in-progress") {
+					t.Fatalf("retry replayed stale authorization: receipt=%+v err=%v", receipt, err)
+				}
+			}
+		})
+	}
+}
+
 func TestTaskMutationSelectionAndCASContentionShareRepositoryRetryBudget(t *testing.T) {
 	fs, source, sibling := taskTargetFixture(t)
 	beforeSibling := readFile(t, sibling)
@@ -368,5 +451,48 @@ func TestTaskMutationSelectionAndCASContentionShareRepositoryRetryBudget(t *test
 	}
 	if strings.Contains(readFile(t, source), "priority: high") || readFile(t, sibling) != beforeSibling {
 		t.Fatal("exhausted retry committed a field update or changed a sibling")
+	}
+}
+
+func TestTaskLifecycleRetainsIdentityAcrossRepositoryPlannerContention(t *testing.T) {
+	fs, source, sibling := taskTargetFixture(t)
+	beforeSibling := readFile(t, sibling)
+	renamed := filepath.Join(filepath.Dir(source), testutil.TaskID("alpha")+"-omega.md")
+	var release func()
+	plannerActive := false
+	t.Cleanup(func() {
+		if plannerActive {
+			release()
+		}
+		testHookBeforeLifecycleVerify = nil
+	})
+	testHookBeforeLifecycleVerify = func() {
+		if release != nil {
+			return
+		}
+		// A raw editor renames the selected record. A separate FS on the same
+		// repository activates the real planner guard before this attempt's
+		// verification and leaves it active for the next, unplanned attempt.
+		if err := os.Rename(source, renamed); err != nil {
+			t.Fatal(err)
+		}
+		other := testutil.Must(NewFS(filepath.Dir(filepath.Dir(source)), core.UnrestrictedMutations()))
+		release = testutil.Must(other.enterRepositoryPlanner())
+		plannerActive = true
+	}
+	sleeps := 0
+	svc := core.MustNewService(fs, core.WithRetry(2, func(int) {
+		sleeps++
+		if sleeps == 2 {
+			release()
+			plannerActive = false
+		}
+	}))
+	receipt, err := svc.Move("alpha", domain.StatusInProgress, false, core.TaskLifecycleOverrideNone)
+	if err != nil || sleeps != 2 || !receipt.Committed || receipt.Task.ID != testutil.TaskID("alpha") {
+		t.Fatalf("unplanned contention discarded the selected identity: receipt=%+v err=%v sleeps=%d", receipt, err, sleeps)
+	}
+	if !strings.Contains(readFile(t, renamed), "status: in-progress") || readFile(t, sibling) != beforeSibling {
+		t.Fatal("lifecycle retry changed the sibling instead of the selected task")
 	}
 }
