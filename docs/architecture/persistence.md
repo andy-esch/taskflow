@@ -30,6 +30,11 @@ fresh creates use the ordinary encoder.
 [Fidelity tests](../../internal/store/frontmatter_fidelity_test.go) exercise refusal
 and surgical preservation, not merely parseability.
 
+ID validity stays strict lowercase. Case-only spelling diagnostics suggest the same
+lowercase identity, never a replacement ID; automatic repair does not gain case-only
+rename authority. Manual corrections must account for filename, declaration and
+inbound references. Alias repair retains its existing guarded ownership/refusal rules.
+
 Generic create/set/edit cannot change graph-owned dependencies; generic set/edit
 cannot change task status. Guarded dependency and lifecycle verbs own those changes.
 Ordinary task creation accepts only non-start states; guarded create-and-start uses

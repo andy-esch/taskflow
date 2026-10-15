@@ -246,3 +246,32 @@ func TestFixRefusesAnIDContainingU(t *testing.T) {
 		t.Errorf("the refusal should explain why u cannot be repaired: %q", results[0].Changes[0])
 	}
 }
+
+func TestFixKeepsCaseOnlyIDRepairManual(t *testing.T) {
+	for _, dryRun := range []bool{false, true} {
+		r := testutil.NewRepo(t)
+		name := strings.ToUpper(goodID) + "-upper.md"
+		path := filepath.Join(r.Root, "tasks", name)
+		initial := "---\nschema: 1\nid: " + goodID + "\nstatus: ready-to-start\ndescription: d\ntags: [go]\n---\n# Upper\n"
+		testutil.Write(t, path, initial)
+		fs := testutil.Must(NewFS(r.Root, core.UnrestrictedMutations()))
+		results, err := fs.FixFrontmatter(dryRun)
+		if err != nil || len(results) != 1 || !results[0].Skipped {
+			t.Fatalf("dryRun=%v case repair gained automatic authority: results=%+v err=%v", dryRun, results, err)
+		}
+		note := strings.Join(results[0].Changes, " ")
+		if !strings.Contains(note, "lowercase") || !strings.Contains(note, "not repaired automatically") || strings.Contains(note, "drops u") {
+			t.Fatalf("misleading repair refusal: %q", note)
+		}
+		content, err := os.ReadFile(path)
+		if err != nil || string(content) != initial {
+			t.Fatalf("manual case repair changed source bytes: %v\n%s", err, content)
+		}
+		// os.Stat(lowercase) is not a reliable rename check on macOS; inspect
+		// the directory's actual spelling and namespace instead.
+		entries, err := os.ReadDir(filepath.Dir(path))
+		if err != nil || len(entries) != 1 || entries[0].Name() != name {
+			t.Fatalf("case repair changed filenames: %v err=%v", entries, err)
+		}
+	}
+}

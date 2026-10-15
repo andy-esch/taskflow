@@ -191,8 +191,11 @@ func (s *FS) repairInvalidID(dir, filename string, content []byte) (out []byte, 
 	bad := stem[:id.Length]
 	good, ok := id.Canonicalize(bad)
 	if !ok {
-		if _, _, isBad := id.InvalidChar(bad); isBad {
+		if strings.ContainsAny(bad, "uU") {
 			return content, "", fmt.Sprintf("id %q not repaired: no canonical decode (Crockford drops u deliberately)", bad), nil
+		}
+		if reason := invalidEntityIDReason(bad); reason != "" {
+			return content, "", reason + " — not repaired automatically; inspect filename, id field and inbound references before manual correction", nil
 		}
 		return content, "", "", nil
 	}
