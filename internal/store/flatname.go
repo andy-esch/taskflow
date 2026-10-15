@@ -52,7 +52,7 @@ func entityNameProblem(base string) (string, error) {
 }
 
 // flatNameProblem explains a MISSPELLED id, returning "" when the stem simply is not
-// id-led at all (a genuine stray). It exists because splitFlatName It exists because
+// id-led at all (a genuine stray). It exists because
 // splitFlatName's single ok=false collapsed two very different situations into one message:
 // a genuinely non-entity file (notes.md), and a file whose 12-character id is right there
 // but contains a character Crockford excludes. The second was reported as "has no leading
@@ -64,15 +64,41 @@ func flatNameProblem(stem string) string {
 		return ""
 	}
 	cand := stem[:id.Length]
-	c, pos, bad := id.InvalidChar(cand)
-	if !bad {
+	reason := invalidEntityIDReason(cand)
+	if reason == "" {
 		return ""
 	}
-	reason := fmt.Sprintf("id %q contains %q at position %d, which Crockford base32 excludes (no i, l, o, u)",
-		cand, string(c), pos)
-	if fixed, ok := id.Canonicalize(cand); ok {
-		// i/l/o have a canonical decode, so the same identity can be spelled legally.
+	lower := strings.ToLower(cand)
+	if fixed, ok := id.Canonicalize(lower); ok && len(lower) == len(cand) {
+		// Casing and i/l/o spelling can preserve the same decoded identity.
+		// This is manual advice, not authority for the automatic repair writer.
 		return reason + fmt.Sprintf(" — rename to %q and match the `id:` field", fixed+stem[id.Length:]+".md")
 	}
-	return reason + " — u has no canonical decode, so this id must be replaced deliberately"
+	if strings.ContainsAny(cand, "uU") {
+		return reason + " — u has no canonical decode, so this id must be replaced deliberately"
+	}
+	return reason + " — no canonical decode is established; inspect the intended id manually"
+}
+
+// Use the same strict classification for filenames and write-time validation.
+// A case defect is not an excluded character or permission to mint a new ID.
+// This formats advice only: id.Valid and automatic repair authority stay strict.
+func invalidEntityIDReason(value string) string {
+	if id.Valid(value) {
+		return ""
+	}
+	lower := strings.ToLower(value)
+	if len(lower) == len(value) && id.Valid(lower) {
+		return fmt.Sprintf("id %q must be lowercase (canonical spelling %q)", value, lower)
+	}
+	if c, pos, bad := id.InvalidChar(value); bad {
+		if c >= 'A' && c <= 'Z' {
+			_, _, lowerBad := id.InvalidChar(strings.ToLower(string(c)))
+			if !lowerBad {
+				return fmt.Sprintf("id %q contains uppercase %q at position %d; ids require %d lowercase Crockford base32 characters", value, string(c), pos, id.Length)
+			}
+		}
+		return fmt.Sprintf("id %q contains %q at position %d, outside the canonical lowercase Crockford base32 alphabet (no i, l, o, u)", value, string(c), pos)
+	}
+	return fmt.Sprintf("id %q is not a valid id (%d lowercase Crockford base32 characters)", value, id.Length)
 }

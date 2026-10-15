@@ -3,6 +3,7 @@ package store
 import (
 	"errors"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -245,5 +246,37 @@ func TestAcceptanceCriterionTransformRetriesWithoutLosingConcurrentBodyWrite(t *
 	got := readFile(t, path)
 	if !strings.Contains(got, "- [x] preserve concurrent work") || !strings.Contains(got, "concurrent note") {
 		t.Fatalf("criterion edit lost one writer:\n%s", got)
+	}
+}
+
+func TestTrackedCriterionStaysBoundToSourceAcrossRenameConflict(t *testing.T) {
+	root := t.TempDir()
+	seed := "---\nstatus: ready-to-start\ndescription: original\ntags: [go]\ntier: 2\n---\n# Alpha\n\n## Acceptance criteria\n\n- [ ] preserve identity\n"
+	writeTask(t, root, "ready-to-start", "alpha.md", seed)
+	writeTask(t, root, "ready-to-start", "alpha-two.md", seed)
+	path, _ := testutil.TaskFixture(root, "ready-to-start", "alpha.md", seed)
+	sibling, _ := testutil.TaskFixture(root, "ready-to-start", "alpha-two.md", seed)
+	renamed := filepath.Join(root, "tasks", testutil.TaskID("alpha")+"-omega.md")
+	beforeSibling := readFile(t, sibling)
+	injected := false
+	testHookBeforeBodyWrite = func() {
+		if injected {
+			return
+		}
+		injected = true
+		if err := os.Rename(path, renamed); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Cleanup(func() { testHookBeforeBodyWrite = nil })
+	retries := 0
+	svc := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())), core.WithRetry(1, func(int) { retries++ }))
+	task, body, changed, err := svc.SetCriteriaTracked("alpha", []int{1}, "alpha-two", "follow up", false)
+	if err != nil || !changed || !injected || retries != 1 || task.Slug != "omega" {
+		t.Fatalf("rename retry lost source identity: task=%+v changed=%v injected=%v retries=%d err=%v", task, changed, injected, retries, err)
+	}
+	want := "by " + testutil.TaskID("alpha-two")
+	if !strings.Contains(body, want) || !strings.Contains(readFile(t, renamed), want) || readFile(t, sibling) != beforeSibling {
+		t.Fatal("tracked retry redirected the handoff or changed the sibling")
 	}
 }

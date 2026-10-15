@@ -13,7 +13,6 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
-	"github.com/andy-esch/taskflow/internal/id"
 )
 
 // fmField is one frontmatter key/value, written in declared order for new files.
@@ -164,24 +163,19 @@ func taskFields(t domain.Task) []fmField {
 	return fields
 }
 
-// CreateTask writes a new task file at tasks/<id>-<slug>.md (flat, id-led per
-// ADR-0003 §4). It refuses to clobber an existing file; the slug, id, and status
-// are taken from t.
 // validEntityID rejects an id that cannot legally appear in a flat filename. The creates
 // build `<id>-<slug>.md` directly from it, so an illegal id would produce a file the
 // scanner refuses to parse — caught here rather than discovered by the next `lint`.
 func validEntityID(entityID string) error {
-	if id.Valid(entityID) {
-		return nil
+	if reason := invalidEntityIDReason(entityID); reason != "" {
+		return fmt.Errorf("%w: %s", domain.ErrValidation, reason)
 	}
-	if c, pos, bad := id.InvalidChar(entityID); bad {
-		return fmt.Errorf("%w: id %q contains %q at position %d, which Crockford base32 excludes (no i, l, o, u)",
-			domain.ErrValidation, entityID, string(c), pos)
-	}
-	return fmt.Errorf("%w: id %q is not a valid id (%d lowercase Crockford base32 characters)",
-		domain.ErrValidation, entityID, id.Length)
+	return nil
 }
 
+// CreateTask writes a new task file at tasks/<id>-<slug>.md (flat, id-led per
+// ADR-0003 §4). It refuses to clobber an existing file; the slug, id, and status
+// are taken from t.
 func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (core.TaskCreationReceipt, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return core.TaskCreationReceipt{}, err

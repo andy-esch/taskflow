@@ -28,6 +28,20 @@ within-kind duplicate IDs, and recoverable unreadable task/Thread cross-kind
 collisions retain per-occurrence diagnostics; ownership evidence does not establish
 valid membership.
 
+Criterion handoffs resolve both tasks' source IDs before checking self-tracking and
+use the resolved source ID as the mutation query, following source renames rather than
+re-resolving its old alias. Slug aliases and declarations cannot substitute for those
+IDs. Equal IDs are resolved canonically before self-track refusal so a duplicate-ID
+ambiguity is not misreported as a self-handoff. Body CAS remains a single-record
+guarantee, not an atomic cross-task transaction or a guarantee that the destination
+cannot later disappear.
+
+Known action-selection gap: other task-body/field retries still reuse raw aliases,
+and even an ID query can fall back to a human slug if that ID disappears. The CAS
+guard then protects the newly selected record, not necessarily the original intent.
+[Strict identity-bound task retries](../../planning/tasks/6gkmexz4vh23-bind-task-mutation-retries-to-strict-source-identities.md)
+owns the correction; passing an ID string alone is not a complete action guarantee.
+
 See [record tests](../../internal/core/entity_read_test.go),
 [source-boundary tests](../../internal/core/thread_source_boundary_test.go) and
 [wire mappings](../../internal/wire/envelopes_test.go).

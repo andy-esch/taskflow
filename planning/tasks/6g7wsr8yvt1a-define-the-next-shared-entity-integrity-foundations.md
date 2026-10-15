@@ -62,6 +62,11 @@ a deliberate sequence. This task owns design and scoping, not the implementation
    this hint; verify the remaining mutation recovery envelopes in this design pass. Research also
    still equates any clean, uncommitted `ErrConflict` with a mintable ID collision; decide whether
    the port needs a positive ID-collision signal so future adapters cannot trigger futile remints.
+   [Strict task retry targeting](6gkmexz4vh23-bind-task-mutation-retries-to-strict-source-identities.md)
+   now owns a concrete correctness gap: retrying a raw alias can target a different
+   record after rename, and even an ID string can fall back to a human slug after
+   deletion. Reconcile its explicit selected-identity boundary with the shared retry
+   contract; this design pass must not block that bounded production fix.
 
 ## Design constraints
 

@@ -85,3 +85,44 @@ func TestEntityNameProblemDistinguishesStrayFromMistypedID(t *testing.T) {
 		}
 	}
 }
+
+func TestEntityNameProblemGivesIdentityPreservingCaseAdvice(t *testing.T) {
+	for _, cand := range []string{strings.ToUpper(goodID), "6Fjvr03mr9zg"} {
+		reason, err := entityNameProblem(cand + "-upper-probe.md")
+		if !errors.Is(err, errBadEntityID) || !errors.Is(err, domain.ErrValidation) {
+			t.Fatalf("case defect lost its validation classification: %v", err)
+		}
+		if !strings.Contains(reason, "lowercase") || !strings.Contains(reason, goodID+"-upper-probe.md") {
+			t.Fatalf("case defect lacks canonical spelling advice: %q", reason)
+		}
+		for _, wrong := range []string{"Crockford base32 excludes", "u has no canonical", "replaced deliberately", "meta/"} {
+			if strings.Contains(reason, wrong) {
+				t.Fatalf("misleading case advice %q in %q", wrong, reason)
+			}
+		}
+	}
+	for _, cand := range []string{"6fbj87000?t6", "6fbj87000-t6"} {
+		reason, _ := entityNameProblem(cand + "-invalid.md")
+		if strings.Contains(reason, "u has no canonical") || strings.Contains(reason, "rename to") {
+			t.Fatalf("unrecognised character got an invented decode: %q", reason)
+		}
+	}
+}
+
+func TestEntityIDWriteValidationRejectsCaseWithoutNormalizing(t *testing.T) {
+	uppercase := strings.ToUpper(goodID)
+	for _, err := range []error{validEntityID(uppercase), validateIDUpdate(map[string]any{"id": uppercase})} {
+		if !errors.Is(err, domain.ErrValidation) || !strings.Contains(err.Error(), "lowercase") || !strings.Contains(err.Error(), goodID) {
+			t.Fatalf("write-time case advice = %v", err)
+		}
+		if strings.Contains(err.Error(), "excludes") || strings.Contains(err.Error(), "u has no") {
+			t.Fatalf("write-time case advice invents an excluded character: %v", err)
+		}
+	}
+	// Mixed case plus a real alias is manual identity-preserving advice, not
+	// permission to rewrite an arbitrary invalid character or change Valid.
+	reason, _ := entityNameProblem("6FBJ87000LT6-mixed.md")
+	if !strings.Contains(reason, "6fbj870001t6-mixed.md") || strings.Contains(reason, "u has no") {
+		t.Fatalf("mixed spelling advice = %q", reason)
+	}
+}

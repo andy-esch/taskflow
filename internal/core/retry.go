@@ -52,13 +52,13 @@ func WithRetry(maxRetries int, sleep func(attempt int)) Option {
 }
 
 // retryOnConflict runs fn and, on domain.ErrConflict, re-runs it up to s.maxRetries more
-// times (backoff+jitter between attempts) — the bounded, plain-retry auto-heal that makes
-// the scriptable mutations (set/append/move/defer) concurrency-safe WITHOUT each agent
-// reimplementing a read→re-apply→rewrite loop. Each re-run goes through the store's
-// self-contained read-modify-write, so it re-reads fresh and re-derives the change; and
-// because the version-CAS fails BEFORE any write, a plain retry is safe even for a body
-// append (it re-appends onto fresh content exactly once). A dry-run is a preview — never
-// retried. Successes and non-conflict errors return immediately.
+// times (backoff+jitter between attempts). Each re-run must read fresh content and
+// re-derive the change for the SAME stable record identity; re-resolving a raw alias
+// can redirect a retry after a rename. Callers must also ensure a conflict precedes
+// any durable write: the loop cannot infer committed effects or make an arbitrary
+// callback safe. Under those conditions even append is safe (it re-appends onto fresh
+// content exactly once). A dry-run is a preview — never retried. Successes and
+// non-conflict errors return immediately.
 func retryOnConflict[T any](s *Service, dryRun bool, fn func() (T, error)) (T, error) {
 	v, err := fn()
 	if dryRun {

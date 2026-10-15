@@ -6,12 +6,13 @@ package store
 import (
 	"bytes"
 	"fmt"
+	"maps"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 
 	"github.com/andy-esch/taskflow/internal/core"
-	"github.com/andy-esch/taskflow/internal/id"
 
 	yaml "go.yaml.in/yaml/v3"
 
@@ -101,15 +102,7 @@ func validateIDUpdate(updates map[string]any) error {
 	if !ok {
 		return fmt.Errorf("%w: id must be a string, got %T", domain.ErrValidation, v)
 	}
-	if id.Valid(s) {
-		return nil
-	}
-	if c, pos, bad := id.InvalidChar(s); bad {
-		return fmt.Errorf("%w: id %q contains %q at position %d, which Crockford base32 excludes (no i, l, o, u)",
-			domain.ErrValidation, s, string(c), pos)
-	}
-	return fmt.Errorf("%w: id %q is not a valid id (%d lowercase Crockford base32 characters)",
-		domain.ErrValidation, s, id.Length)
+	return validEntityID(s)
 }
 
 // updateFrontmatter applies key=value updates to a file's frontmatter, then
@@ -139,7 +132,10 @@ func updateFrontmatter(content []byte, updates map[string]any) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	for k, v := range updates {
+	// Replace existing keys in place; append only new keys in lexical order.
+	// Do not sort the mapping itself or the caller's semantic values.
+	for _, k := range slices.Sorted(maps.Keys(updates)) {
+		v := updates[k]
 		if _, unset := v.(domain.UnsetField); unset {
 			deleteMapNode(mapping, k)
 			continue

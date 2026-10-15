@@ -115,6 +115,61 @@ func TestTaskAcTracked_RefusesSelfReference(t *testing.T) {
 	}
 }
 
+func TestTaskAcTrackedRefusesEverySelfAliasWithoutWriting(t *testing.T) {
+	refs := []string{"alpha", testutil.TaskID("alpha"), "alp", "pha", "ALPHA"}
+	for _, source := range refs {
+		for _, destination := range refs {
+			for _, dryRun := range []bool{false, true} {
+				t.Run(source+"/"+destination+"/"+map[bool]string{false: "write", true: "preview"}[dryRun], func(t *testing.T) {
+					root := setupRepoForTracked(t)
+					before := alphaBody(t, root)
+					args := []string{"-C", root, "task", "ac", source, "--tracked", "1", "--to", destination}
+					if dryRun {
+						args = append(args, "--dry-run")
+					}
+					_, err := runRootRC(t, args...)
+					if err == nil || ExitCode(err) != 11 || !strings.Contains(err.Error(), "its own task") {
+						t.Fatalf("self alias was not refused as validation: %v", err)
+					}
+					if alphaBody(t, root) != before {
+						t.Fatal("self-alias refusal changed file bytes or timestamps")
+					}
+				})
+			}
+		}
+	}
+}
+
+func TestTaskAcTrackedReportsDuplicateIdentityWithoutWriting(t *testing.T) {
+	for _, destination := range []string{"copy", "alpha"} {
+		for _, dryRun := range []bool{false, true} {
+			t.Run(destination+"/"+map[bool]string{false: "write", true: "preview"}[dryRun], func(t *testing.T) {
+				root := setupRepoForTracked(t)
+				before := alphaBody(t, root)
+				copyPath := filepath.Join(root, "tasks", testutil.TaskID("alpha")+"-copy.md")
+				if err := os.WriteFile(copyPath, []byte(before), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				args := []string{"-C", root, "task", "ac", "alpha", "--tracked", "1", "--to", destination, "--reason", "follow up"}
+				if dryRun {
+					args = append(args, "--dry-run")
+				}
+				_, err := runRootRC(t, args...)
+				if err == nil || ExitCode(err) != 13 || !strings.Contains(err.Error(), "alpha") || !strings.Contains(err.Error(), "copy") || strings.Contains(err.Error(), "its own task") {
+					t.Fatalf("duplicate identity was not reported as actionable ambiguity: %v", err)
+				}
+				copied, err := os.ReadFile(copyPath)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if alphaBody(t, root) != before || string(copied) != before {
+					t.Fatal("duplicate-identity refusal changed task bytes")
+				}
+			})
+		}
+	}
+}
+
 // --to belongs to --tracked alone; accepting it elsewhere would silently drop it.
 func TestTaskAcTracked_ToIsRejectedForOtherStates(t *testing.T) {
 	root := setupRepoForTracked(t)
