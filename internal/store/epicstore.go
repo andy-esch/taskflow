@@ -246,7 +246,9 @@ func (s *FS) EditEpic(id string, now time.Time, edit func(current string, prevEr
 	return editFile("epic", path, orig, now,
 		func(content []byte) (domain.Epic, error) { return parseEpic(content, path) },
 		s.writeLock,
-		func() error { return verifyUnchanged(s.resolveEpicPath, id, path, ifVersion, "epic", "edit") },
+		func() error {
+			return verifyUnchangedWithLabel(s.resolveEpicMutationPath, c.id, id, path, ifVersion, "epic", "edit")
+		},
 		edit)
 }
 

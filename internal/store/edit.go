@@ -188,7 +188,9 @@ func (s *FS) EditTask(slug string, now time.Time, edit func(current string, prev
 		s.writeLock,
 		// Version-CAS across the long editor window: conflict if the path or content
 		// changed under us.
-		func() error { return verifyUnchanged(s.resolvePath, slug, path, ifVersion, "task", "edit") },
+		func() error {
+			return verifyUnchangedWithLabel(s.resolvePath, taskSource(path).ID, slug, path, ifVersion, "task", "edit")
+		},
 		edit)
 }
 
@@ -320,6 +322,8 @@ func (s *FS) EditAudit(slug string, now time.Time, edit func(current string, pre
 			},
 			func(a domain.Audit) string { return a.ID }),
 		s.writeLock,
-		func() error { return verifyUnchanged(s.resolveAuditPath, slug, path, ifVersion, "audit", "edit") },
+		func() error {
+			return verifyUnchangedWithLabel(s.resolveAuditPath, auditSource(path).ID, slug, path, ifVersion, "audit", "edit")
+		},
 		edit)
 }

@@ -76,6 +76,11 @@ scriptable ports use the same explicit-target rule, with entity-specific parse-f
 source lookup. Their write and CAS lookups are exact; an epic uses its whole stem,
 not its numeric prefix. [Entity regressions](../../internal/store/entity_target_test.go)
 cover all nine retry families, duplicate ownership and occurrence-based header repair.
+The shared CAS helper takes an explicit adapter resolver key, never guesses identity
+from the path's shape. Interactive editors keep their original diagnostic label
+separate from that selected key. [CAS key tests](../../internal/store/cas_test.go)
+and [whole-stem epic writes](../../internal/store/epic_selected_cas_test.go) pin this,
+including legacy epic stems that resemble ID-led task filenames.
 Graph retries retain semantic endpoints while recomputing current changes; they do
 not replay cached write sets. See [graph retry regressions](../../internal/store/graph_retry_target_test.go)
 and the [planning-data guide](planning-data.md).

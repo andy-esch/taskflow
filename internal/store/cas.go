@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"path/filepath"
 	"slices"
 	"sort"
 	"strings"
@@ -101,8 +100,9 @@ func sameThreadProblemSource(left, right core.ThreadReadProblem) bool {
 }
 
 // verifyUnchanged is the version-CAS precondition shared by every write: called
-// immediately before the write, it re-resolves the file (by its canonical slug, not the
-// caller's raw fuzzy query) and re-reads the source to confirm nothing raced us between
+// immediately before the write, it re-resolves the file by its explicit selected
+// adapter key, never a raw fuzzy query or an identity guessed from a filename,
+// and re-reads the source to confirm nothing raced us between
 // the read-and-transform and the write. It returns
 // domain.ErrConflict (exit 14 — the same sentinel today's path-CAS produces) when the
 // file either:
@@ -116,30 +116,19 @@ func sameThreadProblemSource(left, right core.ThreadReadProblem) bool {
 //
 // ifVersion is the hash of the bytes the caller read; an empty ifVersion skips the
 // content check (an unconditional write — the caller held no prior version to compare).
-// resolve is s.resolve / s.resolveAudit adapted to (path, error), keeping the guard
-// entity-agnostic; noun/op shape the error to match the existing per-site wording
-// ("task %q changed on disk during move", …) so routing the call sites through here is
-// behaviour-preserving.
-func verifyUnchanged(resolve func(string) (string, error), slug, path, ifVersion, noun, op string) error {
+// The caller establishes key and supplies its matching resolver. Epics use whole
+// stems even when they resemble an ID-led task name; this helper does not decode
+// either convention. Callers with a distinct diagnostic label use
+// verifyUnchangedWithLabel without changing the resolver key.
+func verifyUnchanged(resolve func(string) (string, error), key, path, ifVersion, noun, op string) error {
+	return verifyUnchangedWithLabel(resolve, key, key, path, ifVersion, noun, op)
+}
+
+func verifyUnchangedWithLabel(resolve func(string) (string, error), key, label, path, ifVersion, noun, op string) error {
 	conflict := func() error {
-		return fmt.Errorf("%s %q changed on disk during %s; retry: %w", noun, slug, op, domain.ErrConflict)
+		return fmt.Errorf("%s %q changed on disk during %s; retry: %w", noun, label, op, domain.ErrConflict)
 	}
-	// Re-resolve by the CANONICAL slug (the resolved file's basename), never the caller's
-	// raw query: re-running a fuzzy/partial query could newly match a concurrently-created
-	// same-prefix file and return ErrAmbiguous, which we'd read as a conflict — a spurious
-	// rejection of an edit to a file that never changed. The canonical slug matches
-	// exactly (resolveID is exact-first) and deterministically, so only a genuine move or
-	// dup of THIS file trips the path check.
-	// Re-resolve by a key the resolver actually matches: for a flat, id-led entity
-	// (`<id>-<slug>`) that is the stable id — the full stem matches neither the id
-	// nor the slug candidate key. For a bucketed audit or an epic (basename not
-	// id-led) the full stem IS the resolution key. Either way it matches THIS file
-	// exactly and deterministically.
-	canonical := strings.TrimSuffix(filepath.Base(path), ".md")
-	if entityID, _, ok := splitFlatName(canonical); ok {
-		canonical = entityID
-	}
-	curPath, err := resolve(canonical)
+	curPath, err := resolve(key)
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
 		// The file we read is no longer resolvable under its own id: moved, renamed,
@@ -154,7 +143,7 @@ func verifyUnchanged(resolve func(string) (string, error), slug, path, ifVersion
 		// misnames. Propagating keeps the sentinel the CLI maps to its own exit code
 		// (13 for the ambiguity, which names the colliding files). This mirrors the
 		// os.IsNotExist split in the re-read below.
-		return fmt.Errorf("re-resolve %s %q before writing: %w", noun, slug, err)
+		return fmt.Errorf("re-resolve %s %q before writing: %w", noun, label, err)
 	case curPath != path:
 		return conflict()
 	}
@@ -169,7 +158,7 @@ func verifyUnchanged(resolve func(string) (string, error), slug, path, ifVersion
 		if os.IsNotExist(err) {
 			return conflict()
 		}
-		return fmt.Errorf("re-read %s %q: %w", noun, slug, err)
+		return fmt.Errorf("re-read %s %q: %w", noun, label, err)
 	}
 	if hashContent(cur) != ifVersion {
 		return conflict()

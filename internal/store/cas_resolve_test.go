@@ -45,7 +45,7 @@ func TestVerifyUnchanged_DuplicateIDSurfacesAsAmbiguous(t *testing.T) {
 	// reject a pre-existing duplicate before even reaching this check.
 	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	path := filepath.Join(root, "tasks", dup+"-alpha.md")
-	err := verifyUnchanged(fs.resolvePath, "alpha", path, hashContent([]byte(readFile(t, path))), "task", "update")
+	err := verifyUnchanged(fs.resolvePath, dup, path, hashContent([]byte(readFile(t, path))), "task", "update")
 	if err == nil {
 		t.Fatal("a duplicate stable id must not be written through")
 	}
