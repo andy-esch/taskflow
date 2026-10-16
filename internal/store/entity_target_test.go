@@ -206,3 +206,25 @@ func TestSelectedAuditPortsRefuseDuplicateIdentityBeforeCallbackOrNoop(t *testin
 		t.Fatal("ambiguous identity changed records")
 	}
 }
+
+func TestSelectedAuditPortsRefuseIDShapedImpostors(t *testing.T) {
+	root := t.TempDir()
+	selectedID := testutil.TaskID("missing-selected-audit")
+	impostorID := testutil.TaskID("audit-impostor")
+	testutil.Write(t, filepath.Join(root, domain.AuditsDir, impostorID+"-"+selectedID+".md"), "---\nbucket: open\narea: identity\ndate: 2026-10-16\n---\n# Impostor\n")
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
+	before := testutil.SnapshotTree(t, root)
+	for _, dry := range []bool{false, true} {
+		if _, err := fs.MoveAudit(core.AuditMutationTarget{ID: selectedID}, domain.AuditOpen, dry); !errors.Is(err, domain.ErrNotFound) {
+			t.Fatalf("missing selected ID became an impostor no-op: %v", err)
+		}
+		called := false
+		_, _, _, err := fs.TransformAuditBody(core.AuditMutationTarget{ID: selectedID}, time.Now(), dry, func(_ domain.Audit, body string) (string, error) { called = true; return body, nil })
+		if !errors.Is(err, domain.ErrNotFound) || called {
+			t.Fatalf("impostor reached callback: called=%v err=%v", called, err)
+		}
+	}
+	if !maps.Equal(before, testutil.SnapshotTree(t, root)) {
+		t.Fatal("missing selected identity changed a sibling")
+	}
+}
