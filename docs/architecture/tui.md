@@ -41,10 +41,15 @@ Audit lifecycle and epic field/lifecycle commands also use selected-identity
 Service entry points, retaining ordinary CLI validation and reference matching.
 [Non-task action tests](../../internal/tui/selected_entity_action_test.go) cover
 missing selected sources and impostor labels before the first Service call.
-This is not yet a universal selected-action guarantee:
-[local-path actions](../../planning/tasks/6gm30jat0xsy-keep-selected-tui-path-actions-bound-to-exact-identities.md)
-still require an identity-only optional lookup. Rechecking a fuzzy ID string twice
-does not prevent both lookups selecting another record's ID-shaped human label.
+Local editor/path-copy actions and detail path joins use optional `*PathByID`
+Service methods for all five entity families, never the reference-based CLI path
+methods. Both asynchronous local-action lookups require exact source ownership;
+the second lookup can follow a same-ID rename but cannot accept an impostor label.
+Lookups remain parse-free for manual repair and refuse missing/duplicate identities.
+Selection, list and workspace-session guards still protect delayed delivery. This
+does not eliminate a raw editor's final lookup-to-effect race or guarantee an ID's
+incarnation after delete/recreate with the identical ID.
+See [selected local-action tests](../../internal/tui/selected_local_path_test.go).
 
 Lifecycle menus and command verbs use the registry's transition table and delegate.
 Tasks, audits and epics have their respective core transitions; Threads remain

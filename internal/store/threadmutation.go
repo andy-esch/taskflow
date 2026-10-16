@@ -101,7 +101,7 @@ func (s *FS) MutateThread(now time.Time, dryRun bool, planner core.ThreadMutatio
 	if testHookBeforeThreadMutationWrite != nil {
 		testHookBeforeThreadMutationWrite(materialized.thread.ID)
 	}
-	if err := verifyUnchanged(s.resolveThread, materialized.thread.ID, materialized.path, materialized.ifVersion, "Thread", "mutation"); err != nil {
+	if err := verifyUnchanged(s.resolveThreadPathExact, materialized.thread.ID, materialized.path, materialized.ifVersion, "Thread", "mutation"); err != nil {
 		return result, err
 	}
 	if err := writeFileAtomic(materialized.path, materialized.content, 0o644); err != nil {
@@ -155,7 +155,7 @@ func (s *FS) materializeThreadMutation(source core.VersionedRecord[domain.Thread
 	if source.Record.Source.ID != plan.ThreadID || before.ID != plan.ThreadID || after.ID != plan.ThreadID || source.Record.Value.ID != plan.ThreadID || source.LocalPath == "" || source.SourceVersion == "" {
 		return materializedThreadMutation{}, fmt.Errorf("%w: Thread mutation analysis does not identify its target document", domain.ErrValidation)
 	}
-	resolved, err := s.resolveThread(plan.ThreadID)
+	resolved, err := s.resolveThreadPathExact(plan.ThreadID)
 	if err != nil {
 		return materializedThreadMutation{}, err
 	}

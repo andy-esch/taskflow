@@ -82,8 +82,13 @@ type TaskStore interface {
 
 // TaskPathSource is optional local, parse-free task navigation. Semantic task
 // reads do not imply that their adapter has a filesystem path to resolve.
+// Across all entity path ports, reference methods preserve CLI matching; ByID
+// methods require exact, unique source identity before returning a path, including
+// for malformed documents. A missing ID must never fall back to a display label.
 type TaskPathSource interface {
 	ResolveTaskPath(ref string) (string, error)
+	// ResolveTaskPathByID is exact selected identity, never fuzzy reference matching.
+	ResolveTaskPathByID(id string) (string, error)
 }
 
 // TaskDependencyWrite is one semantic task-file change returned by a pure graph
@@ -123,6 +128,8 @@ type TaskGraphPlanner func(*TaskGraph) (TaskGraphMutationPlan, error)
 // TaskGraphMutationStore owns the repository-wide graph read/validate/write
 // critical section. It is a sibling capability rather than part of Store so read-
 // only/test adapters do not acquire a mutation method they cannot implement.
+// Successful planner output is retained in Result.Plan on subsequent errors.
+// Core retains selected endpoints but recomputes writes against each fresh graph.
 type TaskGraphMutationStore interface {
 	MutateTaskGraph(now time.Time, dryRun bool, planner TaskGraphPlanner) (TaskGraphMutationResult, error)
 }
@@ -246,25 +253,32 @@ type ThreadStore interface {
 // path recovery for malformed documents.
 type ThreadPathSource interface {
 	ResolveThreadPath(ref string) (string, error)
+	ResolveThreadPathByID(id string) (string, error)
 }
 
 // EpicPathSource is optional local, parse-free epic navigation.
 type EpicPathSource interface {
 	ResolveEpicPath(ref string) (string, error)
+	ResolveEpicPathByID(id string) (string, error)
 }
 
 // AuditPathSource is optional local, parse-free audit navigation.
 type AuditPathSource interface {
 	ResolveAuditPath(ref string) (string, error)
+	ResolveAuditPathByID(id string) (string, error)
 }
 
 // ResearchPathSource is optional local, parse-free research navigation.
 type ResearchPathSource interface {
 	ResolveResearchPath(ref string) (string, error)
+	ResolveResearchPathByID(id string) (string, error)
 }
 
 // ThreadCreationMutationStore owns guarded, unstarted Thread creation. The
 // control-inverted planner receives only immutable semantic snapshot values.
+// Return a successfully validated Plan on later errors for receipt evidence.
+// Core binds successful planner intent even before validation; each attempt
+// revalidates all current source evidence and the selected member IDs.
 type ThreadCreationMutationStore interface {
 	MutateThreadCreation(now time.Time, dryRun bool, planner ThreadCreationPlanner) (ThreadCreationMutationResult, error)
 }
@@ -272,6 +286,9 @@ type ThreadCreationMutationStore interface {
 // ThreadMutationStore owns guarded updates to an existing Thread document.
 // Membership and lifecycle intents share the capability so neither can validate
 // against a stale task/Thread snapshot or nest another repository guard.
+// Return validated Plan endpoints on later errors for receipt evidence. Core
+// binds successful planner intent; derived membership and impacts are recomputed,
+// never replayed as a stale document replacement.
 type ThreadMutationStore interface {
 	MutateThread(now time.Time, dryRun bool, planner ThreadMutationPlanner) (ThreadMutationResult, error)
 }
