@@ -11,7 +11,7 @@ autonomy_level: 2
 tags: [correctness, identity, core, store, concurrency]
 created: "2026-10-14"
 audit_sources: [2026-10-14-task-correctness-detour-implementation-claude]
-updated_at: "2026-10-15"
+updated_at: "2026-10-16"
 started_at: "2026-10-15"
 ---
 # Pin non-task mutation retries to selected source identities
@@ -60,12 +60,12 @@ port work and needs no separate task or artificial dependency on task-only helpe
 
 ## Acceptance criteria
 
-- [ ] Each ordinary retry family retains its first source identity through rename, alias reuse, deletion and ID-shaped label fallback; unrelated records stay byte-identical.
-- [ ] Audit bulk header repair targets snapshot identities even with duplicate display slugs, and retains partial progress and baseline-aware repair policy.
-- [ ] Empty identity and duplicate canonical IDs refuse before callbacks, preview/no-op returns or effects, using useful existing sentinels.
-- [ ] Portable and real-adapter regressions cover transient initial selection, one retry budget, normal concurrent edits, and the observed audit/research wrong-target cases.
-- [ ] Owning comments/guides and full validation accurately separate fixed families from remaining selection boundaries.
-- [ ] Already-selected audit lifecycle and other inventoried non-task TUI
+- [x] Each ordinary retry family retains its first source identity through rename, alias reuse, deletion and ID-shaped label fallback; unrelated records stay byte-identical.
+- [x] Audit bulk header repair targets snapshot identities even with duplicate display slugs, and retains partial progress and baseline-aware repair policy.
+- [x] Empty identity and duplicate canonical IDs refuse before callbacks, preview/no-op returns or effects, using useful existing sentinels.
+- [x] Portable and real-adapter regressions cover transient initial selection, one retry budget, normal concurrent edits, and the observed audit/research wrong-target cases.
+- [x] Owning comments/guides and full validation accurately separate fixed families from remaining selection boundaries.
+- [x] Already-selected audit lifecycle and other inventoried non-task TUI
   mutation callers do not restart fuzzy selection at Service entry; deletion and
   ID-shaped impostors never change another record.
 
@@ -87,5 +87,14 @@ families. Entity-specific targets and parse-free source selection now keep ordin
 audit, research and epic writes exact from first selection through CAS and retry;
 audit repair uses snapshot source IDs. Selected audit/epic TUI callers use explicit
 Service APIs. Epics intentionally retain their whole-stem identity semantics.
-Focused core/store/TUI race suites and lint pass; full validation and independent
-cluster review are still required before completion.
+Duplicate-label audit header repair now has preview/write occurrence tests, and
+duplicate canonical IDs refuse before audit callbacks or no-op/preview success.
+Portable tests cover opaque identities, transient initial selection, empty conflict
+results and one shared selection/write retry budget. Selected audit/epic TUI
+commands have missing/impostor regressions through their actual command closures.
+
+Owner validation: `just build`, `just test` (race-enabled), `just lint`,
+`just docs-check` and planning `lint --links` pass. Acceptance criteria reflect
+implemented owner evidence, not independent approval; this task remains in progress
+with the safety cluster until the external reviews are processed. Interactive
+editors/creation and a universal retry/durability framework remain outside this fix.
