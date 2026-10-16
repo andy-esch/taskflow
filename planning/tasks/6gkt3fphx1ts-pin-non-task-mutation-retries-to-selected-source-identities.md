@@ -11,7 +11,7 @@ autonomy_level: 2
 tags: [correctness, identity, core, store, concurrency]
 created: "2026-10-14"
 audit_sources: [2026-10-14-task-correctness-detour-implementation-claude]
-updated_at: "2026-10-14"
+updated_at: "2026-10-15"
 ---
 # Pin non-task mutation retries to selected source identities
 
@@ -41,6 +41,22 @@ Probe: `/private/tmp/taskflow-target-neighbors.VNxBO5/neighbor_retry_probe_test.
 - Do not silently include interactive editors, creates, graph planners or new wire
   shapes. Record any separately confirmed exposure at those boundaries.
 
+### Earlier selected-caller boundary (2026-10-15)
+
+The [TUI task-action work](6gkt3fq0pv26-preserve-selected-tui-task-identities-through-service-actions.md)
+also reproduced an audit lifecycle command restarting selection before core retries:
+queue `moveAudit` with the selected source ID, delete that record, then create a
+different-ID audit whose human slug equals the missing ID. The real command returned
+`movedMsg` and closed the impostor. Probe retained locally at
+`/private/tmp/taskflow-selected-action-neighbors.uYLhPU/selected_identity_neighbors_probe_test.go`.
+
+Include narrow selected-identity Service entry points for these non-task callers,
+not just pinning after a fresh reference lookup. Inventory epic inline fields and
+audit lifecycle delegates; only audit deletion/impostor drift is independently
+reproduced here. Reuse ordinary coercion/lifecycle rules and preserve `tea.Cmd`,
+session/generation guards and CLI matching. This overlaps the existing entity-specific
+port work and needs no separate task or artificial dependency on task-only helpers.
+
 ## Acceptance criteria
 
 - [ ] Each ordinary retry family retains its first source identity through rename, alias reuse, deletion and ID-shaped label fallback; unrelated records stay byte-identical.
@@ -48,6 +64,9 @@ Probe: `/private/tmp/taskflow-target-neighbors.VNxBO5/neighbor_retry_probe_test.
 - [ ] Empty identity and duplicate canonical IDs refuse before callbacks, preview/no-op returns or effects, using useful existing sentinels.
 - [ ] Portable and real-adapter regressions cover transient initial selection, one retry budget, normal concurrent edits, and the observed audit/research wrong-target cases.
 - [ ] Owning comments/guides and full validation accurately separate fixed families from remaining selection boundaries.
+- [ ] Already-selected audit lifecycle and other inventoried non-task TUI
+  mutation callers do not restart fuzzy selection at Service entry; deletion and
+  ID-shaped impostors never change another record.
 
 ## Sequencing
 

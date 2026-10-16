@@ -21,6 +21,9 @@ import (
 // refusing missing or duplicate identities before callbacks, previews and no-ops.
 // It carries neither a declaration nor a location, revision or authorization token.
 // This prevents a retry from falling back to another record's human label.
+// Interfaces which already selected a row use [Service.SetSelectedTaskFields],
+// [Service.MoveSelectedTask] or [Service.DeferSelectedTask]; converting ID back
+// into a reference string would restart selection.
 type TaskMutationTarget struct {
 	ID string
 }

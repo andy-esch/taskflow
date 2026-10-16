@@ -93,3 +93,12 @@ terms before they can answer what is active, what blocks it, and what it unlocks
 The Thread-only lifecycle feedback fix (6ggkdbg0816h) retains the exact core remedy, independently summarizes task and Thread impacts, and preserves committed-cleanup warnings and reloads. The existing footer still truncates the entire flash to one terminal row and clears it on the next key: at 120 columns, a sole-member reopen can hide part of the recovery text, and long task labels or cleanup errors consume more of the budget. This is a presentation limitation, not a missing core receipt or a failed transition.
 
 Include consequential mutation feedback in the navigation/help design: make committed versus refused outcomes, warning severity, and complete core recovery instructions discoverable on narrow terminals. Compare a bounded expandable result/help surface with other approaches before choosing a persistent notification system; do not invent adapter-owned repair advice. The small receipt-rendering fix does not claim to solve this layout problem.
+
+The [selected-action review](../audits/6gm337aba0bh-2026-10-15-selected-tui-task-actions-implementation-claude.md)
+also identified a feedback-policy boundary: the stale `mutationResultMsg` handler
+reloads but preserves the newer selection's flash/editor, discarding any committed
+cleanup warning carried by the old result. Session-stale results are dropped too.
+Evaluate how consequential durable warnings remain discoverable without applying
+old selection state, overwriting newer feedback, or suggesting an already-committed
+write should be retried. This is design follow-up, not a reproduced wrong-target
+write or a change to cancellation policy.
