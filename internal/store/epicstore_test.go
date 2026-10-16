@@ -119,7 +119,7 @@ func TestFS_MoveEpic(t *testing.T) {
 	writeEpic(t, root, "18-tui.md",
 		"---\nstatus: active\ndescription: tui epic\ncustom: keep\n---\n# TUI Epic\nbody\n")
 
-	ep, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveEpic("18-tui", "retired", bodyNow, false)
+	ep, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveEpic(core.EpicMutationTarget{ID: "18-tui"}, "retired", bodyNow, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +155,7 @@ func TestFS_MoveEpic(t *testing.T) {
 func TestFS_MoveEpic_NoOp_NoStamp(t *testing.T) {
 	root := t.TempDir()
 	writeEpic(t, root, "18-tui.md", "---\nstatus: active\ndescription: x\n---\n# X\n")
-	ep, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveEpic("18-tui", "active", bodyNow, false)
+	ep, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveEpic(core.EpicMutationTarget{ID: "18-tui"}, "active", bodyNow, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,7 +172,7 @@ func TestFS_MoveEpic_InvalidStatus(t *testing.T) {
 	const original = "---\nstatus: active\ndescription: x\n---\n# X\n"
 	writeEpic(t, root, "18-tui.md", original)
 
-	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveEpic("18-tui", "bogus", bodyNow, false); !errors.Is(err, domain.ErrValidation) {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveEpic(core.EpicMutationTarget{ID: "18-tui"}, "bogus", bodyNow, false); !errors.Is(err, domain.ErrValidation) {
 		t.Errorf("invalid status should be ErrValidation, got %v", err)
 	}
 	b, _ := os.ReadFile(filepath.Join(root, "epics", "18-tui.md"))
@@ -187,7 +187,7 @@ func TestFS_MoveEpic_DryRun(t *testing.T) {
 	const original = "---\nstatus: active\n---\n# X\n"
 	writeEpic(t, root, "18-tui.md", original)
 
-	ep, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveEpic("18-tui", "retired", bodyNow, true)
+	ep, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveEpic(core.EpicMutationTarget{ID: "18-tui"}, "retired", bodyNow, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -201,7 +201,7 @@ func TestFS_MoveEpic_DryRun(t *testing.T) {
 }
 
 func TestFS_MoveEpic_NotFound(t *testing.T) {
-	if _, err := testutil.Must(NewFS(t.TempDir(), core.UnrestrictedMutations())).MoveEpic("ghost", "retired", bodyNow, false); !errors.Is(err, domain.ErrNotFound) {
+	if _, err := testutil.Must(NewFS(t.TempDir(), core.UnrestrictedMutations())).MoveEpic(core.EpicMutationTarget{ID: "ghost"}, "retired", bodyNow, false); !errors.Is(err, domain.ErrNotFound) {
 		t.Errorf("want ErrNotFound, got %v", err)
 	}
 }

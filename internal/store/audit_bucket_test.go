@@ -19,7 +19,7 @@ func TestMoveAudit_WritesBucketFrontmatter(t *testing.T) {
 		"---\nid: 6fjjt6s9ttz3\nbucket: open\narea: x\ndate: 2026-01-02\n---\n#### H1. t  · **Status:** fixed\n")
 	testutil.Write(t, path, out)
 
-	a, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveAudit("2026-01-02-c", domain.AuditClosed, false)
+	a, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveAudit(testAuditTarget("2026-01-02-c"), domain.AuditClosed, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -47,7 +47,7 @@ func TestMoveAudit_HealsFellBackBucket(t *testing.T) {
 	testutil.Write(t, path,
 		"---\nid: 6fjjt6s9ttz6\narea: x\ndate: 2026-01-02\n---\n# a\n")
 
-	a, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveAudit("2026-01-02-h", domain.AuditOpen, false)
+	a, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveAudit(testAuditTarget("2026-01-02-h"), domain.AuditOpen, false)
 	if err != nil {
 		t.Fatal(err)
 	}

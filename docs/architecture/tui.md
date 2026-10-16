@@ -37,9 +37,12 @@ collisions, denied writes and stale/current-space results.
 [Activation tests](../../internal/tui/selected_task_session_test.go) exercise a
 pending Atlas open landing under an edit, action, confirm or defer form.
 
-This is not yet a universal selected-action guarantee: non-task mutation callers
-remain tracked by [entity pinning](../../planning/tasks/6gkt3fphx1ts-pin-non-task-mutation-retries-to-selected-source-identities.md),
-and [local-path actions](../../planning/tasks/6gm30jat0xsy-keep-selected-tui-path-actions-bound-to-exact-identities.md)
+Audit lifecycle and epic field/lifecycle commands also use selected-identity
+Service entry points, retaining ordinary CLI validation and reference matching.
+[Non-task action tests](../../internal/tui/selected_entity_action_test.go) cover
+missing selected sources and impostor labels before the first Service call.
+This is not yet a universal selected-action guarantee:
+[local-path actions](../../planning/tasks/6gm30jat0xsy-keep-selected-tui-path-actions-bound-to-exact-identities.md)
 still require an identity-only optional lookup. Rechecking a fuzzy ID string twice
 does not prevent both lookups selecting another record's ID-shaped human label.
 

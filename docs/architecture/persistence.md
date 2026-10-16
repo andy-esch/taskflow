@@ -71,8 +71,12 @@ the adapter's parse-free source lookup, preserving field repair without treating
 malformed typed value as missing identity. Field writes validate the updated document;
 body writes still require their resulting task to decode.
 [Target regressions](../../internal/store/task_target_test.go) exercise rename, old-alias
-reuse, disappearance, collisions and preview/no-op boundaries. Other entity/graph
-retry gaps remain explicit in the [planning-data guide](planning-data.md).
+reuse, disappearance, collisions and preview/no-op boundaries. Audit/research/epic
+scriptable ports use the same explicit-target rule, with entity-specific parse-free
+source lookup. Their write and CAS lookups are exact; an epic uses its whole stem,
+not its numeric prefix. [Entity regressions](../../internal/store/entity_target_test.go)
+cover all nine retry families. Graph retry gaps remain explicit in the
+[planning-data guide](planning-data.md).
 
 ## Ordinary create and task rename
 

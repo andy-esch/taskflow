@@ -51,7 +51,7 @@ func TestFS_MoveAudit_RejectsMalformedWithoutMoving(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "a1.md"), []byte("---\narea: store\n# no closing fence\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveAudit("a1", domain.AuditClosed, false)
+	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveAudit(testAuditTarget("a1"), domain.AuditClosed, false)
 	if err == nil {
 		t.Fatal("want an error for a malformed audit")
 	}

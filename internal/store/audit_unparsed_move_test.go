@@ -56,11 +56,11 @@ func TestAuditMovesKeepCleanEmptyAndOrdinaryAuditsSupported(t *testing.T) {
 			testutil.Write(t, path, content)
 			fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 			before := testutil.SnapshotTree(t, root)
-			preview, err := fs.MoveAudit("probe", to, true)
+			preview, err := fs.MoveAudit(testAuditTarget("probe"), to, true)
 			if err != nil || preview.Bucket != to || !maps.Equal(before, testutil.SnapshotTree(t, root)) {
 				t.Fatalf("clean preview to %s: audit=%+v err=%v", to, preview, err)
 			}
-			after, err := fs.MoveAudit("probe", to, false)
+			after, err := fs.MoveAudit(testAuditTarget("probe"), to, false)
 			if err != nil || after.Bucket != to {
 				t.Fatalf("clean move to %s: audit=%+v err=%v", to, after, err)
 			}
@@ -74,7 +74,7 @@ func TestAuditReopenAllowsIncompleteEvidenceForRepair(t *testing.T) {
 	testutil.Write(t, path, content)
 	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 	for _, dry := range []bool{true, false} {
-		a, err := fs.MoveAudit("probe", domain.AuditOpen, dry)
+		a, err := fs.MoveAudit(testAuditTarget("probe"), domain.AuditOpen, dry)
 		if err != nil || a.Bucket != domain.AuditOpen || a.UnparsedFindings != 1 {
 			t.Fatalf("reopen dry=%t: audit=%+v err=%v", dry, a, err)
 		}

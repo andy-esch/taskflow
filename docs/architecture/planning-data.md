@@ -61,8 +61,17 @@ See [portable application tests](../../internal/core/selected_task_action_test.g
 and [TUI action tests](../../internal/tui/selected_task_action_test.go), including
 [open-form activation regressions](../../internal/tui/selected_task_session_test.go).
 
-The survey confirms remaining [non-task retry/selected-caller](../../planning/tasks/6gkt3fphx1ts-pin-non-task-mutation-retries-to-selected-source-identities.md),
-[selected local-path](../../planning/tasks/6gm30jat0xsy-keep-selected-tui-path-actions-bound-to-exact-identities.md)
+Audit, research and epic scriptable writes likewise take entity-specific selected
+targets. Their parse-free source lookups share one retry budget with writes; audit
+header repair uses each snapshot occurrence's source ID, never its display slug.
+Epics use the complete filename stem as identity: changing that stem removes the
+old identity rather than authorizing a similarly named epic. TUI audit lifecycle
+and epic field/lifecycle commands use selected entry points from the first attempt.
+See [portable entity tests](../../internal/core/entity_target_test.go),
+[real-store retry tests](../../internal/store/entity_target_test.go) and
+[TUI non-task actions](../../internal/tui/selected_entity_action_test.go).
+
+The survey confirms remaining [selected local-path](../../planning/tasks/6gm30jat0xsy-keep-selected-tui-path-actions-bound-to-exact-identities.md)
 and [dependency/Thread replanning](../../planning/tasks/6gkt3fpsfdd7-keep-graph-and-thread-retry-endpoints-fixed-during-replanning.md)
 gaps. Neither canonical strings nor CAS alone establish end-to-end target binding.
 

@@ -92,7 +92,7 @@ func TestEditAudit_UnknownSlug_NotFound(t *testing.T) {
 // (its immutable slug) stays put.
 func TestAppendAuditBody_StampsUpdatedAt(t *testing.T) {
 	fs, path := auditEditRepo(t)
-	a, body, err := fs.AppendAuditBody("2026-06-20-store", "#### M2. new  · **Status:** open", auditEditNow, false)
+	a, body, err := fs.AppendAuditBody(testAuditTarget("2026-06-20-store"), "#### M2. new  · **Status:** open", auditEditNow, false)
 	if err != nil {
 		t.Fatalf("AppendAuditBody: %v", err)
 	}
@@ -120,7 +120,7 @@ func TestAppendAuditBody_PreservesTrailingCandidateProjection(t *testing.T) {
 	path, content := testutil.AuditFixture(root, "open", "2026-06-20-append.md", source)
 	testutil.Write(t, path, content)
 
-	_, body, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).AppendAuditBody("2026-06-20-append", "## Progress\n\nNarrative update.", auditEditNow, false)
+	_, body, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).AppendAuditBody(testAuditTarget("2026-06-20-append"), "## Progress\n\nNarrative update.", auditEditNow, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -140,7 +140,7 @@ func TestAppendAuditBody_PreservesTrailingCandidateProjection(t *testing.T) {
 func TestAppendAuditBody_DryRun_NoWrite(t *testing.T) {
 	fs, path := auditEditRepo(t)
 	before := readFile(t, path)
-	_, body, err := fs.AppendAuditBody("2026-06-20-store", "PREVIEW", bodyNow, true)
+	_, body, err := fs.AppendAuditBody(testAuditTarget("2026-06-20-store"), "PREVIEW", bodyNow, true)
 	if err != nil {
 		t.Fatalf("dry-run AppendAuditBody: %v", err)
 	}
@@ -155,7 +155,7 @@ func TestAppendAuditBody_DryRun_NoWrite(t *testing.T) {
 // Unknown slug → ErrNotFound, no write.
 func TestAppendAuditBody_UnknownSlug_NotFound(t *testing.T) {
 	fs, _ := auditEditRepo(t)
-	if _, _, err := fs.AppendAuditBody("nope", "x", bodyNow, false); !errors.Is(err, domain.ErrNotFound) {
+	if _, _, err := fs.AppendAuditBody(testAuditTarget("nope"), "x", bodyNow, false); !errors.Is(err, domain.ErrNotFound) {
 		t.Fatalf("want ErrNotFound, got %v", err)
 	}
 }
@@ -238,7 +238,7 @@ func TestAppendAuditBody_EditedDuringWrite_Conflict(t *testing.T) {
 		testutil.Write(t, path, strings.Replace(auditEditSeed, "bucket: open", "bucket: closed", 1))
 	}
 	defer func() { testHookBeforeBodyWrite = nil }()
-	if _, _, err := fs.AppendAuditBody("2026-06-20-store", "x", bodyNow, false); !errors.Is(err, domain.ErrConflict) {
+	if _, _, err := fs.AppendAuditBody(testAuditTarget("2026-06-20-store"), "x", bodyNow, false); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a concurrent in-place edit in the write window should be ErrConflict, got %v", err)
 	}
 	if got := readFile(t, path); !strings.Contains(got, "bucket: closed") {
@@ -251,7 +251,7 @@ func TestAppendAuditBody_BrokenFrontmatter_Errors(t *testing.T) {
 	root := t.TempDir()
 	path, out := testutil.AuditFixture(root, "open", "2026-06-20-broken.md", "---\narea: store\nno closing fence\n")
 	testutil.Write(t, path, out)
-	if _, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).AppendAuditBody("2026-06-20-broken", "y", bodyNow, false); err == nil {
+	if _, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).AppendAuditBody(testAuditTarget("2026-06-20-broken"), "y", bodyNow, false); err == nil {
 		t.Fatal("appending to a file with unterminated frontmatter should error")
 	}
 }

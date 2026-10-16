@@ -89,14 +89,14 @@ func writeBody[T any](
 // updated_at like the task path; the audit's immutable date stays untouched. The
 // shared write tail (parse-before-accept, compare-and-swap, dry-run, body echo)
 // lives in writeBody. Returns the reloaded audit and the resulting (LF) body.
-func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (domain.Audit, string, error) {
+func (s *FS) AppendAuditBody(target core.AuditMutationTarget, text string, now time.Time, dryRun bool) (domain.Audit, string, error) {
 	if err := s.authorizeMutation(); err != nil {
 		return domain.Audit{}, "", err
 	}
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Audit{}, "", err
 	}
-	path, err := s.resolveAudit(slug)
+	path, err := s.resolveAuditMutationTarget(target)
 	if err != nil {
 		return domain.Audit{}, "", err
 	}
@@ -132,7 +132,7 @@ func (s *FS) AppendAuditBody(slug, text string, now time.Time, dryRun bool) (dom
 		s.writeLock,
 		// A concurrent audit lifecycle or content edit during the read→write gap.
 		func() error {
-			return verifyUnchanged(s.resolveAuditPath, slug, path, hashContent(content), "audit", "edit")
+			return verifyUnchanged(s.resolveAuditPath, target.ID, path, hashContent(content), "audit", "edit")
 		},
 		dryRun,
 	)
@@ -190,7 +190,7 @@ func (s *FS) EditBody(target core.TaskMutationTarget, text string, appendMode bo
 // `audit append` instead of refusing it. An unchanged normalized body is a no-op
 // and does not stamp updated_at.
 func (s *FS) TransformAuditBody(
-	slug string,
+	target core.AuditMutationTarget,
 	now time.Time,
 	dryRun bool,
 	transform func(audit domain.Audit, current string) (string, error),
@@ -201,7 +201,7 @@ func (s *FS) TransformAuditBody(
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Audit{}, "", false, err
 	}
-	path, err := s.resolveAudit(slug)
+	path, err := s.resolveAuditMutationTarget(target)
 	if err != nil {
 		return domain.Audit{}, "", false, err
 	}
@@ -233,7 +233,7 @@ func (s *FS) TransformAuditBody(
 		func(c []byte) (domain.Audit, error) { return parseAudit(c, path) },
 		s.writeLock,
 		func() error {
-			return verifyUnchanged(s.resolveAuditPath, slug, path, hashContent(content), "audit", "edit")
+			return verifyUnchanged(s.resolveAuditPath, target.ID, path, hashContent(content), "audit", "edit")
 		},
 		dryRun,
 	)

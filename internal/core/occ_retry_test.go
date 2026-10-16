@@ -60,11 +60,13 @@ func (c *conflictStore) TransformTaskBody(target TaskMutationTarget, _ time.Time
 	}
 	return domain.Task{ID: target.ID}, body, true, nil
 }
-func (c *conflictStore) MoveAudit(slug string, _ domain.AuditBucket, _ bool) (domain.Audit, error) {
+func (c *conflictStore) MoveAudit(target AuditMutationTarget, _ domain.AuditBucket, _ bool) (domain.Audit, error) {
+	slug := target.ID
 	c.auditMoveCalls++
 	return domain.Audit{Slug: slug}, c.errFor(c.auditMoveCalls)
 }
-func (c *conflictStore) AppendAuditBody(slug, text string, _ time.Time, _ bool) (domain.Audit, string, error) {
+func (c *conflictStore) AppendAuditBody(target AuditMutationTarget, text string, _ time.Time, _ bool) (domain.Audit, string, error) {
+	slug := target.ID
 	c.auditBodyCalls++
 	return domain.Audit{Slug: slug}, text, c.errFor(c.auditBodyCalls)
 }
@@ -74,7 +76,8 @@ func (c *conflictStore) AppendAuditBody(slug, text string, _ time.Time, _ bool) 
 // caller precomputed before the conflict.
 const auditFindingBody = "# Audit: a\n\n## Findings\n\n#### H1. a finding · **Status:** open\n\nBody.\n"
 
-func (c *conflictStore) TransformAuditBody(slug string, _ time.Time, _ bool, transform func(domain.Audit, string) (string, error)) (domain.Audit, string, bool, error) {
+func (c *conflictStore) TransformAuditBody(target AuditMutationTarget, _ time.Time, _ bool, transform func(domain.Audit, string) (string, error)) (domain.Audit, string, bool, error) {
+	slug := target.ID
 	c.auditTransforms++
 	body, err := transform(domain.Audit{Slug: slug, Bucket: domain.AuditOpen}, auditFindingBody)
 	if err != nil {
@@ -86,11 +89,13 @@ func (c *conflictStore) TransformAuditBody(slug string, _ time.Time, _ bool, tra
 	return domain.Audit{Slug: slug}, body, body != auditFindingBody, nil
 }
 
-func (c *conflictStore) SetResearchFields(slug string, _ map[string]any, _ bool) (domain.Research, error) {
+func (c *conflictStore) SetResearchFields(target ResearchMutationTarget, _ map[string]any, _ bool) (domain.Research, error) {
+	slug := target.ID
 	c.researchSetCalls++
 	return domain.Research{Slug: slug}, c.errFor(c.researchSetCalls)
 }
-func (c *conflictStore) AppendResearchBody(slug, text string, _ time.Time, _ bool) (domain.Research, string, error) {
+func (c *conflictStore) AppendResearchBody(target ResearchMutationTarget, text string, _ time.Time, _ bool) (domain.Research, string, error) {
+	slug := target.ID
 	c.researchBodyCalls++
 	return domain.Research{Slug: slug}, text, c.errFor(c.researchBodyCalls)
 }

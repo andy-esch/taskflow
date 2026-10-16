@@ -29,7 +29,7 @@ func TestFS_SetResearchFields_PreservesUnknownKeysAndOrder(t *testing.T) {
 		"# a comment the tool must not eat\nstatus: reference\ntopic: something bespoke\ntags: [old]\n---\n# Legacy\n\nbody\n"
 	researchFixture(t, root, "legacy.md", original)
 
-	got, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetResearchFields("legacy", map[string]any{"description": "now described"}, false)
+	got, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetResearchFields(testResearchTarget("legacy"), map[string]any{"description": "now described"}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestFS_SetResearchFields_UnsetRemovesKey(t *testing.T) {
 	root := t.TempDir()
 	researchFixture(t, root, "doc.md", "---\nschema: 1\nid: "+testutil.TaskID("doc")+"\ncreated: \"2026-01-03\"\nstatus: reference\n---\n# Doc\n")
 
-	got, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetResearchFields("doc", map[string]any{"status": domain.UnsetField{}}, false)
+	got, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetResearchFields(testResearchTarget("doc"), map[string]any{"status": domain.UnsetField{}}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -81,7 +81,7 @@ func TestFS_SetResearchFields_DryRunWritesNothing(t *testing.T) {
 	path := researchFixture(t, root, "doc.md", "---\nschema: 1\nid: "+testutil.TaskID("doc")+"\ncreated: \"2026-01-03\"\n---\n# Doc\n")
 	before, _ := os.ReadFile(path)
 
-	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetResearchFields("doc", map[string]any{"description": "preview"}, true); err != nil {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetResearchFields(testResearchTarget("doc"), map[string]any{"description": "preview"}, true); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := os.ReadFile(path)
@@ -99,7 +99,7 @@ func TestFS_SetResearchFields_RefusesUnreloadableUpdate(t *testing.T) {
 
 	// A scalar written into the list-typed `tags` cannot unmarshal, so the reload fails.
 	// No t.Skip: a skip here would silently retire the guard behind a green suite.
-	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetResearchFields("doc", map[string]any{"tags": "not-a-list"}, false)
+	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).SetResearchFields(testResearchTarget("doc"), map[string]any{"tags": "not-a-list"}, false)
 	if err == nil {
 		t.Fatal("an update that makes the file unreloadable must be refused")
 	}
@@ -125,7 +125,7 @@ func TestFS_AppendResearchBody(t *testing.T) {
 	researchFixture(t, root, "doc.md", "---\nschema: 1\nid: "+testutil.TaskID("doc")+"\ncreated: \"2026-01-03\"\n---\n# Doc\n\nfirst\n")
 	now := time.Date(2026, 8, 18, 0, 0, 0, 0, time.UTC)
 
-	got, body, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).AppendResearchBody("doc", "## Addendum\n\nmore", now, false)
+	got, body, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).AppendResearchBody(testResearchTarget("doc"), "## Addendum\n\nmore", now, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -146,7 +146,7 @@ func TestFS_AppendResearchBody_DryRunWritesNothing(t *testing.T) {
 	path := researchFixture(t, root, "doc.md", "---\nschema: 1\nid: "+testutil.TaskID("doc")+"\ncreated: \"2026-01-03\"\n---\n# Doc\n")
 	before, _ := os.ReadFile(path)
 
-	if _, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).AppendResearchBody("doc", "## X", time.Now(), true); err != nil {
+	if _, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).AppendResearchBody(testResearchTarget("doc"), "## X", time.Now(), true); err != nil {
 		t.Fatal(err)
 	}
 	after, _ := os.ReadFile(path)
@@ -162,7 +162,7 @@ func TestFS_AppendResearchBody_RefusesBrokenFrontmatter(t *testing.T) {
 	testutil.Write(t, filepath.Join(root, domain.ResearchDir, testutil.TaskID("bad")+"-bad.md"),
 		"---\nid: [unclosed\ncreated: \"2026-01-03\"\n---\n# Bad\n")
 
-	if _, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).AppendResearchBody("bad", "## X", time.Now(), false); err == nil {
+	if _, _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).AppendResearchBody(testResearchTarget("bad"), "## X", time.Now(), false); err == nil {
 		t.Error("appending to a doc with malformed frontmatter must fail, not half-write")
 	}
 }
@@ -258,11 +258,11 @@ func TestFS_ResearchWritePaths_RefuseFrontmatterlessDoc(t *testing.T) {
 		write func(*FS) error
 	}{
 		{"SetResearchFields", func(fs *FS) error {
-			_, err := fs.SetResearchFields("legacy", map[string]any{"description": "d"}, false)
+			_, err := fs.SetResearchFields(testResearchTarget("legacy"), map[string]any{"description": "d"}, false)
 			return err
 		}},
 		{"AppendResearchBody", func(fs *FS) error {
-			_, _, err := fs.AppendResearchBody("legacy", "## Added", time.Now(), false)
+			_, _, err := fs.AppendResearchBody(testResearchTarget("legacy"), "## Added", time.Now(), false)
 			return err
 		}},
 	}
@@ -306,7 +306,7 @@ func TestFS_SetResearchFields_ConcurrentEditConflicts(t *testing.T) {
 		testHookBeforeResearchWrite = orig // fire once
 	}
 
-	_, err := fs.SetResearchFields("doc", map[string]any{"description": "mine"}, false)
+	_, err := fs.SetResearchFields(testResearchTarget("doc"), map[string]any{"description": "mine"}, false)
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a concurrent in-place edit must conflict (exit 14), got %v", err)
 	}
@@ -331,7 +331,7 @@ func TestFS_AppendResearchBody_ConcurrentEditConflicts(t *testing.T) {
 		testHookBeforeBodyWrite = orig
 	}
 
-	_, _, err := fs.AppendResearchBody("doc", "## Mine", time.Now(), false)
+	_, _, err := fs.AppendResearchBody(testResearchTarget("doc"), "## Mine", time.Now(), false)
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a concurrent edit during append must conflict, got %v", err)
 	}

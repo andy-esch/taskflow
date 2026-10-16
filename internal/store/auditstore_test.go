@@ -144,7 +144,7 @@ func TestFS_MoveAudit(t *testing.T) {
 	// is an in-place frontmatter edit.
 	wantPath := filepath.Join(root, "audits", testutil.TaskID("x")+"-x.md")
 
-	a, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveAudit("x", domain.AuditClosed, false)
+	a, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveAudit(testAuditTarget("x"), domain.AuditClosed, false)
 	if err != nil {
 		t.Fatal(err)
 	}

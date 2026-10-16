@@ -397,7 +397,7 @@ func deferTaskCmd(svc *core.Service, ref entityRef, revisit string) tea.Cmd {
 // as an actionErrMsg (red flash, no move), matching the CLI.
 func moveAudit(svc *core.Service, ref entityRef, tr transition) tea.Cmd {
 	return func() tea.Msg {
-		if _, err := svc.MoveAudit(ref.key, domain.AuditBucket(tr.to), false); err != nil {
+		if _, err := svc.MoveSelectedAudit(core.AuditMutationTarget{ID: ref.key}, domain.AuditBucket(tr.to), false); err != nil {
 			return actionErrMsg{ref: ref, err: err}
 		}
 		return movedMsg{ref: ref, to: tr.to}
@@ -410,7 +410,7 @@ func moveAudit(svc *core.Service, ref entityRef, tr transition) tea.Cmd {
 // actionErrMsg (red flash, no reload), matching the CLI.
 func moveEpic(svc *core.Service, ref entityRef, tr transition) tea.Cmd {
 	return func() tea.Msg {
-		if _, err := svc.MoveEpic(ref.key, tr.to, false); err != nil {
+		if _, err := svc.MoveSelectedEpic(core.EpicMutationTarget{ID: ref.key}, tr.to, false); err != nil {
 			return actionErrMsg{ref: ref, err: err}
 		}
 		return movedMsg{ref: ref, to: tr.to}

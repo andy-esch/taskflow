@@ -143,14 +143,14 @@ func (s *FS) resolveResearchPathExact(entityID string) (string, error) {
 // atomic, validated write. Unknown keys, comments, and key order survive (the vestigial
 // `status: reference` on the legacy corpus rides along untouched). The service injects
 // updated_at; protected fields are rejected before we get here.
-func (s *FS) SetResearchFields(slug string, updates map[string]any, dryRun bool) (domain.Research, error) {
+func (s *FS) SetResearchFields(target core.ResearchMutationTarget, updates map[string]any, dryRun bool) (domain.Research, error) {
 	if err := s.authorizeMutation(); err != nil {
 		return domain.Research{}, err
 	}
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Research{}, err
 	}
-	path, err := s.resolveResearch(slug)
+	path, err := s.resolveResearchMutationTarget(target)
 	if err != nil {
 		return domain.Research{}, err
 	}
@@ -240,14 +240,14 @@ func (s *FS) EditResearch(slug string, now time.Time, edit func(current string, 
 // AppendResearchBody appends markdown to a research doc's body in one atomic, validated
 // write, stamping updated_at. `created` stays immutable — the id is minted from it. The
 // agent face of body editing, beside EditResearch's editor.
-func (s *FS) AppendResearchBody(slug, text string, now time.Time, dryRun bool) (domain.Research, string, error) {
+func (s *FS) AppendResearchBody(target core.ResearchMutationTarget, text string, now time.Time, dryRun bool) (domain.Research, string, error) {
 	if err := s.authorizeMutation(); err != nil {
 		return domain.Research{}, "", err
 	}
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return domain.Research{}, "", err
 	}
-	path, err := s.resolveResearch(slug)
+	path, err := s.resolveResearchMutationTarget(target)
 	if err != nil {
 		return domain.Research{}, "", err
 	}
