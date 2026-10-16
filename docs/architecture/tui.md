@@ -37,18 +37,15 @@ collisions, denied writes and stale/current-space results.
 [Activation tests](../../internal/tui/selected_task_session_test.go) exercise a
 pending Atlas open landing under an edit, action, confirm or defer form.
 
-Audit lifecycle and epic field/lifecycle commands also use selected-identity
-Service entry points, retaining ordinary CLI validation and reference matching.
+Audit lifecycle and epic field/lifecycle commands also use selected Service entry
+points, sharing CLI validation without repeating reference matching.
 [Non-task action tests](../../internal/tui/selected_entity_action_test.go) cover
 missing selected sources and impostor labels before the first Service call.
-Local editor/path-copy actions and detail path joins use optional `*PathByID`
-Service methods for all five entity families, never the reference-based CLI path
-methods. Both asynchronous local-action lookups require exact source ownership;
-the second lookup can follow a same-ID rename but cannot accept an impostor label.
-Lookups remain parse-free for manual repair and refuse missing/duplicate identities.
-Selection, list and workspace-session guards still protect delayed delivery. This
-does not eliminate a raw editor's final lookup-to-effect race or guarantee an ID's
-incarnation after delete/recreate with the identical ID.
+Local editor/path-copy actions and detail joins use optional, parse-free `*PathByID`
+methods for all five kinds. Both asynchronous lookups require exact source ownership;
+confirmation follows same-ID renames but refuses impostors. Selection/list/session
+guards protect delayed delivery. Neither the final lookup-to-effect race nor
+delete/recreate with the identical ID is made transactional.
 See [selected local-action tests](../../internal/tui/selected_local_path_test.go).
 
 Lifecycle menus and command verbs use the registry's transition table and delegate.

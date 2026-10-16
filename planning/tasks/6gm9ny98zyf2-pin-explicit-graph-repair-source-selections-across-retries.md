@@ -68,6 +68,7 @@ regression when implementing. No real planning artifacts were used as fixtures.
 
 ## Sequencing
 
-Add to Finish selected identity safety as the next bounded repair follow-up. The
-current three fixes need not wait to ship; they are precedent, not an artificial
-dependency. Keep broad entity-integrity/storage redesign in its existing design task.
+Queued in [Finish selected identity safety](../threads/6gm4h71hm1yt-finish-selected-identity-safety.md)
+as the next bounded repair follow-up. The three completed fixes can ship first;
+they are precedent, not an artificial dependency. Broad entity-integrity/storage
+redesign stays in its existing design task.

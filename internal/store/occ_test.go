@@ -228,7 +228,7 @@ func TestSetFields_FuzzyQueryDoesNotSpuriouslyConflict(t *testing.T) {
 	}
 }
 
-// MoveEpic conflict coverage (resolveEpicPath + the move path; distinct from SetEpicFields).
+// MoveEpic conflict coverage uses the exact selected key, independently of SetEpicFields.
 func TestMoveEpic_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(root+"/epics", 0o755); err != nil {

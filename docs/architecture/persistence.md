@@ -64,26 +64,16 @@ must not be blindly retried. See [retry tests](../../internal/core/occ_retry_tes
 and [recovery tests](../../internal/core/dependency_recovery_test.go). A general shared
 retry/durability policy remains [design work](../../planning/tasks/6g7wsr8yvt1a-define-the-next-shared-entity-integrity-foundations.md).
 
-Task body/field ports take an explicit selected identity, not a fuzzy reference.
-Their initial lookup and CAS both use exact ID ownership; a missing ID is not permission
-to try another record's slug. Core requests initial user-reference resolution through
-the adapter's parse-free source lookup, preserving field repair without treating a
-malformed typed value as missing identity. Field writes validate the updated document;
-body writes still require their resulting task to decode.
-[Target regressions](../../internal/store/task_target_test.go) exercise rename, old-alias
-reuse, disappearance, collisions and preview/no-op boundaries. Audit/research/epic
-scriptable ports use the same explicit-target rule, with entity-specific parse-free
-source lookup. Their write and CAS lookups are exact; an epic uses its whole stem,
-not its numeric prefix. [Entity regressions](../../internal/store/entity_target_test.go)
-cover all nine retry families, duplicate ownership and occurrence-based header repair.
-The shared CAS helper takes an explicit adapter resolver key, never guesses identity
-from the path's shape. Interactive editors keep their original diagnostic label
-separate from that selected key. [CAS key tests](../../internal/store/cas_test.go)
-and [whole-stem epic writes](../../internal/store/epic_selected_cas_test.go) pin this,
-including legacy epic stems that resemble ID-led task filenames.
-Graph retries retain semantic endpoints while recomputing current changes; they do
-not replay cached write sets. See [graph retry regressions](../../internal/store/graph_retry_target_test.go)
-and the [planning-data guide](planning-data.md).
+Scriptable writes enforce the [selected-identity contract](planning-data.md#identity-is-evidence-not-a-display-label)
+at target lookup and CAS, without fuzzy fallback. Field writes validate repaired
+documents; task body writes require the result to decode. See
+[task](../../internal/store/task_target_test.go) and
+[non-task](../../internal/store/entity_target_test.go) drift/refusal regressions.
+
+The CAS helper accepts an explicit adapter resolver key, never infers it from path
+shape. Editors keep diagnostic labels separate; epics retain whole-stem identity even
+when the stem resembles an ID-led task name. See [CAS key tests](../../internal/store/cas_test.go)
+and [epic regressions](../../internal/store/epic_selected_cas_test.go).
 
 ## Ordinary create and task rename
 

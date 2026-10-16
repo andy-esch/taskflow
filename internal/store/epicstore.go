@@ -256,9 +256,8 @@ func (s *FS) EditEpic(id string, now time.Time, edit func(current string, prevEr
 // a test can interleave a concurrent edit in the read→write window. Nil in production.
 var testHookBeforeEpicWrite func()
 
-// resolveEpicPath resolves an epic id to its file path — the (path, error) adapter the
-// version-CAS guard takes. Epics live flat, so this never sees a relocation; the guard's
-// content hash is what catches a concurrent in-place epic edit.
+// resolveEpicPath applies ordinary human-reference matching for local navigation.
+// Selected writes and CAS use resolveEpicMutationPath instead.
 func (s *FS) resolveEpicPath(id string) (string, error) {
 	cands, err := epicCandidates(s.epicsDir)
 	if err != nil {

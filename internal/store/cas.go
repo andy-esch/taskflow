@@ -27,11 +27,9 @@ func hashContent(b []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// verifyTaskGraphSourceSnapshot is the shared pre-write whole-repository CAS for
-// every graph-aware mutation, including the forthcoming broken-graph repair path.
-// It is deliberately valid for broken snapshots: unreadable source revisions are
-// part of SameSourceSnapshot, so a raw edit cannot hide behind an unchanged parse
-// error. Callers add operation-specific conflict context around the sentinel.
+// verifyTaskGraphSourceSnapshot is the whole-repository CAS for graph-aware writes,
+// including repair. Unreadable source revisions participate in equality, so an
+// unchanged parse error cannot hide changed bytes. Callers add conflict context.
 func verifyTaskGraphSourceSnapshot(expected, current *core.TaskGraph) error {
 	if !expected.SameSourceSnapshot(current) {
 		return domain.ErrConflict
@@ -39,10 +37,9 @@ func verifyTaskGraphSourceSnapshot(expected, current *core.TaskGraph) error {
 	return nil
 }
 
-// verifyThreadSourceSnapshot is the unreadable-aware half of every graph-aware
-// repository write CAS. It compares opaque source evidence without exposing it
-// to planners or renderers and remains valid for a future repair path that may
-// deliberately continue past malformed Thread documents.
+// verifyThreadSourceSnapshot compares complete Thread source evidence, including
+// unreadable revisions, without exposing persistence tokens to planners/renderers.
+// This also protects repair operations that tolerate malformed Threads.
 func verifyThreadSourceSnapshot(expected, current core.ThreadRead) error {
 	if !sameThreadSourceSnapshot(expected, current) {
 		return domain.ErrConflict
@@ -99,27 +96,14 @@ func sameThreadProblemSource(left, right core.ThreadReadProblem) bool {
 		left.SourceVersion != "" && left.SourceVersion == right.SourceVersion
 }
 
-// verifyUnchanged is the version-CAS precondition shared by every write: called
-// immediately before the write, it re-resolves the file by its explicit selected
-// adapter key, never a raw fuzzy query or an identity guessed from a filename,
-// and re-reads the source to confirm nothing raced us between
-// the read-and-transform and the write. It returns
-// domain.ErrConflict (exit 14 — the same sentinel today's path-CAS produces) when the
-// file either:
+// verifyUnchanged checks selected ownership and content immediately before writing.
+// The caller holds the write guard and supplies an established key with its exact
+// resolver, never a fuzzy query or a key inferred here from filename shape. Epics
+// use whole stems even when those resemble ID-led task names.
 //
-//   - moved or vanished (curPath != path) — a concurrent relocation; the check the
-//     path-CAS re-resolve has always made, guarding against resurrecting the slug in its
-//     old status/bucket dir; or
-//   - changed content (hash(current) != ifVersion) — a concurrent in-place body/field
-//     edit, which the path-CAS alone silently missed. This is the coverage version-CAS
-//     adds, so this guard is a strict superset of the old re-resolve block.
-//
-// ifVersion is the hash of the bytes the caller read; an empty ifVersion skips the
-// content check (an unconditional write — the caller held no prior version to compare).
-// The caller establishes key and supplies its matching resolver. Epics use whole
-// stems even when they resemble an ID-led task name; this helper does not decode
-// either convention. Callers with a distinct diagnostic label use
-// verifyUnchangedWithLabel without changing the resolver key.
+// A missing/moved source or changed hash returns ErrConflict; ambiguity and I/O
+// errors retain their sentinels. Empty ifVersion skips only the content comparison.
+// Use verifyUnchangedWithLabel when diagnostics need a label distinct from key.
 func verifyUnchanged(resolve func(string) (string, error), key, path, ifVersion, noun, op string) error {
 	return verifyUnchangedWithLabel(resolve, key, key, path, ifVersion, noun, op)
 }
@@ -131,18 +115,10 @@ func verifyUnchangedWithLabel(resolve func(string) (string, error), key, label, 
 	curPath, err := resolve(key)
 	switch {
 	case errors.Is(err, domain.ErrNotFound):
-		// The file we read is no longer resolvable under its own id: moved, renamed,
-		// or deleted under us. That IS the conflict this guard exists for, and a
-		// retry re-reads from scratch and can legitimately succeed.
+		// Retry policy belongs to the caller; absence never authorizes alias fallback.
 		return conflict()
 	case err != nil:
-		// Everything else — a genuine duplicate id (ErrAmbiguous), or a real ReadDir
-		// I/O failure — is NOT a conflict, and no number of retries can fix it.
-		// Collapsing it into one would burn the whole OCC budget and then hand back
-		// "changed on disk; retry": advice that cannot work, for a condition it
-		// misnames. Propagating keeps the sentinel the CLI maps to its own exit code
-		// (13 for the ambiguity, which names the colliding files). This mirrors the
-		// os.IsNotExist split in the re-read below.
+		// Preserve actionable ambiguity/I/O errors instead of inviting futile retries.
 		return fmt.Errorf("re-resolve %s %q before writing: %w", noun, label, err)
 	case curPath != path:
 		return conflict()
@@ -152,9 +128,7 @@ func verifyUnchangedWithLabel(resolve func(string) (string, error), key, label, 
 	}
 	cur, err := os.ReadFile(curPath)
 	if err != nil {
-		// A vanished file is a genuine conflict (it changed under us → retry). Any OTHER
-		// read failure — permission, I/O, fd exhaustion — is a real error the caller must
-		// see, not be misled into retrying a "changed on disk" conflict that isn't one.
+		// Disappearance is drift; other read failures are not evidence of contention.
 		if os.IsNotExist(err) {
 			return conflict()
 		}
