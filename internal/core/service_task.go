@@ -593,6 +593,19 @@ func (s *Service) Move(ref string, to domain.Status, dryRun bool, override TaskL
 	})
 }
 
+// MoveSelectedTask is [Service.Move] for an already-selected task, without reference
+// resolution, including on the first guarded attempt. The adapter validates the
+// exact TaskID against its fresh authoritative graph and retains normal lifecycle
+// policy, impacts and committed-error receipts. No unguarded read authorizes it.
+func (s *Service) MoveSelectedTask(target TaskMutationTarget, to domain.Status, dryRun bool, override TaskLifecycleOverride) (TaskLifecycleReceipt, error) {
+	if err := requireSourceID(EntityTask, RecordSource{ID: target.ID}); err != nil {
+		return TaskLifecycleReceipt{}, err
+	}
+	return s.runTaskLifecycleMutation(dryRun, func(*TaskGraph) (TaskLifecyclePlan, error) {
+		return TaskLifecyclePlan{TaskID: target.ID, To: to, Override: override}, nil
+	})
+}
+
 // DeferTask moves a task to deferred and, when until is non-empty, records it as
 // the revisit_at ("snooze until") date — the two halves of `task defer --until`,
 // written together in ONE atomic store operation (audit M4). A bare defer (empty
@@ -613,6 +626,22 @@ func (s *Service) DeferTask(ref, until string, dryRun bool) (TaskLifecycleReceip
 			return TaskLifecyclePlan{}, err
 		}
 		return TaskLifecyclePlan{TaskID: taskID, To: domain.StatusDeferred, RevisitAt: until}, nil
+	})
+}
+
+// DeferSelectedTask is [Service.DeferTask]'s selected-identity entry point. The date remains
+// validated before adapter I/O, and target lookup stays exact inside the guard.
+func (s *Service) DeferSelectedTask(target TaskMutationTarget, until string, dryRun bool) (TaskLifecycleReceipt, error) {
+	if err := requireSourceID(EntityTask, RecordSource{ID: target.ID}); err != nil {
+		return TaskLifecycleReceipt{}, err
+	}
+	if until != "" {
+		if err := domain.ValidateDate(until); err != nil {
+			return TaskLifecycleReceipt{}, err
+		}
+	}
+	return s.runTaskLifecycleMutation(dryRun, func(*TaskGraph) (TaskLifecyclePlan, error) {
+		return TaskLifecyclePlan{TaskID: target.ID, To: domain.StatusDeferred, RevisitAt: until}, nil
 	})
 }
 
@@ -726,8 +755,38 @@ func threadImpactsNeedRepair(impacts []ThreadProjectionImpact) bool {
 // non-empty it must exist, mirroring NewTask, so set can't orphan a task out of
 // its epic's rollup.
 func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun bool) (domain.Task, error) {
+	withMeta, err := s.prepareTaskFieldUpdates(updates, force)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	return retryTaskMutation(s, slug, dryRun, func(target TaskMutationTarget) (domain.Task, error) {
+		return s.store.SetFields(target, withMeta, dryRun)
+	})
+}
+
+// SetSelectedTaskFields updates a task selected by an earlier interface snapshot.
+// Unlike [Service.SetFields] it never interprets the target as a fresh user reference. Both
+// paths share coercion, policy, timestamps and retry bounds; persistence rechecks
+// exact ownership before previews, no-ops and writes. The target is not permission
+// to mutate a different service/source set; callers retain their selected service.
+func (s *Service) SetSelectedTaskFields(target TaskMutationTarget, updates map[string]any, force, dryRun bool) (domain.Task, error) {
+	if err := requireSourceID(EntityTask, RecordSource{ID: target.ID}); err != nil {
+		return domain.Task{}, err
+	}
+	withMeta, err := s.prepareTaskFieldUpdates(updates, force)
+	if err != nil {
+		return domain.Task{}, err
+	}
+	return retryOnConflict(s, dryRun, func() (domain.Task, error) {
+		return s.store.SetFields(target, withMeta, dryRun)
+	})
+}
+
+// prepareTaskFieldUpdates keeps reference-based and selected-identity writes on
+// one validation path. Clone caller input and capture updated_at once, before retry.
+func (s *Service) prepareTaskFieldUpdates(updates map[string]any, force bool) (map[string]any, error) {
 	if len(updates) == 0 {
-		return domain.Task{}, fmt.Errorf("%w: no fields given", domain.ErrValidation)
+		return nil, fmt.Errorf("%w: no fields given", domain.ErrValidation)
 	}
 	withMeta := make(map[string]any, len(updates)+1)
 	// Maps do not preserve CLI argument order. Choose stable lexical validation
@@ -739,7 +798,7 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 		// branches so neither spelling can bypass cycle/referential validation.
 		// Use the guarded dependency operations instead of this field path.
 		if domain.IsGraphOwnedTaskField(field) {
-			return domain.Task{}, fmt.Errorf(
+			return nil, fmt.Errorf(
 				"%w: %s is graph-owned and cannot be changed with `task set` (including --force); use guarded dependency operations%s",
 				domain.ErrValidation, field, graphFieldDirection(field))
 		}
@@ -747,30 +806,30 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 		// so eligibility, timestamps, completion checks, and impact receipts cannot be
 		// bypassed. Rejected on both the set and unset paths.
 		if field == "status" {
-			return domain.Task{}, fmt.Errorf("%w: status is lifecycle-owned — use `task <verb>`/`task move`, not `set`", domain.ErrValidation)
+			return nil, fmt.Errorf("%w: status is lifecycle-owned — use `task <verb>`/`task move`, not `set`", domain.ErrValidation)
 		}
 		if _, unset := val.(domain.UnsetField); unset {
 			switch field {
 			case "updated_at":
-				return domain.Task{}, fmt.Errorf("%w: updated_at is stamped automatically and cannot be unset", domain.ErrValidation)
+				return nil, fmt.Errorf("%w: updated_at is stamped automatically and cannot be unset", domain.ErrValidation)
 			}
 			// A typo'd field name must not silently persist (or, here, silently
 			// no-op) — gate unset on the registry too, mirroring the set path.
 			if !force && !domain.KnownTaskField(field) {
-				return domain.Task{}, unknownFieldErr(field)
+				return nil, unknownFieldErr(field)
 			}
 			withMeta[field] = val
 			continue
 		}
 		if !force && !domain.KnownTaskField(field) {
-			return domain.Task{}, unknownFieldErr(field)
+			return nil, unknownFieldErr(field)
 		}
 		coerced, err := coerceField(field, val)
 		if err != nil {
-			return domain.Task{}, err
+			return nil, err
 		}
 		if err := domain.ValidateField(field, stringify(coerced)); err != nil {
-			return domain.Task{}, err
+			return nil, err
 		}
 		withMeta[field] = coerced
 	}
@@ -780,10 +839,10 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 		} else {
 			epicRead, err := s.store.ReadEpics()
 			if err != nil {
-				return domain.Task{}, err
+				return nil, err
 			}
 			if !epicExists(epicRead.Records, epic) {
-				return domain.Task{}, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, epic)
+				return nil, fmt.Errorf("%w: unknown epic %q", domain.ErrValidation, epic)
 			}
 			// Store the epic's canonical stem (as NewTask does), so `set --set epic=24` and
 			// `new --epic 24` leave the same readable `<NN>-<slug>` ref, not a bare NN.
@@ -791,9 +850,7 @@ func (s *Service) SetFields(slug string, updates map[string]any, force, dryRun b
 		}
 	}
 	withMeta["updated_at"] = s.now().Format("2006-01-02")
-	return retryTaskMutation(s, slug, dryRun, func(target TaskMutationTarget) (domain.Task, error) {
-		return s.store.SetFields(target, withMeta, dryRun)
-	})
+	return withMeta, nil
 }
 
 func graphFieldDirection(field string) string {
