@@ -153,3 +153,56 @@ func TestNonTaskRetriesRetainSelectedSourceIdentity(t *testing.T) {
 		}
 	}
 }
+
+func TestAuditHeaderRepairUsesOccurrenceIdentityWithDuplicateLabels(t *testing.T) {
+	for _, dry := range []bool{false, true} {
+		t.Run(map[bool]string{false: "write", true: "preview"}[dry], func(t *testing.T) {
+			root := t.TempDir()
+			for _, seed := range []string{"first", "second"} {
+				testutil.Write(t, filepath.Join(root, domain.AuditsDir, testutil.TaskID(seed)+"-same-label.md"), "---\nid: "+testutil.TaskID(seed)+"\nbucket: open\narea: identity\ndate: 2026-10-15\n---\n# Audit\n\n#### H-1. Repair me · **Status:** open\n")
+			}
+			before := testutil.SnapshotTree(t, root)
+			svc := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())))
+			fixes, err := svc.FixFindingHeaders(dry)
+			if err != nil || len(fixes) != 2 {
+				t.Fatalf("repair confused equal labels: fixes=%+v err=%v", fixes, err)
+			}
+			after := testutil.SnapshotTree(t, root)
+			if dry {
+				if !maps.Equal(before, after) {
+					t.Fatal("preview changed an occurrence")
+				}
+				return
+			}
+			for _, seed := range []string{"first", "second"} {
+				record, err := svc.ShowAudit(testutil.TaskID(seed))
+				if err != nil || len(domain.ParseFindings(record.Value.Body)) != 1 || len(domain.NearMissFindingHeaders(record.Value.Body)) != 0 {
+					t.Fatalf("occurrence %s not repaired: record=%+v err=%v", seed, record, err)
+				}
+			}
+		})
+	}
+}
+
+func TestSelectedAuditPortsRefuseDuplicateIdentityBeforeCallbackOrNoop(t *testing.T) {
+	root := t.TempDir()
+	selectedID := testutil.TaskID("duplicate")
+	for _, label := range []string{"one", "two"} {
+		testutil.Write(t, filepath.Join(root, domain.AuditsDir, selectedID+"-"+label+".md"), "---\nbucket: open\narea: identity\ndate: 2026-10-15\n---\n# Audit\n")
+	}
+	fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
+	before := testutil.SnapshotTree(t, root)
+	for _, dry := range []bool{false, true} {
+		if _, err := fs.MoveAudit(core.AuditMutationTarget{ID: selectedID}, domain.AuditOpen, dry); !errors.Is(err, domain.ErrAmbiguous) {
+			t.Fatalf("ambiguous noop accepted: %v", err)
+		}
+		called := false
+		_, _, _, err := fs.TransformAuditBody(core.AuditMutationTarget{ID: selectedID}, time.Now(), dry, func(_ domain.Audit, body string) (string, error) { called = true; return body, nil })
+		if !errors.Is(err, domain.ErrAmbiguous) || called {
+			t.Fatalf("ambiguous identity reached callback: called=%v err=%v", called, err)
+		}
+	}
+	if !maps.Equal(before, testutil.SnapshotTree(t, root)) {
+		t.Fatal("ambiguous identity changed records")
+	}
+}
