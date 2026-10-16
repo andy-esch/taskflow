@@ -75,8 +75,10 @@ reuse, disappearance, collisions and preview/no-op boundaries. Audit/research/ep
 scriptable ports use the same explicit-target rule, with entity-specific parse-free
 source lookup. Their write and CAS lookups are exact; an epic uses its whole stem,
 not its numeric prefix. [Entity regressions](../../internal/store/entity_target_test.go)
-cover all nine retry families. Graph retry gaps remain explicit in the
-[planning-data guide](planning-data.md).
+cover all nine retry families, duplicate ownership and occurrence-based header repair.
+Graph retries retain semantic endpoints while recomputing current changes; they do
+not replay cached write sets. See [graph retry regressions](../../internal/store/graph_retry_target_test.go)
+and the [planning-data guide](planning-data.md).
 
 ## Ordinary create and task rename
 

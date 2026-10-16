@@ -121,6 +121,7 @@ func (s *Service) mutateTaskDependencies(operation DependencyOperation, taskRef 
 	if len(prerequisiteRefs) == 0 {
 		return DependencyMutationReceipt{}, fmt.Errorf("%w: at least one --on prerequisite is required", domain.ErrValidation)
 	}
+	prerequisiteRefs = append([]string(nil), prerequisiteRefs...)
 	return s.runDependencyMutation(operation, dryRun, func(graph *TaskGraph) (TaskGraphMutationPlan, dependencyPlanDetails, error) {
 		return planDependencyEdges(graph, operation, taskRef, prerequisiteRefs)
 	})
@@ -163,6 +164,18 @@ func (s *Service) runDependencyMutation(operation DependencyOperation, dryRun bo
 				return receipt, &DependencyMutationFailure{Cause: err, Receipt: receipt}
 			}
 			return receipt, nil
+		}
+		if len(details.edges) > 0 && (operation == DependencyAdd || operation == DependencyRemove) {
+			// Preserve semantic endpoints, not this snapshot's complete dependency
+			// write set. The next guarded planner recomputes against current tasks.
+			dependentID := details.edges[0].DependentID
+			prerequisiteIDs := make([]string, len(details.edges))
+			for i, edge := range details.edges {
+				prerequisiteIDs[i] = edge.PrerequisiteID
+			}
+			planner = func(graph *TaskGraph) (TaskGraphMutationPlan, dependencyPlanDetails, error) {
+				return planSelectedDependencyEdges(graph, operation, dependentID, prerequisiteIDs)
+			}
 		}
 		s.retrySleep(attempt + 1)
 	}
@@ -213,7 +226,7 @@ func planDependencyEdges(graph *TaskGraph, operation DependencyOperation, taskRe
 	if err != nil {
 		return TaskGraphMutationPlan{}, dependencyPlanDetails{}, err
 	}
-	dependent, ok := graph.Task(dependentID)
+	_, ok := graph.Task(dependentID)
 	if !ok {
 		return TaskGraphMutationPlan{}, dependencyPlanDetails{}, fmt.Errorf("task %q resolved to unreadable task %s: %w", taskRef, dependentID, domain.ErrValidation)
 	}
@@ -232,7 +245,21 @@ func planDependencyEdges(graph *TaskGraph, operation DependencyOperation, taskRe
 		prerequisites = append(prerequisites, prerequisiteID)
 	}
 	sort.Strings(prerequisites)
+	return planSelectedDependencyEdges(graph, operation, dependentID, prerequisites)
+}
 
+// Recompute effects for exact selected endpoints. Calling ResolveTaskID again,
+// even with an ID-shaped string, could select an impostor after disappearance.
+func planSelectedDependencyEdges(graph *TaskGraph, operation DependencyOperation, dependentID string, prerequisites []string) (TaskGraphMutationPlan, dependencyPlanDetails, error) {
+	dependent, ok := graph.Task(dependentID)
+	if !ok {
+		return TaskGraphMutationPlan{}, dependencyPlanDetails{}, fmt.Errorf("selected dependent %s: %w", dependentID, domain.ErrNotFound)
+	}
+	for _, prerequisiteID := range prerequisites {
+		if _, ok := graph.Task(prerequisiteID); !ok {
+			return TaskGraphMutationPlan{}, dependencyPlanDetails{}, fmt.Errorf("selected prerequisite %s: %w", prerequisiteID, domain.ErrNotFound)
+		}
+	}
 	dependencies := append([]string(nil), dependent.DependsOn...)
 	details := dependencyPlanDetails{edges: make([]DependencyEdgeOutcome, 0, len(prerequisites))}
 	changed := false
