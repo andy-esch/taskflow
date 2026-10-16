@@ -6,8 +6,8 @@ description: Make large Thread graphs comprehensible and shared TUI navigation p
 goal: Ship an evidence-backed large-graph experience and a coherent shared TUI navigation model.
 created: "2026-09-11"
 tags: [threads, tui, ux, dogfood]
-tasks: [6g6wdvfp2ksa, 6g86016qvk5d, 6g86c7y6hn41, 6g86g03zfj2f, 6g87qn72901g, 6g8vxbv3d4xn, 6g8vxcnezktm, 6g914ybs9t87, 6g9150nrt4p9, 6g95fc3aj4ye, 6g9g37bvetjy, 6g9g37c50qp1, 6g9mz2shwmb0, 6ggkdbg0816h, 6gjn7axv0gmy, 6gkt3fq0pv26]
-updated_at: "2026-10-14"
+tasks: [6g6wdvfp2ksa, 6g86016qvk5d, 6g86c7y6hn41, 6g86g03zfj2f, 6g87qn72901g, 6g8vxbv3d4xn, 6g8vxcnezktm, 6g914ybs9t87, 6g9150nrt4p9, 6g95fc3aj4ye, 6g9g37bvetjy, 6g9g37c50qp1, 6g9mz2shwmb0, 6ggkdbg0816h, 6gjn7axv0gmy, 6gkt3fq0pv26, 6gm30jat0xsy]
+updated_at: "2026-10-15"
 started_at: "2026-09-11"
 ---
 # Thread: Refine Thread and TUI navigation
@@ -59,3 +59,10 @@ string can resolve as another task's human slug at Service entry and edit that r
 It follows the strict task-write identity contract as a genuine prerequisite while
 keeping initial CLI reference ergonomics unchanged. This is action-target safety,
 not a graph-presentation redesign or a reason to reopen the completed adapter Thread.
+
+[Selected local-path actions](../tasks/6gm30jat0xsy-keep-selected-tui-path-actions-bound-to-exact-identities.md)
+are a separate, independently actionable safety follow-up: real E/Y probes showed
+both lookups can accept an ID-shaped impostor after deletion. Preserve optional,
+parse-free local navigation; do not bundle a path-capability redesign into task
+field/lifecycle mutation work. Non-task selected mutation exposure is folded into
+the existing [entity retry task](../tasks/6gkt3fphx1ts-pin-non-task-mutation-retries-to-selected-source-identities.md).
