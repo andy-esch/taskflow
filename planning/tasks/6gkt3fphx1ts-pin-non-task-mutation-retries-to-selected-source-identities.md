@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gkt3fphx1ts
-status: ready-to-start
+status: in-progress
 epic: 21-code-quality-architecture-hardening
 description: Stop audit, research and epic retry loops from reselecting another record after alias drift or deletion.
 effort: 1-2 days
@@ -12,6 +12,7 @@ tags: [correctness, identity, core, store, concurrency]
 created: "2026-10-14"
 audit_sources: [2026-10-14-task-correctness-detour-implementation-claude]
 updated_at: "2026-10-15"
+started_at: "2026-10-15"
 ---
 # Pin non-task mutation retries to selected source identities
 
@@ -74,3 +75,17 @@ Use [strict task targeting](6gkmexz4vh23-bind-task-mutation-retries-to-strict-so
 as the proven pattern, not an artificial code dependency: these entity-specific fixes
 can proceed independently. Feed concrete port/retry decisions into the shared-integrity
 design rather than waiting for it or reopening completed legacy tasks.
+
+## Safety-cluster delivery
+
+Member of [Finish selected identity safety](../threads/6gm4h71hm1yt-finish-selected-identity-safety.md),
+delivered in one PR alongside graph/Thread retry and selected-path fixes. The tasks
+remain independent: delivery order is not a dependency chain or a broader storage redesign.
+
+The initial regression was red in all 18 rename/deletion cases across nine mutation
+families. Entity-specific targets and parse-free source selection now keep ordinary
+audit, research and epic writes exact from first selection through CAS and retry;
+audit repair uses snapshot source IDs. Selected audit/epic TUI callers use explicit
+Service APIs. Epics intentionally retain their whole-stem identity semantics.
+Focused core/store/TUI race suites and lint pass; full validation and independent
+cluster review are still required before completion.
