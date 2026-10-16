@@ -41,11 +41,11 @@ func authorizationMutations(now time.Time, ref string, callback func()) []author
 			return err
 		}},
 		{"MoveAudit", func(s *FS, dryRun bool) error {
-			_, err := s.MoveAudit(ref, domain.AuditOpen, dryRun)
+			_, err := s.MoveAudit(testAuditTarget(ref), domain.AuditOpen, dryRun)
 			return err
 		}},
 		{"AppendAuditBody", func(s *FS, dryRun bool) error {
-			_, _, err := s.AppendAuditBody(ref, "", now, dryRun)
+			_, _, err := s.AppendAuditBody(testAuditTarget(ref), "", now, dryRun)
 			return err
 		}},
 		{"EditBody", func(s *FS, dryRun bool) error {
@@ -53,7 +53,7 @@ func authorizationMutations(now time.Time, ref string, callback func()) []author
 			return err
 		}},
 		{"TransformAuditBody", func(s *FS, dryRun bool) error {
-			_, _, _, err := s.TransformAuditBody(ref, now, dryRun, func(_ domain.Audit, body string) (string, error) { callback(); return body, nil })
+			_, _, _, err := s.TransformAuditBody(testAuditTarget(ref), now, dryRun, func(_ domain.Audit, body string) (string, error) { callback(); return body, nil })
 			return err
 		}},
 		{"TransformTaskBody", func(s *FS, dryRun bool) error {
@@ -81,11 +81,11 @@ func authorizationMutations(now time.Time, ref string, callback func()) []author
 			return err
 		}},
 		{"MoveEpic", func(s *FS, dryRun bool) error {
-			_, err := s.MoveEpic(ref, "active", now, dryRun)
+			_, err := s.MoveEpic(core.EpicMutationTarget{ID: ref}, "active", now, dryRun)
 			return err
 		}},
 		{"SetEpicFields", func(s *FS, dryRun bool) error {
-			_, err := s.SetEpicFields(ref, map[string]any{}, dryRun)
+			_, err := s.SetEpicFields(core.EpicMutationTarget{ID: ref}, map[string]any{}, dryRun)
 			return err
 		}},
 		{"EditEpic", func(s *FS, _ bool) error {
@@ -93,7 +93,7 @@ func authorizationMutations(now time.Time, ref string, callback func()) []author
 			return err
 		}},
 		{"SetResearchFields", func(s *FS, dryRun bool) error {
-			_, err := s.SetResearchFields(ref, map[string]any{}, dryRun)
+			_, err := s.SetResearchFields(testResearchTarget(ref), map[string]any{}, dryRun)
 			return err
 		}},
 		{"EditResearch", func(s *FS, _ bool) error {
@@ -101,7 +101,7 @@ func authorizationMutations(now time.Time, ref string, callback func()) []author
 			return err
 		}},
 		{"AppendResearchBody", func(s *FS, dryRun bool) error {
-			_, _, err := s.AppendResearchBody(ref, "", now, dryRun)
+			_, _, err := s.AppendResearchBody(testResearchTarget(ref), "", now, dryRun)
 			return err
 		}},
 		{"MutateTaskGraph", func(s *FS, dryRun bool) error {

@@ -88,11 +88,28 @@ func (s *Service) runThreadCreationMutation(dryRun bool, planner ThreadCreationP
 		return ThreadCreationReceipt{}, fmt.Errorf("thread creation is unavailable from this store")
 	}
 	now := s.now()
-	result, err := s.threadCreations.MutateThreadCreation(now, dryRun, planner)
+	var selected *ThreadCreationPlan
+	boundPlanner := func(snapshot ThreadCreationSnapshot) (ThreadCreationPlan, error) {
+		if selected == nil {
+			plan, err := planner(snapshot)
+			if err != nil {
+				return ThreadCreationPlan{}, err
+			}
+			plan.Thread = cloneThread(plan.Thread)
+			selected = &plan
+		}
+		// Bind at successful selection, before adapter validation can conflict
+		// without returning a plan. Only intent is retained; every attempt still
+		// validates it against the fresh authoritative snapshot.
+		plan := *selected
+		plan.Thread = cloneThread(plan.Thread)
+		return plan, nil
+	}
+	result, err := s.threadCreations.MutateThreadCreation(now, dryRun, boundPlanner)
 	if !dryRun {
 		for attempt := 1; attempt <= s.maxRetries && errors.Is(err, domain.ErrConflict) && !result.Committed; attempt++ {
 			s.retrySleep(attempt)
-			result, err = s.threadCreations.MutateThreadCreation(now, dryRun, planner)
+			result, err = s.threadCreations.MutateThreadCreation(now, dryRun, boundPlanner)
 		}
 	}
 	receipt := ThreadCreationReceipt{
@@ -174,11 +191,27 @@ func (s *Service) runThreadMutation(dryRun bool, planner ThreadMutationPlanner) 
 		return ThreadMutationReceipt{}, fmt.Errorf("thread mutations are unavailable from this store")
 	}
 	now := s.now()
-	result, err := s.threadMutations.MutateThread(now, dryRun, planner)
+	var selected *ThreadMutationPlan
+	boundPlanner := func(snapshot ThreadMutationSnapshot) (ThreadMutationPlan, error) {
+		if selected == nil {
+			plan, err := planner(snapshot)
+			if err != nil {
+				return ThreadMutationPlan{}, err
+			}
+			plan.TaskIDs = append([]string(nil), plan.TaskIDs...)
+			selected = &plan
+		}
+		// This is endpoint/operation intent, never derived membership, policy,
+		// impacts or revisions. The adapter recomputes those on every attempt.
+		plan := *selected
+		plan.TaskIDs = append([]string(nil), plan.TaskIDs...)
+		return plan, nil
+	}
+	result, err := s.threadMutations.MutateThread(now, dryRun, boundPlanner)
 	if !dryRun {
 		for attempt := 1; attempt <= s.maxRetries && errors.Is(err, domain.ErrConflict) && !result.Committed; attempt++ {
 			s.retrySleep(attempt)
-			result, err = s.threadMutations.MutateThread(now, dryRun, planner)
+			result, err = s.threadMutations.MutateThread(now, dryRun, boundPlanner)
 		}
 	}
 	receipt := threadMutationReceipt(result)

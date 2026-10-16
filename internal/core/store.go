@@ -28,6 +28,18 @@ type TaskMutationTarget struct {
 	ID string
 }
 
+// AuditMutationTarget is an adapter-established audit source ID, never a user
+// reference. Initial lookup and CAS must both match it exactly, including no-ops.
+type AuditMutationTarget struct{ ID string }
+
+// ResearchMutationTarget is an adapter-established research source ID, never a
+// reference, declaration, path, revision, or authorization token.
+type ResearchMutationTarget struct{ ID string }
+
+// EpicMutationTarget identifies an epic by its complete adapter-established ID.
+// The local adapter uses the whole filename stem, not just the sequence prefix.
+type EpicMutationTarget struct{ ID string }
+
 // TaskStore is the task mutation and selected-read port. Repository-wide task
 // reads use TaskGraphSource so list, board, graph, and Thread projections share
 // one authoritative snapshot rather than rescanning through the aggregate store.
@@ -70,8 +82,13 @@ type TaskStore interface {
 
 // TaskPathSource is optional local, parse-free task navigation. Semantic task
 // reads do not imply that their adapter has a filesystem path to resolve.
+// Across all entity path ports, reference methods preserve CLI matching; ByID
+// methods require exact, unique source identity before returning a path, including
+// for malformed documents. A missing ID must never fall back to a display label.
 type TaskPathSource interface {
 	ResolveTaskPath(ref string) (string, error)
+	// ResolveTaskPathByID is exact selected identity, never fuzzy reference matching.
+	ResolveTaskPathByID(id string) (string, error)
 }
 
 // TaskDependencyWrite is one semantic task-file change returned by a pure graph
@@ -111,6 +128,8 @@ type TaskGraphPlanner func(*TaskGraph) (TaskGraphMutationPlan, error)
 // TaskGraphMutationStore owns the repository-wide graph read/validate/write
 // critical section. It is a sibling capability rather than part of Store so read-
 // only/test adapters do not acquire a mutation method they cannot implement.
+// Successful planner output is retained in Result.Plan on subsequent errors.
+// Core retains selected endpoints but recomputes writes against each fresh graph.
 type TaskGraphMutationStore interface {
 	MutateTaskGraph(now time.Time, dryRun bool, planner TaskGraphPlanner) (TaskGraphMutationResult, error)
 }
@@ -234,25 +253,32 @@ type ThreadStore interface {
 // path recovery for malformed documents.
 type ThreadPathSource interface {
 	ResolveThreadPath(ref string) (string, error)
+	ResolveThreadPathByID(id string) (string, error)
 }
 
 // EpicPathSource is optional local, parse-free epic navigation.
 type EpicPathSource interface {
 	ResolveEpicPath(ref string) (string, error)
+	ResolveEpicPathByID(id string) (string, error)
 }
 
 // AuditPathSource is optional local, parse-free audit navigation.
 type AuditPathSource interface {
 	ResolveAuditPath(ref string) (string, error)
+	ResolveAuditPathByID(id string) (string, error)
 }
 
 // ResearchPathSource is optional local, parse-free research navigation.
 type ResearchPathSource interface {
 	ResolveResearchPath(ref string) (string, error)
+	ResolveResearchPathByID(id string) (string, error)
 }
 
 // ThreadCreationMutationStore owns guarded, unstarted Thread creation. The
 // control-inverted planner receives only immutable semantic snapshot values.
+// Return a successfully validated Plan on later errors for receipt evidence.
+// Core binds successful planner intent even before validation; each attempt
+// revalidates all current source evidence and the selected member IDs.
 type ThreadCreationMutationStore interface {
 	MutateThreadCreation(now time.Time, dryRun bool, planner ThreadCreationPlanner) (ThreadCreationMutationResult, error)
 }
@@ -260,6 +286,9 @@ type ThreadCreationMutationStore interface {
 // ThreadMutationStore owns guarded updates to an existing Thread document.
 // Membership and lifecycle intents share the capability so neither can validate
 // against a stale task/Thread snapshot or nest another repository guard.
+// Return validated Plan endpoints on later errors for receipt evidence. Core
+// binds successful planner intent; derived membership and impacts are recomputed,
+// never replayed as a stale document replacement.
 type ThreadMutationStore interface {
 	MutateThread(now time.Time, dryRun bool, planner ThreadMutationPlanner) (ThreadMutationResult, error)
 }
@@ -276,17 +305,20 @@ type ThreadApplyMutationStore interface {
 type EpicStore interface {
 	ReadEpics() (EpicRead, error)
 	ReadEpic(ref string) (LoadedRecord[EpicWithBody], error)
+	// ResolveEpicSource selects source identity with ordinary reference matching,
+	// without typed decoding. Selected writes recheck exact ownership separately.
+	ResolveEpicSource(ref string) (RecordSource, error)
 	CreateEpic(slug string, e domain.Epic, body string, dryRun bool) (EpicCreationReceipt, error)
 	// MoveEpic surgically rewrites an epic's `status` frontmatter field (epic
 	// status is a field, not a directory, so the file stays put), stamping updated_at
 	// on a real status change. dryRun runs every validation and returns the would-be
 	// epic without touching disk.
-	MoveEpic(id, status string, now time.Time, dryRun bool) (domain.Epic, error)
+	MoveEpic(target EpicMutationTarget, status string, now time.Time, dryRun bool) (domain.Epic, error)
 	// SetEpicFields surgically updates non-status frontmatter fields on an epic in
 	// one atomic, validated write (status moves via MoveEpic). updated_at is injected
 	// by the service. dryRun runs every validation and returns the would-be epic
 	// without touching disk.
-	SetEpicFields(id string, updates map[string]any, dryRun bool) (domain.Epic, error)
+	SetEpicFields(target EpicMutationTarget, updates map[string]any, dryRun bool) (domain.Epic, error)
 	// EditEpic hands the current file content to edit (which runs the caller's
 	// editor) and accepts the result only if it still parses as an epic —
 	// parse-before-accept, looping on the editor for a broken edit. A changed save is
@@ -325,6 +357,9 @@ type TaskWithBody struct {
 type AuditStore interface {
 	ReadAudits() (AuditRead, error)
 	ReadAudit(ref string) (LoadedRecord[AuditWithBody], error)
+	// ResolveAuditSource is parse-free initial reference selection, not authority
+	// to mutate. Every selected write must recheck exact, unique source ownership.
+	ResolveAuditSource(ref string) (RecordSource, error)
 	// MoveAudit applies domain.Audit.ValidateMove to freshly loaded counts from
 	// the exact source protected by the write guard. Incomplete finding evidence
 	// or nonterminal parsed statuses must refuse close/defer before no-op, preview,
@@ -333,7 +368,7 @@ type AuditStore interface {
 	// validation or be overwritten by a bucket move.
 	// Policy refusals carry AuditMoveError with adapter-established source identity
 	// so remediation never resolves a display slug or frontmatter-declared ID.
-	MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error)
+	MoveAudit(target AuditMutationTarget, to domain.AuditBucket, dryRun bool) (domain.Audit, error)
 	CreateAudit(a domain.Audit, body string, dryRun bool) (AuditCreationReceipt, error)
 	// EditAudit hands the current file content to edit (the caller's editor) and
 	// accepts the result only if it still parses as an audit — parse-before-accept,
@@ -346,7 +381,7 @@ type AuditStore interface {
 	// projection and stamping updated_at (the audit's `date` stays immutable — it's
 	// the slug). The agent face of audit body editing, beside EditAudit's editor.
 	// Returns the reloaded audit and the resulting body.
-	AppendAuditBody(slug, text string, now time.Time, dryRun bool) (domain.Audit, string, error)
+	AppendAuditBody(target AuditMutationTarget, text string, now time.Time, dryRun bool) (domain.Audit, string, error)
 	// TransformAuditBody is the read-modify-write counterpart to AppendAuditBody,
 	// and the audit twin of TransformTaskBody. transform receives the body from the
 	// exact snapshot the write's content CAS protects, together with that snapshot's
@@ -355,7 +390,7 @@ type AuditStore interface {
 	// operation and have the edit recomputed against fresh metadata and text.
 	// Reports whether the normalized body actually changed; an unchanged body is a
 	// no-op that stamps nothing.
-	TransformAuditBody(slug string, now time.Time, dryRun bool, transform func(audit domain.Audit, current string) (string, error)) (domain.Audit, string, bool, error)
+	TransformAuditBody(target AuditMutationTarget, now time.Time, dryRun bool, transform func(audit domain.Audit, current string) (string, error)) (domain.Audit, string, bool, error)
 }
 
 // ResearchStore is the research-persistence port. The narrowest entity port: research
@@ -364,11 +399,14 @@ type AuditStore interface {
 type ResearchStore interface {
 	ReadResearch() (ResearchRead, error)
 	ReadResearchDocument(ref string) (LoadedRecord[ResearchWithBody], error)
+	// ResolveResearchSource is parse-free initial selection so a field update can
+	// repair typed metadata before the adapter validates the resulting document.
+	ResolveResearchSource(ref string) (RecordSource, error)
 	CreateResearch(r domain.Research, body string, dryRun bool) (ResearchCreationReceipt, error)
 	// SetResearchFields surgically updates frontmatter fields in one atomic, validated
 	// write. updated_at is injected by the service; `created` is rejected upstream (the
 	// id encodes it). dryRun runs every validation without touching disk.
-	SetResearchFields(slug string, updates map[string]any, dryRun bool) (domain.Research, error)
+	SetResearchFields(target ResearchMutationTarget, updates map[string]any, dryRun bool) (domain.Research, error)
 	// EditResearch hands the current file content to edit (which runs the caller's
 	// editor) and accepts the result only if it still parses as a research doc —
 	// parse-before-accept, looping on a broken edit. A changed save is stamped with
@@ -377,7 +415,7 @@ type ResearchStore interface {
 	// AppendResearchBody appends markdown to a doc's body in one atomic, validated
 	// write, stamping updated_at (`created` stays immutable — the id is minted from it).
 	// The agent face of body editing, beside EditResearch's editor.
-	AppendResearchBody(slug, text string, now time.Time, dryRun bool) (domain.Research, string, error)
+	AppendResearchBody(target ResearchMutationTarget, text string, now time.Time, dryRun bool) (domain.Research, string, error)
 }
 
 // Store is the use-case persistence port the Service depends on. It is

@@ -39,6 +39,23 @@ type aggregateEntityPaths struct {
 	*entityPathFake
 }
 
+func (f *entityPathFake) ResolveTaskPathByID(id string) (string, error) {
+	f.calls = append(f.calls, "task-id:"+id)
+	return f.path, nil
+}
+func (f *entityPathFake) ResolveEpicPathByID(id string) (string, error) {
+	f.calls = append(f.calls, "epic-id:"+id)
+	return f.path, nil
+}
+func (f *entityPathFake) ResolveAuditPathByID(id string) (string, error) {
+	f.calls = append(f.calls, "audit-id:"+id)
+	return f.path, nil
+}
+func (f *entityPathFake) ResolveResearchPathByID(id string) (string, error) {
+	f.calls = append(f.calls, "research-id:"+id)
+	return f.path, nil
+}
+
 func (*aggregateEntityPaths) SourceSetID() SourceSetID { return testSourceSetID }
 
 func TestEntityPathCapabilitiesAreOptionalAndEntitySpecific(t *testing.T) {
@@ -136,5 +153,44 @@ func TestEntityPathCapabilitiesIgnoreTypedNilAndRejectForeignSourceSets(t *testi
 		if _, err := NewService(nopStore{}, opt); !errors.Is(err, ErrIncompatibleCapabilities) {
 			t.Fatalf("foreign path source was paired with aggregate reads: %v", err)
 		}
+	}
+}
+
+func TestSelectedPathsUseExactCapabilityWithoutDecodingOrFallback(t *testing.T) {
+	paths := &entityPathFake{path: "/planning/local.md"}
+	threads := &threadPathFake{path: "/planning/thread.md"}
+	svc := MustNewService(nopStore{}, WithTaskPathSource(paths), WithEpicPathSource(paths), WithAuditPathSource(paths), WithResearchPathSource(paths), WithThreadPathSource(threads))
+	pathless := MustNewService(nopStore{})
+	for _, tc := range []struct {
+		resolve     func(string) (string, error)
+		unavailable func(string) (string, error)
+		want        string
+	}{
+		{svc.TaskPathByID, pathless.TaskPathByID, "task-id:opaque:selected"},
+		{svc.EpicPathByID, pathless.EpicPathByID, "epic-id:opaque:selected"},
+		{svc.AuditPathByID, pathless.AuditPathByID, "audit-id:opaque:selected"},
+		{svc.ResearchPathByID, pathless.ResearchPathByID, "research-id:opaque:selected"},
+		{svc.ThreadPathByID, pathless.ThreadPathByID, "id:opaque:selected"},
+	} {
+		before := len(paths.calls) + len(threads.refs)
+		if _, err := tc.resolve(" "); !errors.Is(err, domain.ErrValidation) || len(paths.calls)+len(threads.refs) != before {
+			t.Fatalf("empty selected evidence reached path adapter: %v", err)
+		}
+		if _, err := tc.unavailable("opaque:selected"); !errors.Is(err, domain.ErrValidation) {
+			t.Fatalf("missing capability inferred a path: %v", err)
+		}
+		path, err := tc.resolve("opaque:selected")
+		if err != nil || path == "" {
+			t.Fatalf("selected path failed: %q %v", path, err)
+		}
+		calls := append(append([]string(nil), paths.calls...), threads.refs...)
+		if calls[len(calls)-1] != tc.want {
+			t.Fatalf("selected path used reference resolver: %v want %q", calls, tc.want)
+		}
+	}
+	// Replacing task reads detaches both lookup modes unless explicitly supplied.
+	detached := MustNewService(&aggregateEntityPaths{entityPathFake: paths}, WithTaskGraphSource(&sourceSetProbe{id: testSourceSetID}))
+	if _, err := detached.TaskPathByID("opaque:selected"); !errors.Is(err, domain.ErrValidation) {
+		t.Fatalf("selected lookup borrowed detached local source: %v", err)
 	}
 }

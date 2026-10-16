@@ -35,7 +35,7 @@ func TestAppendAuditBody_RefusesIntroducedNearMissHeader(t *testing.T) {
 	fs, p := auditRepo(t, "2026-01-01-c.md", cleanAuditSource)
 	before, _ := os.ReadFile(p)
 
-	_, _, err := fs.AppendAuditBody("2026-01-01-c", "#### H-2. a drifted header\n\n**Status:** open", writeNow, false)
+	_, _, err := fs.AppendAuditBody(testAuditTarget("2026-01-01-c"), "#### H-2. a drifted header\n\n**Status:** open", writeNow, false)
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("append must refuse a heading that would parse to nothing, got %v", err)
 	}
@@ -52,7 +52,7 @@ func TestAuditBodyWritesPreserveOrdinaryCodeShapedHeadings(t *testing.T) {
 		t.Run(heading, func(t *testing.T) {
 			fs, path := auditRepo(t, "probe.md", cleanAuditSource)
 			text := "## Context\n\n### " + heading + "\n\nOrdinary explanatory prose.\n"
-			if _, _, err := fs.AppendAuditBody("probe", text, writeNow, false); err != nil {
+			if _, _, err := fs.AppendAuditBody(testAuditTarget("probe"), text, writeNow, false); err != nil {
 				t.Fatalf("ordinary append refused: %v", err)
 			}
 			_, changed, err := fs.EditAudit("probe", writeNow, func(current string, _ error) (string, error) {
@@ -65,7 +65,7 @@ func TestAuditBodyWritesPreserveOrdinaryCodeShapedHeadings(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			_, _, changed, err = fs.TransformAuditBody("probe", writeNow, false, func(_ domain.Audit, body string) (string, error) {
+			_, _, changed, err = fs.TransformAuditBody(testAuditTarget("probe"), writeNow, false, func(_ domain.Audit, body string) (string, error) {
 				next, hits := domain.CanonicalizeFindingHeaders(body)
 				if len(hits) != 0 {
 					t.Fatalf("ordinary prose was repairable: %+v", hits)
@@ -86,7 +86,7 @@ func TestAuditBodyWritesPreserveOrdinaryCodeShapedHeadings(t *testing.T) {
 // A canonical append still lands — the guard must not make appending findings harder.
 func TestAppendAuditBody_AcceptsCanonicalHeader(t *testing.T) {
 	fs, p := auditRepo(t, "2026-01-01-c.md", cleanAuditSource)
-	if _, _, err := fs.AppendAuditBody("2026-01-01-c", "#### M1. a good header · **Status:** open", writeNow, false); err != nil {
+	if _, _, err := fs.AppendAuditBody(testAuditTarget("2026-01-01-c"), "#### M1. a good header · **Status:** open", writeNow, false); err != nil {
 		t.Fatalf("a canonical header must be accepted: %v", err)
 	}
 	b, _ := os.ReadFile(p)
@@ -99,7 +99,7 @@ func TestAppendAuditBody_AcceptsCanonicalHeader(t *testing.T) {
 // is refused, or one bad header would block every later append and status stamp.
 func TestAppendAuditBody_AllowsUnrelatedAppendToAlreadyDriftedAudit(t *testing.T) {
 	fs, p := auditRepo(t, "2026-01-01-d.md", driftedAuditSource)
-	if _, _, err := fs.AppendAuditBody("2026-01-01-d", "## Candidate tasks\n\n- none", writeNow, false); err != nil {
+	if _, _, err := fs.AppendAuditBody(testAuditTarget("2026-01-01-d"), "## Candidate tasks\n\n- none", writeNow, false); err != nil {
 		t.Fatalf("an unrelated append to a drifted audit must be allowed: %v", err)
 	}
 	b, _ := os.ReadFile(p)
@@ -114,7 +114,7 @@ func TestAppendAuditBody_AllowsUnrelatedAppendToAlreadyDriftedAudit(t *testing.T
 // The repair path must stay permissive — it exists precisely to write drifted files.
 func TestTransformAuditBody_RepairPathIsNotBlockedByTheWriteGuard(t *testing.T) {
 	fs, p := auditRepo(t, "2026-01-01-d.md", driftedAuditSource)
-	_, _, changed, err := fs.TransformAuditBody("2026-01-01-d", writeNow, false, func(_ domain.Audit, current string) (string, error) {
+	_, _, changed, err := fs.TransformAuditBody(testAuditTarget("2026-01-01-d"), writeNow, false, func(_ domain.Audit, current string) (string, error) {
 		fixed, _ := domain.CanonicalizeFindingHeaders(current)
 		return fixed, nil
 	})
@@ -136,7 +136,7 @@ func TestEditFinding_WorksOnAnAuditWithUnrelatedDrift(t *testing.T) {
 	source := "---\nid: 6fjangd7kve1\nbucket: open\narea: e\ndate: \"2026-01-01\"\n---\n" +
 		"# Audit: e\n\n## Findings\n\n#### H1. good · **Status:** open\n\n#### M-2. drifted\n\n**Status:** open\n"
 	fs, p := auditRepo(t, "2026-01-01-e.md", source)
-	_, _, changed, err := fs.TransformAuditBody("2026-01-01-e", writeNow, false, func(_ domain.Audit, current string) (string, error) {
+	_, _, changed, err := fs.TransformAuditBody(testAuditTarget("2026-01-01-e"), writeNow, false, func(_ domain.Audit, current string) (string, error) {
 		return strings.Replace(current, "#### H1. good · **Status:** open", "#### H1. good · **Status:** fixed", 1), nil
 	})
 	if err != nil || !changed {

@@ -120,8 +120,20 @@ func (s *Service) AuditPath(slug string) (string, error) {
 // persistence port validates domain policy against its guarded source; a retry
 // must reload counts so newly unparsed or unsettled evidence cannot be overwritten.
 func (s *Service) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error) {
+	return retryAuditMutation(s, slug, dryRun, func(target AuditMutationTarget) (domain.Audit, error) {
+		return s.store.MoveAudit(target, to, dryRun)
+	})
+}
+
+// MoveSelectedAudit preserves an earlier interface selection from the first attempt.
+// Policy and exact ownership are revalidated by the adapter; ID is not authority
+// to use another Service. Ordinary CLI callers continue to use [Service.MoveAudit].
+func (s *Service) MoveSelectedAudit(target AuditMutationTarget, to domain.AuditBucket, dryRun bool) (domain.Audit, error) {
+	if err := requireSourceID(EntityAudit, RecordSource{ID: target.ID}); err != nil {
+		return domain.Audit{}, err
+	}
 	return retryOnConflict(s, dryRun, func() (domain.Audit, error) {
-		return s.store.MoveAudit(slug, to, dryRun)
+		return s.store.MoveAudit(target, to, dryRun)
 	})
 }
 
@@ -145,8 +157,8 @@ func (s *Service) AppendAuditBody(slug, text string, dryRun bool) (domain.Audit,
 		audit domain.Audit
 		body  string
 	}
-	r, err := retryOnConflict(s, dryRun, func() (res, error) {
-		a, b, e := s.store.AppendAuditBody(slug, text, now, dryRun)
+	r, err := retryAuditMutation(s, slug, dryRun, func(target AuditMutationTarget) (res, error) {
+		a, b, e := s.store.AppendAuditBody(target, text, now, dryRun)
 		return res{a, b}, e
 	})
 	return r.audit, r.body, err

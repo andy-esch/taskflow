@@ -199,8 +199,8 @@ func (s *Service) SetResearchFields(slug string, updates map[string]any, force, 
 		clean[field] = coerced
 	}
 	clean["updated_at"] = s.now().Format("2006-01-02")
-	return retryOnConflict(s, dryRun, func() (domain.Research, error) {
-		return s.store.SetResearchFields(slug, clean, dryRun)
+	return retryResearchMutation(s, slug, dryRun, func(target ResearchMutationTarget) (domain.Research, error) {
+		return s.store.SetResearchFields(target, clean, dryRun)
 	})
 }
 
@@ -243,8 +243,8 @@ func (s *Service) AppendResearchBody(slug, text string, dryRun bool) (domain.Res
 		doc  domain.Research
 		body string
 	}
-	r, err := retryOnConflict(s, dryRun, func() (res, error) {
-		d, b, e := s.store.AppendResearchBody(slug, text, now, dryRun)
+	r, err := retryResearchMutation(s, slug, dryRun, func(target ResearchMutationTarget) (res, error) {
+		d, b, e := s.store.AppendResearchBody(target, text, now, dryRun)
 		return res{d, b}, e
 	})
 	return r.doc, r.body, err

@@ -20,7 +20,7 @@ import (
 // active field's editor shows IN PLACE — an enum's options inline in its row, a
 // long field (description) in a taller word-wrapped box below the list. Submit
 // fires the entity's validated write (Service.SetSelectedTaskFields for a task,
-// Service.SetEpicFields for an epic — sharing CLI coercion and validation),
+// Service.SetSelectedEpicFields for an epic — sharing CLI coercion and validation),
 // so the TUI is a third mutation face that adds no new validation path. The two
 // entities differ only in their field set (epics have no effort/tier) and which
 // service write submit routes to (the menu carries an apply closure); the form,
@@ -380,7 +380,7 @@ func unsetFieldCmd(svc *core.Service, ref entityRef, key string) tea.Cmd {
 // reload, and on-field error handling are reused unchanged.
 func setEpicFieldCmd(svc *core.Service, ref entityRef, key, value string) tea.Cmd {
 	return func() tea.Msg {
-		if _, err := svc.SetEpicFields(ref.key, map[string]any{key: value}, false, false); err != nil {
+		if _, err := svc.SetSelectedEpicFields(core.EpicMutationTarget{ID: ref.key}, map[string]any{key: value}, false, false); err != nil {
 			return actionErrMsg{ref: ref, err: err}
 		}
 		return editedMsg{ref: ref, field: key, value: value}

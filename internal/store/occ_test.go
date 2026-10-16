@@ -119,7 +119,7 @@ func TestMoveAudit_ConflictsOnConcurrentContentEdit(t *testing.T) {
 		_ = os.WriteFile(p, []byte("---\nid: 6fjjt6s9ttx1\nbucket: open\narea: x\ndate: 2026-01-02\nnote: CHANGED\n---\n#### H1. t  · **Status:** fixed\n"), 0o644)
 		testHookBeforeMoveAuditWrite = orig
 	}
-	if _, err := fs.MoveAudit("2026-01-02-x", domain.AuditClosed, false); !errors.Is(err, domain.ErrConflict) {
+	if _, err := fs.MoveAudit(testAuditTarget("2026-01-02-x"), domain.AuditClosed, false); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a concurrent in-place edit during an audit move must conflict, got %v", err)
 	}
 	// The move is in-place under the flat layout — the file never relocates; the losing
@@ -148,7 +148,7 @@ func TestSetEpicFields_ConflictsOnConcurrentContentEdit(t *testing.T) {
 		_ = os.WriteFile(p, []byte("---\nstatus: active\npriority: high\ndescription: CHANGED\n---\n# E\n"), 0o644)
 		testHookBeforeEpicWrite = orig
 	}
-	if _, err := fs.SetEpicFields("99-x", map[string]any{"priority": "low"}, false); !errors.Is(err, domain.ErrConflict) {
+	if _, err := fs.SetEpicFields(core.EpicMutationTarget{ID: "99-x"}, map[string]any{"priority": "low"}, false); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a concurrent in-place epic edit must conflict, got %v", err)
 	}
 	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "description: CHANGED") || strings.Contains(string(b), "priority: low") {
@@ -228,7 +228,7 @@ func TestSetFields_FuzzyQueryDoesNotSpuriouslyConflict(t *testing.T) {
 	}
 }
 
-// MoveEpic conflict coverage (resolveEpicPath + the move path; distinct from SetEpicFields).
+// MoveEpic conflict coverage uses the exact selected key, independently of SetEpicFields.
 func TestMoveEpic_ConflictsOnConcurrentContentEdit(t *testing.T) {
 	root := t.TempDir()
 	if err := os.MkdirAll(root+"/epics", 0o755); err != nil {
@@ -246,7 +246,7 @@ func TestMoveEpic_ConflictsOnConcurrentContentEdit(t *testing.T) {
 		_ = os.WriteFile(p, []byte("---\nstatus: active\npriority: high\ndescription: CHANGED\n---\n# E\n"), 0o644)
 		testHookBeforeEpicWrite = orig
 	}
-	if _, err := fs.MoveEpic("98-y", "deprecated", time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC), false); !errors.Is(err, domain.ErrConflict) {
+	if _, err := fs.MoveEpic(core.EpicMutationTarget{ID: "98-y"}, "deprecated", time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC), false); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a concurrent edit during an epic move must conflict, got %v", err)
 	}
 	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "description: CHANGED") || strings.Contains(string(b), "status: deprecated") {
@@ -268,7 +268,7 @@ func TestAppendAuditBody_ConflictsOnConcurrentContentEdit(t *testing.T) {
 		_ = os.WriteFile(p, []byte("---\nid: 6fjjt6s9ttab\nbucket: open\narea: x\ndate: 2026-01-02\nnote: CHANGED\n---\n#### H1. t  · **Status:** open\n"), 0o644)
 		testHookBeforeBodyWrite = orig
 	}
-	if _, _, err := fs.AppendAuditBody("2026-01-02-ab", "#### M9. new  · **Status:** open", time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC), false); !errors.Is(err, domain.ErrConflict) {
+	if _, _, err := fs.AppendAuditBody(testAuditTarget("2026-01-02-ab"), "#### M9. new  · **Status:** open", time.Date(2026, 6, 20, 0, 0, 0, 0, time.UTC), false); !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("a concurrent edit during an audit append must conflict, got %v", err)
 	}
 	if b, _ := os.ReadFile(p); !strings.Contains(string(b), "note: CHANGED") || strings.Contains(string(b), "M9. new") {

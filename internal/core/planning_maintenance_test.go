@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -43,8 +44,10 @@ func (f *headerMaintenanceStore) ReadAuditSnapshot(string) (AuditSnapshot, error
 	return snapshot, nil
 }
 
-func (f *headerMaintenanceStore) TransformAuditBody(ref string, _ time.Time, dryRun bool, transform func(domain.Audit, string) (string, error)) (domain.Audit, string, bool, error) {
+func (f *headerMaintenanceStore) TransformAuditBody(target AuditMutationTarget, _ time.Time, dryRun bool, transform func(domain.Audit, string) (string, error)) (domain.Audit, string, bool, error) {
+	ref := target.ID
 	f.events = append(f.events, "body/"+ref)
+	ref = strings.TrimPrefix(ref, "opaque-")
 	audit := domain.Audit{Slug: ref}
 	if ref == f.failRef {
 		return audit, "", false, f.headerErr
@@ -69,7 +72,7 @@ func TestRepairPlanningRetainsActualBodyRepairPrefix(t *testing.T) {
 				bodies: map[string]string{"first": body, "second": body}, failRef: "second",
 			}
 			receipt, err := MustNewService(fake).RepairPlanning(dryRun)
-			want := []string{fmt.Sprintf("frontmatter/%t", dryRun), "audit snapshot", "body/first", "body/second"}
+			want := []string{fmt.Sprintf("frontmatter/%t", dryRun), "audit snapshot", "body/opaque-first", "body/opaque-second"}
 			if !errors.Is(err, sentinel) || len(receipt.Fixes) != 2 || len(receipt.Fixes[1].Changes) != 1 || !slices.Equal(fake.events, want) {
 				t.Fatalf("repair=%+v err=%v events=%v want=%v", receipt, err, fake.events, want)
 			}

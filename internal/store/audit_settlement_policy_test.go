@@ -26,7 +26,7 @@ func TestAuditMovesRequireTerminalParsedFindingsBeforeEffects(t *testing.T) {
 						testutil.Write(t, path, content)
 						fs := testutil.Must(NewFS(root, core.UnrestrictedMutations()))
 						before := testutil.SnapshotTree(t, root)
-						_, err := fs.MoveAudit("probe", to, dry)
+						_, err := fs.MoveAudit(testAuditTarget("probe"), to, dry)
 						var refusal *core.AuditMoveError
 						var unsettled *domain.AuditUnsettledFindingsError
 						if !errors.Is(err, domain.ErrValidation) || !errors.As(err, &refusal) || !errors.As(err, &unsettled) || unsettled.Count != 1 || refusal.Source.ID != testutil.TaskID("probe") {
@@ -35,7 +35,7 @@ func TestAuditMovesRequireTerminalParsedFindingsBeforeEffects(t *testing.T) {
 						if !maps.Equal(before, testutil.SnapshotTree(t, root)) {
 							t.Fatal("refused move changed tree bytes, modes, or entries")
 						}
-						if _, err := fs.MoveAudit("probe", domain.AuditOpen, dry); err != nil {
+						if _, err := fs.MoveAudit(testAuditTarget("probe"), domain.AuditOpen, dry); err != nil {
 							t.Fatalf("reopen for repair: %v", err)
 						}
 					})
@@ -160,7 +160,7 @@ func TestFindingEditRetryObservesConcurrentNonOpenBucket(t *testing.T) {
 			testHookBeforeBodyWrite = func() {
 				calls++
 				testHookBeforeBodyWrite = previous
-				if _, err := fs.MoveAudit("2026-01-01-a", target, false); err != nil {
+				if _, err := fs.MoveAudit(testAuditTarget("2026-01-01-a"), target, false); err != nil {
 					t.Fatal(err)
 				}
 				var err error

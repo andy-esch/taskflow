@@ -64,7 +64,7 @@ func loadThreadDetail(svc *core.Service, id string) tea.Cmd {
 		// Path lookup is optional and non-authoritative. Resolve it independently so
 		// a local repair path survives a semantic projection failure, but never let a
 		// missing/path-only failure blank otherwise coherent Thread content.
-		path, pathErr := svc.ThreadPath(id)
+		path, pathErr := svc.ThreadPathByID(id)
 		projection, body, err := svc.ShowThreadGraphDetail(id)
 		if err != nil {
 			return detailErrMsg{kind: entityThreads, id: id, err: err, localPath: path}

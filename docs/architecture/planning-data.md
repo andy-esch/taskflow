@@ -28,16 +28,16 @@ within-kind duplicate IDs, and recoverable unreadable task/Thread cross-kind
 collisions retain per-occurrence diagnostics; ownership evidence does not establish
 valid membership.
 
-Task body/criterion/field writes resolve a user reference once, then carry a
-[TaskMutationTarget](../../internal/core/store.go) containing its established source
-ID. Persistence matches that ID exactly before callbacks, previews and no-ops; deletion
-or duplication cannot redirect a retry onto a human slug. Single-task selection
-conflicts and subsequent writes share one bounded retry budget and captured timestamp.
-Whole-body replacement uses the same strict target but remains non-retried.
-Initial identity selection uses the parse-free `TaskStore.ResolveTaskSource` port,
-not a typed task read or local path capability: `task set` can repair malformed typed
-fields while persistence still validates the updated document before any write or
-successful preview. Unrelated corruption remains an attributed validation failure.
+Task body/criterion/field writes resolve a reference once through parse-free
+`TaskStore.ResolveTaskSource`, then carry its source ID in a
+[TaskMutationTarget](../../internal/core/store.go). Persistence requires exact, unique
+ownership before callbacks, previews and no-ops; deletion cannot trigger slug fallback.
+Selection and write conflicts share one retry budget and timestamp. Whole-body
+replacement keeps the strict target but is not retried.
+
+Parse-free selection lets `task set` repair malformed typed fields without borrowing
+local-path authority. Persistence validates the updated document, including previews;
+unrelated corruption remains an attributed validation failure.
 See [CLI repair regressions](../../internal/cli/task_set_repair_test.go).
 
 Criterion handoffs resolve both endpoint IDs before self-tracking checks. Equal IDs
@@ -50,21 +50,40 @@ retries keep its task ID while revalidating policy and impacts against fresh sna
 See [portable target tests](../../internal/core/task_target_test.go) and
 [real-store drift tests](../../internal/store/task_target_test.go).
 
-Already-selected task field/lifecycle actions use explicit Service entry points:
-`SetSelectedTaskFields`, `MoveSelectedTask` and `DeferSelectedTask` accept the same
-typed target without repeating initial reference resolution. Their validation and
-retry machinery remains shared with the ordinary CLI paths. Submitted TUI commands
-capture their originating service along with the ID; an ID alone is not cross-space
-authority. Workspace activation closes unsubmitted forms and menus before they
-can bind to the newly selected service, even when row IDs and list generations match.
+Already-selected interfaces use explicit Service entry points, skipping reference
+matching while sharing ordinary CLI validation/retry rules. An ID alone is not
+cross-space authority: the [TUI](tui.md#shell-and-entity-extension-seams) captures the
+originating Service and closes unsubmitted forms on workspace activation.
 See [portable application tests](../../internal/core/selected_task_action_test.go)
 and [TUI action tests](../../internal/tui/selected_task_action_test.go), including
 [open-form activation regressions](../../internal/tui/selected_task_session_test.go).
 
-The survey confirms remaining [non-task retry/selected-caller](../../planning/tasks/6gkt3fphx1ts-pin-non-task-mutation-retries-to-selected-source-identities.md),
-[selected local-path](../../planning/tasks/6gm30jat0xsy-keep-selected-tui-path-actions-bound-to-exact-identities.md)
-and [dependency/Thread replanning](../../planning/tasks/6gkt3fpsfdd7-keep-graph-and-thread-retry-endpoints-fixed-during-replanning.md)
-gaps. Neither canonical strings nor CAS alone establish end-to-end target binding.
+Audit, research and epic scriptable writes follow the same rule with entity-specific
+targets and parse-free source lookups. Audit header repair uses each snapshot
+occurrence's source ID, not its slug. An epic's ID is its complete filename stem:
+changing it removes that identity rather than selecting a similarly named epic.
+See [portable entity tests](../../internal/core/entity_target_test.go),
+[real-store retry tests](../../internal/store/entity_target_test.go) and
+[TUI non-task actions](../../internal/tui/selected_entity_action_test.go).
+
+Dependency add/remove bind both endpoints inside the guarded planner, then recompute
+the requested change against each fresh graph. Thread creation, membership and
+lifecycle likewise retain successful selection even when validation conflicts before
+the adapter returns a plan. Only intent survives: membership, policy, impacts and
+write sets are derived again. Pre-planner contention establishes no selection;
+committed outcomes and durable prefixes are never automatically replayed.
+See [portable retry tests](../../internal/core/graph_retry_target_test.go) and
+[real-store graph tests](../../internal/store/graph_retry_target_test.go).
+Explicit graph-repair selector binding remains a
+[tracked gap](../../planning/tasks/6gm9ny98zyf2-pin-explicit-graph-repair-source-selections-across-retries.md).
+
+Already-selected local navigation uses the optional `*PathByID` Service methods,
+not the ordinary reference-based path methods. Each adapter must resolve a unique
+exact source ID without typed decoding, preserving access to malformed documents
+for manual repair. Ordinary CLI reference matching is unchanged. Source-set binding
+and TUI session guards still apply; an ID alone does not authorize another workspace.
+See [selected path ports](../../internal/core/selected_entity_path.go) and
+[queued local-action tests](../../internal/tui/selected_local_path_test.go).
 
 See [record tests](../../internal/core/entity_read_test.go),
 [source-boundary tests](../../internal/core/thread_source_boundary_test.go) and

@@ -115,7 +115,7 @@ func TestFS_MoveAudit_ConflictsWhenEditedConcurrently(t *testing.T) {
 	}
 	defer func() { testHookBeforeMoveAuditWrite = nil }()
 
-	_, err := fs.MoveAudit("a1", domain.AuditDeferred, false)
+	_, err := fs.MoveAudit(testAuditTarget("a1"), domain.AuditDeferred, false)
 	if !errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("want ErrConflict for a concurrently-edited audit, got %v", err)
 	}
@@ -130,7 +130,7 @@ func TestFS_MoveAudit_RejectsOpenFindings(t *testing.T) {
 	root := t.TempDir()
 	path, out := testutil.AuditFixture(root, "open", "x.md", "---\narea: a\n---\n#### H1. t  · **Status:** open\n")
 	testutil.Write(t, path, out)
-	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveAudit("x", domain.AuditClosed, false)
+	_, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveAudit(testAuditTarget("x"), domain.AuditClosed, false)
 	if !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("closing an audit with open findings must be rejected, got %v", err)
 	}
@@ -142,7 +142,7 @@ func TestFS_MoveAudit_RejectsOpenFindings(t *testing.T) {
 		t.Errorf("a rejected move must not change the audit's bucket frontmatter: %q", b)
 	}
 	// Deferring (also a non-open bucket) is refused for the same reason.
-	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveAudit("x", domain.AuditDeferred, false); !errors.Is(err, domain.ErrValidation) {
+	if _, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).MoveAudit(testAuditTarget("x"), domain.AuditDeferred, false); !errors.Is(err, domain.ErrValidation) {
 		t.Fatalf("deferring an audit with open findings must be rejected, got %v", err)
 	}
 }

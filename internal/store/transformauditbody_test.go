@@ -32,7 +32,7 @@ func TestTransformAuditBody_CallbackErrorWritesNothing(t *testing.T) {
 	before, _ := os.ReadFile(p)
 	sentinel := errors.New("no such finding")
 
-	_, _, changed, err := fs.TransformAuditBody("2026-01-01-a", transformAuditNow, false,
+	_, _, changed, err := fs.TransformAuditBody(testAuditTarget("2026-01-01-a"), transformAuditNow, false,
 		func(_ domain.Audit, _ string) (string, error) { return "", sentinel })
 	if !errors.Is(err, sentinel) {
 		t.Fatalf("callback error should surface unchanged, got %v", err)
@@ -51,7 +51,7 @@ func TestTransformAuditBody_UnchangedBodyIsNoOpAndDoesNotStamp(t *testing.T) {
 	fs, p := transformAuditRepo(t)
 	before, _ := os.ReadFile(p)
 
-	_, _, changed, err := fs.TransformAuditBody("2026-01-01-a", transformAuditNow, false,
+	_, _, changed, err := fs.TransformAuditBody(testAuditTarget("2026-01-01-a"), transformAuditNow, false,
 		func(_ domain.Audit, current string) (string, error) { return current, nil })
 	if err != nil {
 		t.Fatal(err)
@@ -73,7 +73,7 @@ func TestTransformAuditBody_DryRunWritesNothing(t *testing.T) {
 	fs, p := transformAuditRepo(t)
 	before, _ := os.ReadFile(p)
 
-	_, _, changed, err := fs.TransformAuditBody("2026-01-01-a", transformAuditNow, true,
+	_, _, changed, err := fs.TransformAuditBody(testAuditTarget("2026-01-01-a"), transformAuditNow, true,
 		func(_ domain.Audit, current string) (string, error) { return current + "\nappended by dry run\n", nil })
 	if err != nil {
 		t.Fatal(err)
@@ -99,7 +99,7 @@ func TestTransformAuditBody_ConflictsOnConcurrentContentEdit(t *testing.T) {
 		testHookBeforeBodyWrite = orig
 	}
 
-	_, _, _, err := fs.TransformAuditBody("2026-01-01-a", transformAuditNow, false,
+	_, _, _, err := fs.TransformAuditBody(testAuditTarget("2026-01-01-a"), transformAuditNow, false,
 		func(_ domain.Audit, current string) (string, error) {
 			return strings.Replace(current, "**Status:** open", "**Status:** fixed", 1), nil
 		})
@@ -122,7 +122,7 @@ func TestTransformAuditBody_TransformSeesFreshBodyAfterConcurrentAppend(t *testi
 	}
 
 	var seen string
-	_, _, changed, err := fs.TransformAuditBody("2026-01-01-a", transformAuditNow, false,
+	_, _, changed, err := fs.TransformAuditBody(testAuditTarget("2026-01-01-a"), transformAuditNow, false,
 		func(audit domain.Audit, current string) (string, error) {
 			if audit.Bucket != domain.AuditOpen || audit.Slug != "2026-01-01-a" {
 				t.Fatalf("transform received wrong audit snapshot: %+v", audit)
@@ -160,7 +160,7 @@ func TestEditFinding_RetriesAroundConcurrentAppendPreservingBoth(t *testing.T) {
 	testHookBeforeBodyWrite = func() {
 		// Restore first: the append below goes through the same write path.
 		testHookBeforeBodyWrite = orig
-		if _, _, err := fs.AppendAuditBody("2026-01-01-a", "## Appended section\n\nnew prose.", transformAuditNow, false); err != nil {
+		if _, _, err := fs.AppendAuditBody(testAuditTarget("2026-01-01-a"), "## Appended section\n\nnew prose.", transformAuditNow, false); err != nil {
 			t.Errorf("concurrent append failed: %v", err)
 		}
 	}
@@ -201,7 +201,7 @@ func TestEditFindingCandidate_RetriesAroundConcurrentAppendPreservingAll(t *test
 	defer func() { testHookBeforeBodyWrite = orig }()
 	testHookBeforeBodyWrite = func() {
 		testHookBeforeBodyWrite = orig
-		if _, _, err := fs.AppendAuditBody("2026-01-01-a", "## Appended section\n\nnew prose.", transformAuditNow, false); err != nil {
+		if _, _, err := fs.AppendAuditBody(testAuditTarget("2026-01-01-a"), "## Appended section\n\nnew prose.", transformAuditNow, false); err != nil {
 			t.Errorf("concurrent append failed: %v", err)
 		}
 	}
@@ -243,8 +243,7 @@ func TestNewFinding_RetriesAllocationAroundConcurrentAppend(t *testing.T) {
 	defer func() { testHookBeforeBodyWrite = orig }()
 	testHookBeforeBodyWrite = func() {
 		testHookBeforeBodyWrite = orig
-		if _, _, err := fs.AppendAuditBody("2026-01-01-a",
-			"#### H2. Concurrent finding · **Status:** open\n\nConcurrent prose.", transformAuditNow, false); err != nil {
+		if _, _, err := fs.AppendAuditBody(testAuditTarget("2026-01-01-a"), "#### H2. Concurrent finding · **Status:** open\n\nConcurrent prose.", transformAuditNow, false); err != nil {
 			t.Errorf("concurrent finding append failed: %v", err)
 		}
 	}
@@ -284,7 +283,7 @@ func TestNewFinding_RetryRefusesConcurrentNonOpenAuditMove(t *testing.T) {
 			defer func() { testHookBeforeBodyWrite = orig }()
 			testHookBeforeBodyWrite = func() {
 				testHookBeforeBodyWrite = orig
-				if _, err := fs.MoveAudit("2026-01-01-a", target, false); err != nil {
+				if _, err := fs.MoveAudit(testAuditTarget("2026-01-01-a"), target, false); err != nil {
 					t.Errorf("concurrent move to %s failed: %v", target, err)
 				}
 			}
@@ -312,7 +311,7 @@ func TestNewFinding_RetryRefusesConcurrentNonOpenAuditMove(t *testing.T) {
 // The frontmatter is preserved surgically and the body write stamps updated_at.
 func TestTransformAuditBody_StampsUpdatedAtAndPreservesFrontmatter(t *testing.T) {
 	fs, p := transformAuditRepo(t)
-	_, _, changed, err := fs.TransformAuditBody("2026-01-01-a", transformAuditNow, false,
+	_, _, changed, err := fs.TransformAuditBody(testAuditTarget("2026-01-01-a"), transformAuditNow, false,
 		func(_ domain.Audit, current string) (string, error) {
 			return strings.Replace(current, "**Status:** open", "**Status:** fixed", 1), nil
 		})

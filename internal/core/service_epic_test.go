@@ -32,6 +32,18 @@ func (nopStore) SourceSetID() SourceSetID { return testSourceSetID }
 
 var _ Store = nopStore{}
 
+func (nopStore) ResolveAuditSource(ref string) (RecordSource, error) {
+	return RecordSource{ID: ref}, nil
+}
+
+func (nopStore) ResolveResearchSource(ref string) (RecordSource, error) {
+	return RecordSource{ID: ref}, nil
+}
+
+func (nopStore) ResolveEpicSource(ref string) (RecordSource, error) {
+	return RecordSource{ID: ref}, nil
+}
+
 func (nopStore) ReadTasks() (TaskRead, error) { return TaskRead{}, nil }
 func (nopStore) ReadTask(string) (LoadedRecord[TaskWithBody], error) {
 	return LoadedRecord[TaskWithBody]{}, domain.ErrNotFound
@@ -86,10 +98,10 @@ func (nopStore) GetEpic(string) (domain.Epic, string, error) {
 func (nopStore) CreateEpic(string, domain.Epic, string, bool) (EpicCreationReceipt, error) {
 	return EpicCreationReceipt{}, nil
 }
-func (nopStore) MoveEpic(string, string, time.Time, bool) (domain.Epic, error) {
+func (nopStore) MoveEpic(EpicMutationTarget, string, time.Time, bool) (domain.Epic, error) {
 	return domain.Epic{}, nil
 }
-func (nopStore) SetEpicFields(string, map[string]any, bool) (domain.Epic, error) {
+func (nopStore) SetEpicFields(EpicMutationTarget, map[string]any, bool) (domain.Epic, error) {
 	return domain.Epic{}, nil
 }
 func (nopStore) EditEpic(string, time.Time, func(string, error) (string, error)) (domain.Epic, bool, error) {
@@ -102,7 +114,7 @@ func (nopStore) ListAuditsWithFindings() ([]AuditWithFindings, []domain.FileProb
 func (nopStore) GetAudit(string) (domain.Audit, string, error) {
 	return domain.Audit{}, "", domain.ErrNotFound
 }
-func (nopStore) MoveAudit(string, domain.AuditBucket, bool) (domain.Audit, error) {
+func (nopStore) MoveAudit(AuditMutationTarget, domain.AuditBucket, bool) (domain.Audit, error) {
 	return domain.Audit{}, nil
 }
 func (nopStore) CreateAudit(domain.Audit, string, bool) (AuditCreationReceipt, error) {
@@ -111,10 +123,10 @@ func (nopStore) CreateAudit(domain.Audit, string, bool) (AuditCreationReceipt, e
 func (nopStore) EditAudit(string, time.Time, func(string, error) (string, error)) (domain.Audit, bool, error) {
 	return domain.Audit{}, false, nil
 }
-func (nopStore) AppendAuditBody(string, string, time.Time, bool) (domain.Audit, string, error) {
+func (nopStore) AppendAuditBody(AuditMutationTarget, string, time.Time, bool) (domain.Audit, string, error) {
 	return domain.Audit{}, "", nil
 }
-func (nopStore) TransformAuditBody(string, time.Time, bool, func(domain.Audit, string) (string, error)) (domain.Audit, string, bool, error) {
+func (nopStore) TransformAuditBody(AuditMutationTarget, time.Time, bool, func(domain.Audit, string) (string, error)) (domain.Audit, string, bool, error) {
 	return domain.Audit{}, "", false, nil
 }
 func (nopStore) ListResearch() ([]domain.Research, []domain.FileProblem, error) {
@@ -126,13 +138,13 @@ func (nopStore) GetResearch(string) (domain.Research, string, error) {
 func (nopStore) CreateResearch(domain.Research, string, bool) (ResearchCreationReceipt, error) {
 	return ResearchCreationReceipt{}, nil
 }
-func (nopStore) SetResearchFields(string, map[string]any, bool) (domain.Research, error) {
+func (nopStore) SetResearchFields(ResearchMutationTarget, map[string]any, bool) (domain.Research, error) {
 	return domain.Research{}, nil
 }
 func (nopStore) EditResearch(string, time.Time, func(string, error) (string, error)) (domain.Research, bool, error) {
 	return domain.Research{}, false, nil
 }
-func (nopStore) AppendResearchBody(string, string, time.Time, bool) (domain.Research, string, error) {
+func (nopStore) AppendResearchBody(ResearchMutationTarget, string, time.Time, bool) (domain.Research, string, error) {
 	return domain.Research{}, "", nil
 }
 
@@ -424,7 +436,8 @@ func (f *fakeStore) GetEpic(id string) (domain.Epic, string, error) {
 
 // MoveEpic mirrors the real store's field rewrite: resolve the seeded epic, set
 // its status, and (unless dryRun) persist it back to the in-memory slice.
-func (f *fakeStore) MoveEpic(id, status string, _ time.Time, dryRun bool) (domain.Epic, error) {
+func (f *fakeStore) MoveEpic(target EpicMutationTarget, status string, _ time.Time, dryRun bool) (domain.Epic, error) {
+	id := target.ID
 	for i, e := range f.epics {
 		if e.ID == id {
 			e.Status = status
@@ -440,7 +453,8 @@ func (f *fakeStore) MoveEpic(id, status string, _ time.Time, dryRun bool) (domai
 // SetEpicFields mirrors the real store: resolve the seeded epic and apply the
 // already-validated/coerced updates the Service hands down (description/priority/
 // tags), persisting unless dryRun. Unknown id is ErrNotFound, like the real store.
-func (f *fakeStore) SetEpicFields(id string, updates map[string]any, dryRun bool) (domain.Epic, error) {
+func (f *fakeStore) SetEpicFields(target EpicMutationTarget, updates map[string]any, dryRun bool) (domain.Epic, error) {
+	id := target.ID
 	for i, e := range f.epics {
 		if e.ID != id {
 			continue

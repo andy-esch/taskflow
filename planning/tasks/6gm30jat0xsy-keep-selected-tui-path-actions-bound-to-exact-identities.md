@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gm30jat0xsy
-status: ready-to-start
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Prevent delayed editor and path-copy actions from resolving another record when their selected source ID disappears.
 effort: 1-2 days
@@ -10,7 +10,9 @@ priority: high
 autonomy_level: 2
 tags: [correctness, identity, tui, core, store]
 created: "2026-10-15"
-updated_at: "2026-10-15"
+updated_at: "2026-10-16"
+started_at: "2026-10-15"
+completed_at: "2026-10-16"
 ---
 
 # Keep selected TUI path actions bound to exact identities
@@ -44,16 +46,16 @@ read; do not claim an unprobed wrong-detail acceptance defect.
 
 ## Acceptance criteria
 
-- [ ] Selected editor and path-copy actions follow rename but refuse deletion,
+- [x] Selected editor and path-copy actions follow rename but refuse deletion,
   duplicate IDs and ID-shaped or case-folded impostor labels without launching
   an effect on another record.
-- [ ] Selected local lookup has an explicit identity-only application/adapter
+- [x] Selected local lookup has an explicit identity-only application/adapter
   contract; CLI path commands retain normal human-reference matching and
   parse-free access to malformed documents.
-- [ ] Real queued E and Y command tests cover drift before each lookup, stale
+- [x] Real queued E and Y command tests cover drift before each lookup, stale
   selection/reload/session results and optional pathless capabilities; no editor
   or clipboard effect runs during safety tests.
-- [ ] Inventory every entity path family and selected-detail read: retain
+- [x] Inventory every entity path family and selected-detail read: retain
   existing source-mismatch refusal and track any separately confirmed exposure
   without parsing diagnostic locations.
 
@@ -75,3 +77,36 @@ on eventual parent/child UX, but do not block this correctness fix on that desig
 ## Related
 
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
+
+## Implementation and evidence
+
+All five optional entity path ports now distinguish ordinary CLI references from
+exact selected `*PathByID` lookups. Service validates nonempty source evidence;
+the filesystem adapter resolves unique ownership without typed decoding. Existing
+source-set/detachment policy is shared by both modes. TUI `localPathLookup`, all four
+ordinary detail loaders and the Thread projection detail loader use selected mode.
+Semantic detail reads retain their existing source-ID mismatch refusal; no new
+wrong-detail acceptance defect is claimed. Thread mutation materialization/CAS
+also use the exact Thread resolver rather than a human-reference lookup.
+
+[Queued local-action tests](../../internal/tui/selected_local_path_test.go) exercise
+76 missing/impostor/case-folded/duplicate cases across E/Y and both lookups, ten
+parse-free repair/same-ID rename controls, and four same-ID/list-generation workspace
+session collisions. Epics use complete-stem identity and cannot duplicate a stem in
+one directory. Existing [local-path tests](../../internal/tui/local_path_test.go)
+cover selection/reload staleness, rename between lookups and detached/pathless sources.
+No editor or clipboard effect is executed by these safety tests.
+
+A compiler-valid owner mutation restoring fuzzy task lookup failed all eight
+task impostor/case-folded cases at the intended effect assertion; restoring exact
+lookup passed the race-enabled safety tests. Core optional-capability tests separately
+pin opaque IDs and exact-mode dispatch without semantic decoding or local fallback.
+
+Owner build/full race tests/lint/docs checks pass. Member of
+[Finish selected identity safety](../threads/6gm4h71hm1yt-finish-selected-identity-safety.md);
+review triage is recorded there. Claude's queued-action cross-check and owner repeated
+race tests support this fix; Antigravity's report is deferred because its inventory
+and test descriptions do not meet the brief's evidence floor. All criteria are met
+and the task is completed for PR delivery, without treating that report as an
+independent clean approval. Neither the final lookup-to-external-effect window nor
+delete/recreate with the identical canonical ID is made transactional.

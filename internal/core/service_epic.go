@@ -278,8 +278,22 @@ func (s *Service) MoveEpic(id, status string, dryRun bool) (domain.Epic, error) 
 		return domain.Epic{}, err
 	}
 	now := s.now()
+	return retryEpicMutation(s, id, dryRun, func(target EpicMutationTarget) (domain.Epic, error) {
+		return s.store.MoveEpic(target, status, now, dryRun)
+	})
+}
+
+// MoveSelectedEpic retains an earlier interface's complete epic source identity.
+func (s *Service) MoveSelectedEpic(target EpicMutationTarget, status string, dryRun bool) (domain.Epic, error) {
+	if err := requireSourceID(EntityEpic, RecordSource{ID: target.ID}); err != nil {
+		return domain.Epic{}, err
+	}
+	if err := domain.ValidateEpicStatus(status); err != nil {
+		return domain.Epic{}, err
+	}
+	now := s.now()
 	return retryOnConflict(s, dryRun, func() (domain.Epic, error) {
-		return s.store.MoveEpic(id, status, now, dryRun)
+		return s.store.MoveEpic(target, status, now, dryRun)
 	})
 }
 
@@ -295,43 +309,66 @@ func (s *Service) MoveEpic(id, status string, dryRun bool) (domain.Epic, error) 
 // domain.UnsetField value removes the key. updated_at is stamped automatically (the
 // service injects it, mirroring SetFields), so a caller can't set or unset it.
 func (s *Service) SetEpicFields(id string, updates map[string]any, force, dryRun bool) (domain.Epic, error) {
+	clean, err := s.prepareEpicFieldUpdates(updates, force)
+	if err != nil {
+		return domain.Epic{}, err
+	}
+	return retryEpicMutation(s, id, dryRun, func(target EpicMutationTarget) (domain.Epic, error) {
+		return s.store.SetEpicFields(target, clean, dryRun)
+	})
+}
+
+// SetSelectedEpicFields shares validation with [Service.SetEpicFields] without
+// reinterpreting the selected identity as a fresh reference.
+func (s *Service) SetSelectedEpicFields(target EpicMutationTarget, updates map[string]any, force, dryRun bool) (domain.Epic, error) {
+	if err := requireSourceID(EntityEpic, RecordSource{ID: target.ID}); err != nil {
+		return domain.Epic{}, err
+	}
+	clean, err := s.prepareEpicFieldUpdates(updates, force)
+	if err != nil {
+		return domain.Epic{}, err
+	}
+	return retryOnConflict(s, dryRun, func() (domain.Epic, error) {
+		return s.store.SetEpicFields(target, clean, dryRun)
+	})
+}
+
+func (s *Service) prepareEpicFieldUpdates(updates map[string]any, force bool) (map[string]any, error) {
 	if len(updates) == 0 {
-		return domain.Epic{}, fmt.Errorf("%w: no fields given", domain.ErrValidation)
+		return nil, fmt.Errorf("%w: no fields given", domain.ErrValidation)
 	}
 	clean := make(map[string]any, len(updates))
 	for field, val := range updates {
 		if field == "status" {
-			return domain.Epic{}, fmt.Errorf("%w: epic status moves via `epic move`, not `set`", domain.ErrValidation)
+			return nil, fmt.Errorf("%w: epic status moves via `epic move`, not `set`", domain.ErrValidation)
 		}
 		if field == "updated_at" {
-			return domain.Epic{}, fmt.Errorf("%w: updated_at is stamped automatically and cannot be set", domain.ErrValidation)
+			return nil, fmt.Errorf("%w: updated_at is stamped automatically and cannot be set", domain.ErrValidation)
 		}
 		if _, unset := val.(domain.UnsetField); unset {
 			// A typo'd field name must not silently no-op — gate unset on the registry
 			// too, mirroring the set path (and the task SetFields contract).
 			if !force && !domain.KnownEpicField(field) {
-				return domain.Epic{}, unknownEpicFieldErr(field)
+				return nil, unknownEpicFieldErr(field)
 			}
 			clean[field] = val
 			continue
 		}
 		if !force && !domain.KnownEpicField(field) {
-			return domain.Epic{}, unknownEpicFieldErr(field)
+			return nil, unknownEpicFieldErr(field)
 		}
 		coerced, err := coerceEpicField(field, val)
 		if err != nil {
-			return domain.Epic{}, err
+			return nil, err
 		}
 		if err := domain.ValidateEpicField(field, stringify(coerced)); err != nil {
-			return domain.Epic{}, err
+			return nil, err
 		}
 		clean[field] = coerced
 	}
 	// Stamp the activity date like SetFields does, so any epic edit advances it.
 	clean["updated_at"] = s.now().Format("2006-01-02")
-	return retryOnConflict(s, dryRun, func() (domain.Epic, error) {
-		return s.store.SetEpicFields(id, clean, dryRun)
-	})
+	return clean, nil
 }
 
 // unknownEpicFieldErr is the shared rejection for an epic field outside the

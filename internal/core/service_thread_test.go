@@ -81,6 +81,11 @@ func (f *threadPathFake) ResolveThreadPath(ref string) (string, error) {
 	return f.path, f.err
 }
 
+func (f *threadPathFake) ResolveThreadPathByID(id string) (string, error) {
+	f.refs = append(f.refs, "id:"+id)
+	return f.path, f.err
+}
+
 var _ ThreadPathSource = (*threadPathFake)(nil)
 
 type aggregateThreadPathFake struct {
@@ -91,6 +96,11 @@ type aggregateThreadPathFake struct {
 }
 
 func (f *aggregateThreadPathFake) ResolveThreadPath(string) (string, error) {
+	f.calls++
+	return f.path, nil
+}
+
+func (f *aggregateThreadPathFake) ResolveThreadPathByID(string) (string, error) {
 	f.calls++
 	return f.path, nil
 }

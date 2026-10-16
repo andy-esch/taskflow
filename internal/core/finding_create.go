@@ -40,9 +40,9 @@ func (s *Service) NewFinding(slug string, params NewFindingParams) (FindingCreat
 		return FindingCreationReceipt{}, fmt.Errorf("%w: --candidate for a new finding cannot be empty; omit the flag when no candidate is needed", domain.ErrValidation)
 	}
 	now := s.now()
-	return retryOnConflict(s, params.DryRun, func() (FindingCreationReceipt, error) {
+	return retryAuditMutation(s, slug, params.DryRun, func(target AuditMutationTarget) (FindingCreationReceipt, error) {
 		var created domain.Finding
-		audit, _, changed, err := s.store.TransformAuditBody(slug, now, params.DryRun,
+		audit, _, changed, err := s.store.TransformAuditBody(target, now, params.DryRun,
 			func(audit domain.Audit, current string) (string, error) {
 				if audit.Bucket != domain.AuditOpen {
 					return "", fmt.Errorf("%w: cannot create an open finding in a %s audit; reopen the audit first", domain.ErrValidation, audit.Bucket)

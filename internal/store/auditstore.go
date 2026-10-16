@@ -105,7 +105,7 @@ func (s *FS) readAudit(slug string) (core.LoadedRecord[core.AuditWithBody], erro
 // MoveAudit changes an audit's bucket (close/reopen/defer) by rewriting its authoritative
 // `bucket:` frontmatter in place — under the flat layout (ADR-0003 §4) there is no bucket
 // directory to move between. A same-bucket call is a no-op only after validation.
-func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.Audit, error) {
+func (s *FS) MoveAudit(target core.AuditMutationTarget, to domain.AuditBucket, dryRun bool) (domain.Audit, error) {
 	if err := s.authorizeMutation(); err != nil {
 		return domain.Audit{}, err
 	}
@@ -115,7 +115,7 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.
 	if !to.Valid() {
 		return domain.Audit{}, fmt.Errorf("%q: %w", to, domain.ErrValidation)
 	}
-	path, err := s.resolveAudit(slug)
+	path, err := s.resolveAuditMutationTarget(target)
 	if err != nil {
 		return domain.Audit{}, err
 	}
@@ -163,7 +163,7 @@ func (s *FS) MoveAudit(slug string, to domain.AuditBucket, dryRun bool) (domain.
 	defer unlock()
 	// Version-CAS before the write: re-hash the source so a concurrent in-place edit is
 	// caught (no relocation under the flat layout). Fail cleanly with nothing written.
-	if err := verifyUnchanged(s.resolveAuditPath, slug, path, hashContent(content), "audit", "move"); err != nil {
+	if err := verifyUnchanged(s.resolveAuditPath, target.ID, path, hashContent(content), "audit", "move"); err != nil {
 		return domain.Audit{}, err
 	}
 	if err := writeFileAtomic(path, newContent, 0o644); err != nil {

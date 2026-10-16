@@ -230,8 +230,9 @@ type tuiThreadPathFake struct {
 	path      string
 }
 
-func (f tuiThreadPathFake) ResolveThreadPath(string) (string, error) { return f.path, nil }
-func (f tuiThreadPathFake) SourceSetID() core.SourceSetID            { return f.sourceSet }
+func (f tuiThreadPathFake) ResolveThreadPath(string) (string, error)     { return f.path, nil }
+func (f tuiThreadPathFake) ResolveThreadPathByID(string) (string, error) { return f.path, nil }
+func (f tuiThreadPathFake) SourceSetID() core.SourceSetID                { return f.sourceSet }
 
 func TestThreadRouteSurvivesSplitPathlessCapabilities(t *testing.T) {
 	root := threadRepo(t)

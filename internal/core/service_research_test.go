@@ -188,7 +188,7 @@ type setStore struct {
 	got map[string]any
 }
 
-func (f *setStore) SetResearchFields(_ string, updates map[string]any, _ bool) (domain.Research, error) {
+func (f *setStore) SetResearchFields(_ ResearchMutationTarget, updates map[string]any, _ bool) (domain.Research, error) {
 	f.got = updates
 	return domain.Research{Slug: "x"}, nil
 }

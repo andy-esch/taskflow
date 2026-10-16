@@ -77,3 +77,38 @@ func TestVerifyUnchanged_MessageShape(t *testing.T) {
 		t.Errorf("conflict message shape drifted: %v", err)
 	}
 }
+
+func TestVerifyUnchangedUsesExplicitResolverKey(t *testing.T) {
+	for _, key := range []string{"202601010000-launch", "opaque-selected-identity"} {
+		t.Run(key, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "unrelated-basename.md")
+			content := []byte("original source\n")
+			if err := os.WriteFile(path, content, 0o644); err != nil {
+				t.Fatal(err)
+			}
+			resolve := func(received string) (string, error) {
+				if received != key {
+					t.Errorf("CAS guessed identity from a path: got %q want %q", received, key)
+					return "", domain.ErrNotFound
+				}
+				return path, nil
+			}
+			if err := verifyUnchanged(resolve, key, path, hashContent(content), "record", "update"); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestVerifyUnchangedKeepsDiagnosticLabelSeparateFromKey(t *testing.T) {
+	resolve := func(key string) (string, error) {
+		if key != "202601010000-launch" {
+			t.Fatalf("diagnostic label became resolver key: %q", key)
+		}
+		return "", domain.ErrNotFound
+	}
+	err := verifyUnchangedWithLabel(resolve, "202601010000-launch", "launch", "/epics/202601010000-launch.md", "", "epic", "edit")
+	if !errors.Is(err, domain.ErrConflict) || !strings.Contains(err.Error(), `epic "launch" changed on disk during edit; retry:`) {
+		t.Fatalf("editor diagnostic changed: %v", err)
+	}
+}

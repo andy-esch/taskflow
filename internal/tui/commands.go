@@ -37,15 +37,15 @@ func localPathLookup(svc *core.Service, kind entityKind, id string, listGen int,
 		var err error
 		switch kind {
 		case entityTasks:
-			path, err = svc.TaskPath(id)
+			path, err = svc.TaskPathByID(id)
 		case entityEpics:
-			path, err = svc.EpicPath(id)
+			path, err = svc.EpicPathByID(id)
 		case entityThreads:
-			path, err = svc.ThreadPath(id)
+			path, err = svc.ThreadPathByID(id)
 		case entityAudits:
-			path, err = svc.AuditPath(id)
+			path, err = svc.AuditPathByID(id)
 		case entityResearch:
-			path, err = svc.ResearchPath(id)
+			path, err = svc.ResearchPathByID(id)
 		}
 		return localPathResultMsg{kind: kind, id: id, listGen: listGen, action: action, rechecked: rechecked, path: path, err: err}
 	}
@@ -134,7 +134,7 @@ func loadDashboard(svc *core.Service, gen int) tea.Cmd {
 
 func loadTaskDetail(svc *core.Service, id string) tea.Cmd {
 	return func() tea.Msg {
-		path, _ := svc.TaskPath(id)
+		path, _ := svc.TaskPathByID(id)
 		record, err := svc.ShowTask(id)
 		if err != nil {
 			return detailErrMsg{kind: entityTasks, id: id, err: err, localPath: path}
@@ -214,7 +214,7 @@ func sortEpicsForView(epics []core.EpicSummary, view string) {
 
 func loadEpicDetail(svc *core.Service, id string) tea.Cmd {
 	return func() tea.Msg {
-		path, _ := svc.EpicPath(id)
+		path, _ := svc.EpicPathByID(id)
 		detail, err := svc.ShowEpic(id)
 		if err != nil {
 			return detailErrMsg{kind: entityEpics, id: id, err: err, localPath: path}
@@ -283,7 +283,7 @@ func filterAuditRecords(records []core.LoadedRecord[domain.Audit], bucket string
 
 func loadAuditDetail(svc *core.Service, id string) tea.Cmd {
 	return func() tea.Msg {
-		path, _ := svc.AuditPath(id)
+		path, _ := svc.AuditPathByID(id)
 		record, err := svc.ShowAudit(id)
 		if err != nil {
 			return detailErrMsg{kind: entityAudits, id: id, err: err, localPath: path}
@@ -385,7 +385,7 @@ func loadResearchList(t *entityTab, svc *core.Service) tea.Cmd {
 
 func loadResearchDetail(svc *core.Service, id string) tea.Cmd {
 	return func() tea.Msg {
-		path, _ := svc.ResearchPath(id)
+		path, _ := svc.ResearchPathByID(id)
 		record, err := svc.ShowResearch(id)
 		if err != nil {
 			return detailErrMsg{kind: entityResearch, id: id, err: err, localPath: path}

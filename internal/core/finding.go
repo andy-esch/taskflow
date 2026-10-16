@@ -244,8 +244,8 @@ func (s *Service) EditFinding(slug, code string, edit FindingEdit, dryRun bool) 
 		audit   domain.Audit
 		changed bool
 	}
-	r, err := retryOnConflict(s, dryRun, func() (result, error) {
-		audit, _, changed, err := s.store.TransformAuditBody(slug, now, dryRun,
+	r, err := retryAuditMutation(s, slug, dryRun, func(target AuditMutationTarget) (result, error) {
+		audit, _, changed, err := s.store.TransformAuditBody(target, now, dryRun,
 			func(audit domain.Audit, current string) (string, error) {
 				next, err := edit.apply(current, code)
 				if err != nil {
@@ -304,7 +304,7 @@ func (s *Service) FixFindingHeaders(dryRun bool) ([]domain.FixResult, error) {
 	if err != nil {
 		return nil, err
 	}
-	// This is a bulk write selected by slug. Validate the complete readable
+	// This is a bulk write selected by source identity. Validate the complete readable
 	// snapshot before applying any prefix, so an incomplete adapter envelope
 	// cannot silently substitute declaration or filename identity.
 	for _, loaded := range snapshot.Audits {
@@ -322,7 +322,7 @@ func (s *Service) FixFindingHeaders(dryRun bool) ([]domain.FixResult, error) {
 		slug := a.Audit.Slug
 		changes, err := retryOnConflict(s, dryRun, func() ([]string, error) {
 			var applied []string
-			_, _, changed, err := s.store.TransformAuditBody(slug, now, dryRun, func(_ domain.Audit, current string) (string, error) {
+			_, _, changed, err := s.store.TransformAuditBody(AuditMutationTarget{ID: loaded.Source.ID}, now, dryRun, func(_ domain.Audit, current string) (string, error) {
 				fixed, hits := domain.CanonicalizeFindingHeaders(current)
 				applied = applied[:0]
 				for _, h := range hits {

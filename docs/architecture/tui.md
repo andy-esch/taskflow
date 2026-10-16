@@ -37,11 +37,16 @@ collisions, denied writes and stale/current-space results.
 [Activation tests](../../internal/tui/selected_task_session_test.go) exercise a
 pending Atlas open landing under an edit, action, confirm or defer form.
 
-This is not yet a universal selected-action guarantee: non-task mutation callers
-remain tracked by [entity pinning](../../planning/tasks/6gkt3fphx1ts-pin-non-task-mutation-retries-to-selected-source-identities.md),
-and [local-path actions](../../planning/tasks/6gm30jat0xsy-keep-selected-tui-path-actions-bound-to-exact-identities.md)
-still require an identity-only optional lookup. Rechecking a fuzzy ID string twice
-does not prevent both lookups selecting another record's ID-shaped human label.
+Audit lifecycle and epic field/lifecycle commands also use selected Service entry
+points, sharing CLI validation without repeating reference matching.
+[Non-task action tests](../../internal/tui/selected_entity_action_test.go) cover
+missing selected sources and impostor labels before the first Service call.
+Local editor/path-copy actions and detail joins use optional, parse-free `*PathByID`
+methods for all five kinds. Both asynchronous lookups require exact source ownership;
+confirmation follows same-ID renames but refuses impostors. Selection/list/session
+guards protect delayed delivery. Neither the final lookup-to-effect race nor
+delete/recreate with the identical ID is made transactional.
+See [selected local-action tests](../../internal/tui/selected_local_path_test.go).
 
 Lifecycle menus and command verbs use the registry's transition table and delegate.
 Tasks, audits and epics have their respective core transitions; Threads remain

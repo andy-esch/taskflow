@@ -18,12 +18,13 @@ type findingCreationStore struct {
 	lastTransformDry bool
 }
 
-func (s *findingCreationStore) TransformAuditBody(
-	slug string,
+func (s *findingCreationStore) TransformAuditBody(target AuditMutationTarget,
+
 	_ time.Time,
 	dryRun bool,
 	transform func(domain.Audit, string) (string, error),
 ) (domain.Audit, string, bool, error) {
+	slug := target.ID
 	s.transformCalls++
 	s.lastTransformDry = dryRun
 	current := s.body
