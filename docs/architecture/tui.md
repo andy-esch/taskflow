@@ -23,6 +23,26 @@ quarantined before filtering, not silently reduced to one row.
 [Identity tests](../../internal/tui/identity_test.go) and
 [cross-view tests](../../internal/tui/identity_cross_view_test.go) exercise this.
 
+Task field set/unset and move/defer commands pass `TaskMutationTarget` to explicit
+selected-identity Service entry points, never the reference-based CLI methods.
+Submitted commands capture the originating service in `tea.Cmd`; workspace activation
+closes unsubmitted forms/menus, which do not capture their opening service. Matching
+IDs and list generations cannot carry an open form into a different checkout.
+Generation/session envelopes protect result delivery, not cancellation of an
+already-issued write. Validation, eligibility, timestamps, retry bounds and durable
+receipts stay in core/persistence.
+[Selected-action tests](../../internal/tui/selected_task_action_test.go) exercise
+real command closures and forms before watcher refresh, impostor labels, rename,
+collisions, denied writes and stale/current-space results.
+[Activation tests](../../internal/tui/selected_task_session_test.go) exercise a
+pending Atlas open landing under an edit, action, confirm or defer form.
+
+This is not yet a universal selected-action guarantee: non-task mutation callers
+remain tracked by [entity pinning](../../planning/tasks/6gkt3fphx1ts-pin-non-task-mutation-retries-to-selected-source-identities.md),
+and [local-path actions](../../planning/tasks/6gm30jat0xsy-keep-selected-tui-path-actions-bound-to-exact-identities.md)
+still require an identity-only optional lookup. Rechecking a fuzzy ID string twice
+does not prevent both lookups selecting another record's ID-shaped human label.
+
 Lifecycle menus and command verbs use the registry's transition table and delegate.
 Tasks, audits and epics have their respective core transitions; Threads remain
 read-only here and research has no lifecycle. Task inline editing uses descriptor

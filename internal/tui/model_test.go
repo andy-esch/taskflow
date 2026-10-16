@@ -25,6 +25,12 @@ import (
 
 func testEntityRef(label string) entityRef { return entityRef{key: label, label: label} }
 
+// testTaskRef matches TaskFixture's source identity. Synthetic key=label refs
+// are useful for reducer-only tests but must not stand in for a selected task.
+func testTaskRef(slug string) entityRef {
+	return entityRef{key: testutil.TaskID(slug), label: slug}
+}
+
 // seedRepo writes a tiny planning tree: alpha (in-progress), beta (ready-to-start),
 // one epic, and one open audit so every tab has content.
 func seedRepo(t *testing.T) string {

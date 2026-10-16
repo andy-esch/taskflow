@@ -19,8 +19,8 @@ import (
 // single form panel listing the typed, editable fields with what each means; the
 // active field's editor shows IN PLACE — an enum's options inline in its row, a
 // long field (description) in a taller word-wrapped box below the list. Submit
-// fires the entity's validated write (Service.SetFields for a task,
-// Service.SetEpicFields for an epic — the SAME paths `task set`/`epic set` use),
+// fires the entity's validated write (Service.SetSelectedTaskFields for a task,
+// Service.SetEpicFields for an epic — sharing CLI coercion and validation),
 // so the TUI is a third mutation face that adds no new validation path. The two
 // entities differ only in their field set (epics have no effort/tier) and which
 // service write submit routes to (the menu carries an apply closure); the form,
@@ -250,8 +250,8 @@ func indexOf(opts []string, v string) int {
 }
 
 // handleEditKey drives the form: navigate fields, then edit the selected one. Enter
-// submits via SetFields, Esc backs out a level. Mutates the model copy (the modal
-// loop passes &m); ForceQuit is the handleKey preamble's job.
+// submits via the entity's field setter, Esc backs out a level. Mutates the model
+// copy (the modal loop passes &m); ForceQuit is the handleKey preamble's job.
 func (m *Model) handleEditKey(msg tea.KeyPressMsg) tea.Cmd {
 	if m.edit.sourceGen == m.cur().loadGen && m.cur().coherentGen != m.cur().loadGen {
 		m.flash, m.flashErr = "refreshing selection; wait to edit", true
@@ -315,7 +315,7 @@ func (m *Model) handleEditKey(msg tea.KeyPressMsg) tea.Cmd {
 	}
 }
 
-// submitEdit fires the SetFields write for the edited field and waits on the result
+// submitEdit fires the selected entity's field write and waits on the result
 // before leaving the field: on success (editedMsg) the form returns to the picker
 // with the new value; on a core validation error (actionErrMsg) it stays on the
 // field, keeping what was typed, and shows the error so the user can fix it in place
@@ -352,10 +352,11 @@ func (e *editMenu) setCurrent(key, val string) {
 
 // setFieldCmd runs a task field write off the event loop, reporting success
 // (editedMsg → flash + reload) or the core validation error (actionErrMsg → flash,
-// no reload). force=false, dryRun=false: a real, fully-validated set.
+// no reload). The row key is already selected identity, never a fresh reference.
+// force=false, dryRun=false: a real, fully-validated set.
 func setFieldCmd(svc *core.Service, ref entityRef, key, value string) tea.Cmd {
 	return func() tea.Msg {
-		if _, err := svc.SetFields(ref.key, map[string]any{key: value}, false, false); err != nil {
+		if _, err := svc.SetSelectedTaskFields(core.TaskMutationTarget{ID: ref.key}, map[string]any{key: value}, false, false); err != nil {
 			return actionErrMsg{ref: ref, err: err}
 		}
 		return editedMsg{ref: ref, field: key, value: value}
@@ -367,7 +368,7 @@ func setFieldCmd(svc *core.Service, ref entityRef, key, value string) tea.Cmd {
 // blanked in the editor — clearing the snooze rather than writing an empty date.
 func unsetFieldCmd(svc *core.Service, ref entityRef, key string) tea.Cmd {
 	return func() tea.Msg {
-		if _, err := svc.SetFields(ref.key, map[string]any{key: domain.UnsetField{}}, false, false); err != nil {
+		if _, err := svc.SetSelectedTaskFields(core.TaskMutationTarget{ID: ref.key}, map[string]any{key: domain.UnsetField{}}, false, false); err != nil {
 			return actionErrMsg{ref: ref, err: err}
 		}
 		return editedMsg{ref: ref, field: key, value: ""}

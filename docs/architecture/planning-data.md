@@ -50,10 +50,19 @@ retries keep its task ID while revalidating policy and impacts against fresh sna
 See [portable target tests](../../internal/core/task_target_test.go) and
 [real-store drift tests](../../internal/store/task_target_test.go).
 
-The guarantee begins at application selection, not an earlier interface selection.
-[Selected TUI actions](../../planning/tasks/6gkt3fq0pv26-preserve-selected-tui-task-identities-through-service-actions.md)
-still pass strings that can be interpreted as fresh references. The survey also
-confirmed remaining [non-task retry](../../planning/tasks/6gkt3fphx1ts-pin-non-task-mutation-retries-to-selected-source-identities.md)
+Already-selected task field/lifecycle actions use explicit Service entry points:
+`SetSelectedTaskFields`, `MoveSelectedTask` and `DeferSelectedTask` accept the same
+typed target without repeating initial reference resolution. Their validation and
+retry machinery remains shared with the ordinary CLI paths. Submitted TUI commands
+capture their originating service along with the ID; an ID alone is not cross-space
+authority. Workspace activation closes unsubmitted forms and menus before they
+can bind to the newly selected service, even when row IDs and list generations match.
+See [portable application tests](../../internal/core/selected_task_action_test.go)
+and [TUI action tests](../../internal/tui/selected_task_action_test.go), including
+[open-form activation regressions](../../internal/tui/selected_task_session_test.go).
+
+The survey confirms remaining [non-task retry/selected-caller](../../planning/tasks/6gkt3fphx1ts-pin-non-task-mutation-retries-to-selected-source-identities.md),
+[selected local-path](../../planning/tasks/6gm30jat0xsy-keep-selected-tui-path-actions-bound-to-exact-identities.md)
 and [dependency/Thread replanning](../../planning/tasks/6gkt3fpsfdd7-keep-graph-and-thread-retry-endpoints-fixed-during-replanning.md)
 gaps. Neither canonical strings nor CAS alone establish end-to-end target binding.
 

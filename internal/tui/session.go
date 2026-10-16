@@ -185,6 +185,9 @@ func (m *Model) activateWorkspace(workspace core.Workspace, nextWatcher *watcher
 	return tea.Batch(closeWatcher(oldWatcher), loads, listen)
 }
 
+// closeTransientUI invalidates unsubmitted intents when the Service changes.
+// Forms store row/list identity, not their opening Service; those values may
+// coincide in another checkout. Issued commands separately capture their Service.
 func (m *Model) closeTransientUI() {
 	m.showHelp = false
 	m.helpScroll = 0

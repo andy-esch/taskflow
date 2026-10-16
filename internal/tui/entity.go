@@ -44,7 +44,7 @@ const overviewName = "overview"
 const atlasName = "atlas"
 
 // entityRef keeps durable identity separate from human-facing text. key is the
-// canonical reference accepted by the entity's store; label is the slug/id users
+// adapter-established identity (not a fresh user query); label is the slug/id users
 // see and copy. Keeping both in the registry contract prevents a future entity
 // (notably Threads) from accidentally using a mutable or ambiguous label for
 // selection, detail reads, navigation, or saved workspace state.
@@ -355,12 +355,13 @@ func (t *entityTab) matches(word string) bool {
 }
 
 // moveTask applies a task status transition off the event loop, reporting success
-// (movedMsg → flash + reload) or failure (actionErrMsg → flash, no reload).
+// (movedMsg → flash + reload) or failure (actionErrMsg → flash, no reload). The
+// selected row ID crosses the application boundary explicitly, without fuzzy lookup.
 func moveTask(svc *core.Service, ref entityRef, tr transition) tea.Cmd {
 	return func() tea.Msg {
 		// force=false: a TUI completion is held to the same acceptance-criteria gate as
 		// the CLI's, and the refusal surfaces as the action's error flash.
-		receipt, err := svc.Move(ref.key, domain.Status(tr.to), false, core.TaskLifecycleOverrideNone)
+		receipt, err := svc.MoveSelectedTask(core.TaskMutationTarget{ID: ref.key}, domain.Status(tr.to), false, core.TaskLifecycleOverrideNone)
 		if err != nil {
 			var committed *core.TaskLifecycleMutationFailure
 			if errors.As(err, &committed) {
@@ -378,7 +379,7 @@ func moveTask(svc *core.Service, ref entityRef, tr transition) tea.Cmd {
 // success/failure reporting (movedMsg → flash + reload, actionErrMsg → flash).
 func deferTaskCmd(svc *core.Service, ref entityRef, revisit string) tea.Cmd {
 	return func() tea.Msg {
-		receipt, err := svc.DeferTask(ref.key, revisit, false)
+		receipt, err := svc.DeferSelectedTask(core.TaskMutationTarget{ID: ref.key}, revisit, false)
 		if err != nil {
 			var committed *core.TaskLifecycleMutationFailure
 			if errors.As(err, &committed) {
