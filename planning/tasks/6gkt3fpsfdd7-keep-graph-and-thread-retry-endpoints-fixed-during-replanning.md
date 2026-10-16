@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gkt3fpsfdd7
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Retain selected dependency and Thread endpoint IDs while recomputing authorized changes from each fresh guarded snapshot.
 effort: 1-2 days
@@ -13,6 +13,7 @@ created: "2026-10-14"
 audit_sources: [2026-10-14-task-correctness-detour-implementation-claude]
 updated_at: "2026-10-16"
 started_at: "2026-10-15"
+completed_at: "2026-10-16"
 ---
 # Keep graph and Thread retry endpoints fixed during replanning
 
@@ -86,5 +87,12 @@ intent. These paths retain their existing recovery and prefix tests, not a new
 universal retry abstraction.
 
 Member of [Finish selected identity safety](../threads/6gm4h71hm1yt-finish-selected-identity-safety.md).
-Owner build/full race tests/lint/docs checks pass; independent cluster review remains
-pending, so checked criteria are owner evidence rather than a completed review verdict.
+Owner build/full race tests/lint/docs checks pass. Claude's review verified the retry
+binding and mutation discrimination. Its repair hypothesis exposed a separate exact
+slug-selector retargeting bug, now owner-reproduced and tracked in
+[the graph-repair follow-up](6gm9ny98zyf2-pin-explicit-graph-repair-source-selections-across-retries.md).
+The earlier inventory exclusion was too broad: repair is not fuzzy, but exact human
+slug selectors can still change source across attempts. That implementation is not
+included here. Antigravity's report is deferred for inaccurate evidence. This task
+is completed for PR delivery with all criteria met, not a claimed pair of independent
+approvals.

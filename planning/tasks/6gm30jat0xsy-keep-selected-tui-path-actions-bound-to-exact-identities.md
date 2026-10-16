@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gm30jat0xsy
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Prevent delayed editor and path-copy actions from resolving another record when their selected source ID disappears.
 effort: 1-2 days
@@ -12,6 +12,7 @@ tags: [correctness, identity, tui, core, store]
 created: "2026-10-15"
 updated_at: "2026-10-16"
 started_at: "2026-10-15"
+completed_at: "2026-10-16"
 ---
 
 # Keep selected TUI path actions bound to exact identities
@@ -103,5 +104,9 @@ pin opaque IDs and exact-mode dispatch without semantic decoding or local fallba
 
 Owner build/full race tests/lint/docs checks pass. Member of
 [Finish selected identity safety](../threads/6gm4h71hm1yt-finish-selected-identity-safety.md);
-independent review remains pending. Neither the final lookup-to-external-effect
-window nor delete/recreate with the identical canonical ID is made transactional.
+review triage is recorded there. Claude's queued-action cross-check and owner repeated
+race tests support this fix; Antigravity's report is deferred because its inventory
+and test descriptions do not meet the brief's evidence floor. All criteria are met
+and the task is completed for PR delivery, without treating that report as an
+independent clean approval. Neither the final lookup-to-external-effect window nor
+delete/recreate with the identical canonical ID is made transactional.

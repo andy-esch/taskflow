@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gkt3fphx1ts
-status: in-progress
+status: completed
 epic: 21-code-quality-architecture-hardening
 description: Stop audit, research and epic retry loops from reselecting another record after alias drift or deletion.
 effort: 1-2 days
@@ -13,6 +13,7 @@ created: "2026-10-14"
 audit_sources: [2026-10-14-task-correctness-detour-implementation-claude]
 updated_at: "2026-10-16"
 started_at: "2026-10-15"
+completed_at: "2026-10-16"
 ---
 # Pin non-task mutation retries to selected source identities
 
@@ -95,6 +96,11 @@ commands have missing/impostor regressions through their actual command closures
 
 Owner validation: `just build`, `just test` (race-enabled), `just lint`,
 `just docs-check` and planning `lint --links` pass. Acceptance criteria reflect
-implemented owner evidence, not independent approval; this task remains in progress
-with the safety cluster until the external reviews are processed. Interactive
-editors/creation and a universal retry/durability framework remain outside this fix.
+implemented owner evidence. Claude's review reproduced an ID-shaped epic-stem CAS
+regression, now fixed by passing explicit adapter resolver keys and keeping editor
+diagnostic labels separate. Whole-stem ordinary/selected writes and previews have
+regressions; store-local ID-shaped audit impostors are also pinned directly.
+Antigravity's report was delivered but deferred for evidence-integrity failures,
+not counted as a second independent approval. All criteria are met and the task is
+completed for PR delivery. Interactive mutation policy and a universal retry/durability
+framework remain outside this fix.

@@ -1,9 +1,10 @@
 ---
 schema: 1
 id: 6gm8vm7aq7zt
-bucket: open
+bucket: closed
 area: selected-identity-safety-implementation-claude
 date: "2026-10-16"
+updated_at: "2026-10-16"
 ---
 # Audit: Selected identity safety finish — claude — 2026-10-16
 
@@ -302,4 +303,351 @@ not a completed review.
 
 ## Reviewer report
 
-Pending independent review.
+Reviewer: claude (Opus 5.5), 2026-10-16. Primary lens: non-task writes and
+graph/Thread retry binding, including durable-prefix boundaries, plus a queued
+local-path cross-check through the real TUI caller.
+
+**Verdict: needs changes (narrow).** Every hostile identity probe in my lens held:
+no rename, disappearance, or alias reuse redirected a selected non-task,
+dependency, or Thread mutation. The second pass did find one low-severity, fail-closed
+regression in the shared CAS helper, demonstrated through the built CLI: epics
+with id-shaped whole stems can no longer be written (L1). No other defect was
+demonstrated.
+
+**Captured snapshot.** The sandbox baseline is `b2e6f072`, an empty-delta capture over
+source HEAD `792b5a88`; the source tree was clean at capture. Implementation
+checkpoint `89b057f0` is an ancestor. I reviewed `2b8d05fc..b2e6f072`: 57 files,
++2463/−199. I saw no implementation drift beyond the listed task, planning, and audit
+commits. I did not read the sibling Antigravity report.
+
+### Findings
+
+#### L1. Exact epic CAS re-resolve rejects epics whose whole stem is id-shaped · **Status:** fixed
+
+- **Severity:** Low. It fails closed: no wrong-record write and no byte change. It is
+  still a deterministic regression of an existing write capability. The command reports
+  the false advice "changed on disk; retry", exits 14 (conflict), and uses up the whole
+  retry budget.
+- **Production trace:** CLI `epic set <epic>` →
+  `Service.SetEpicFields` (`internal/core/service_epic.go:311`) → `retryEpicMutation`
+  (`internal/core/entity_target.go:44`) → `FS.SetEpicFields` (`internal/store/epicstore.go:169`).
+  The exact `resolveEpicMutationPath` (`internal/store/entity_target.go:52`) succeeds.
+  Then `verifyUnchanged(s.resolveEpicMutationPath, …)` runs (`epicstore.go:211`). It
+  rebuilds its lookup key from the path basename and keeps only the 12-character prefix
+  when `splitFlatName` accepts the stem (`internal/store/cas.go:138-142`). Exact
+  whole-stem matching then returns `ErrNotFound`, which becomes a conflict. `epic move`
+  hits the same path (`epicstore.go:152`), and so does the TUI through
+  `MoveSelectedEpic`/`SetSelectedEpicFields` (`internal/tui/entity.go:413`,
+  `internal/tui/edit.go:383`).
+- **Root cause:** The shared helper confuses a label with identity. `verifyUnchanged`
+  assumes an epic basename is never id-led (its own comment, `cas.go:132-137`). But epic
+  identity is the complete filename stem: ADR-0003 2026-07-04 amendment, `parseEpic`
+  sets `ID` from the stem, and `epicCandidates` keys on the whole stem
+  (`internal/store/resolve.go:126`). The former fuzzy `resolveEpicPath` still matched
+  the truncated key in its prefix tier. The new exact resolver, which is correct
+  elsewhere, exposes the mismatch.
+- **Reachable consequence:** It affects any epic whose stem is 12 Crockford-alphabet
+  characters followed by `-`, for example `202601010000-launch.md` (`id.Valid` only
+  checks length and alphabet, `internal/id/id.go:158`). `epic new` always produces
+  `NN-<slug>`, so only hand-named or legacy epics are affected. Such a repository passes
+  `lint`, and `epic list/show/path` work; only field and status writes fail.
+- **Reproduction and evidence:**
+  - Temporary Go probe in the sandbox, since removed. For `202601010000-launch`,
+    `SetEpicFields`, `MoveEpic` and `MoveSelectedEpic` each return
+    `epic "202601010000-launch" changed on disk during update; retry: conflict`, with
+    the tree unchanged. For `01-ordinary`, all three succeed.
+  - Same probe against a `git archive 2b8d05fc` export in my scratchpad, outside the
+    sandbox: both stems succeed (set changed bytes; move returned nil). So this is a
+    regression.
+  - Freshly built sandbox CLI against a throwaway `init` fixture, since deleted:
+    - `epic set 202601010000-launch --priority high` exits 14; sha `0b6366698430`
+      before and after.
+    - `epic move 202601010000-launch retired` exits 14; bytes unchanged.
+    - `epic set 01-ordinary --priority high` exits 0 (`607ec52a27c0` → `0e293720633a`),
+      and `epic move 01-ordinary retired` exits 0.
+    - `lint` reports "all planning entities and dependency links pass lint" (exit 0).
+- **Recommendation:** Pass the CAS re-resolve key explicitly instead of deriving it from
+  the basename. For example, epic writes could pass
+  `func(string) (string, error) { return s.resolveEpicMutationPath(target.ID) }`, or
+  `verifyUnchanged` could accept the resolver key. Do not restore the fuzzy fallback.
+  Add an id-shaped-stem epic regression covering both the ordinary and selected
+  entries.
+- **Residual uncertainty:** I don't know how often real corpora use id-shaped epic
+  stems; I did not inspect external repositories. By code inspection only, `epic edit`
+  still uses the fuzzy `resolveEpicPath` CAS (`epicstore.go:249`) and so is a likely
+  workaround. I did not run it, to avoid executing an editor effect.
+
+**Resolution:** Reproduced before the fix through ordinary and selected epic
+    field/lifecycle entry points. CAS now accepts the adapter's explicit
+    resolver key rather than deriving identity from a path; editor diagnostic
+    labels are separate. Whole-stem epic preview/write and resolver-key
+    regressions pass, as do the full race suite and focused count=3 checks.
+    Exact matching is preserved.
+
+### Verified consumer inventory
+
+All citations were checked in the sandbox at `b2e6f072`. "Exact" means
+`resolveExactID` over directory candidates (`internal/store/resolve.go:288`), with no
+slug, prefix or case-folding tiers.
+
+**Non-task writes (all nine families in `TestNonTaskRetriesRetainSelectedSourceIdentity`, `internal/store/entity_target_test.go:34`):**
+
+| Family | Service entry → wrapper | Adapter lookup / CAS |
+| --- | --- | --- |
+| audit move | `MoveAudit` `service_audit.go:122` → `retryAuditMutation` `entity_target.go:8` | `resolveAuditMutationTarget` `store/entity_target.go:38` (`validEntityID` + exact `resolveAuditPath` `auditstore.go:183`); CAS `auditstore.go:166` exact |
+| audit append | `AppendAuditBody` `service_audit.go:154` | `body.go:92`; CAS `body.go:135` exact |
+| finding edit | `EditFinding` `finding.go:247` | `TransformAuditBody` `body.go:192`; CAS `body.go:236` exact |
+| finding create | `NewFinding` `finding_create.go:43` | same `TransformAuditBody` path |
+| header repair | `FixFindingHeaders` `finding.go:299`. It checks `requireSourceID` across the whole snapshot before any prefix (`:309-313`), then uses the snapshot occurrence's `Source.ID` (`:325`); no reference wrapper | same exact path |
+| research fields | `SetResearchFields` `service_research.go:174` → `retryResearchMutation` `entity_target.go:26` | `resolveResearchMutationTarget` `store/entity_target.go:45` exact; CAS `researchstore.go:198` exact |
+| research append | `AppendResearchBody` `service_research.go:240` | `researchstore.go:243`; CAS `researchstore.go:279` exact |
+| epic fields | `SetEpicFields` `service_epic.go:311` → `retryEpicMutation` `entity_target.go:44` | `resolveEpicMutationPath` `store/entity_target.go:52` whole-stem exact; CAS `epicstore.go:211` (**L1**) |
+| epic move | `MoveEpic` `service_epic.go:276` | `epicstore.go:104`; CAS `epicstore.go:152` (**L1**) |
+
+- Initial selection is parse-free. `FS.Resolve{Audit,Research,Epic}Source`
+  (`store/entity_target.go:14/22/30`) uses the ordinary reference resolver and derives
+  the ID from the filename (`entity_read.go:26/38`; whole stem for epics).
+  `requireSourceID` (`entity_read.go:120`) refuses empty evidence before binding.
+- Selected TUI entries are `MoveSelectedAudit` (`service_audit.go:131`, caller
+  `tui/entity.go:400`), `MoveSelectedEpic` (`service_epic.go:287`, `tui/entity.go:413`)
+  and `SetSelectedEpicFields` (`service_epic.go:323`, `tui/edit.go:383`). Each checks
+  `requireSourceID` before the adapter and repeats no initial matching. A grep for TUI
+  non-test calls to any ordinary non-task, dependency or Thread entry point returns
+  nothing (exit 1). The CLI calls no selected entry.
+- Outside the retry contract: the `EditAudit/EditResearch/EditEpic` editor flows are
+  single-attempt (`service_audit.go:145`, `service_research.go:233`,
+  `service_epic.go:402`).
+
+**Graph and Thread retry binding:**
+
+- **Dependencies:** `runDependencyMutation` (`dependency_operations.go:139`). Binding
+  happens at `:168-179` from the planner's `details`, not from `result.Plan`, and only
+  after a successful planner call. The bound `planSelectedDependencyEdges` (`:253`) uses
+  exact `graph.Task` (`dependency_graph.go:919`) and recomputes from the current
+  `DependsOn`. The loop stops on preview, non-conflict, `AppliedTaskIDs`, or an
+  exhausted budget (`:162`). Migration is excluded by the operation guard.
+- **Graph adapter:** `MutateTaskGraph` loads a fresh graph on every call
+  (`graphmutation.go:53`) and calls the planner under the planner sentinel (`:61`).
+  Materialization uses exact `resolvePath` (`fsstore.go:373`). A whole-snapshot verify
+  (`:83-89`) precedes per-file exact CAS (`:97`) and prefix recording (`:103`).
+- **Thread creation:** `runThreadCreationMutation` (`service_thread.go:86`) binds at
+  planner success (`:92-107`). The new Thread ID is minted once, outside the planner
+  (`:52`). `ValidateThreadCreationPlan` (`thread_creation.go:127`) raises ID-collision
+  `ErrConflict` (`:146/:150`) before the adapter assigns `result.Plan`
+  (`threadcreation.go:70-73`). Missing members fail exactly with `ErrValidation`
+  (`:153-156`).
+- **Thread mutation:** `runThreadMutation` (`service_thread.go:189`) binds at
+  `:195-208`. The plan contains only `ThreadID/Operation/TaskIDs`. Inside the adapter,
+  `ValidateThreadMutationPlan` (`thread_mutation.go:208`) re-derives policy, membership
+  and analysis against each fresh snapshot (`threadmutation.go:62`) using exact
+  `threadByID` (`thread_mutation.go:378`). `threadMutationSource` matches exact
+  `Source.ID`, and materialize/CAS use `resolveThreadPathExact`
+  (`threadmutation.go:158`, `:104`; `paths.go:87`). `!result.Committed` stops retries
+  (`service_thread.go:110`, `:212`).
+- **Brief exclusions, rechecked:** Bulk apply stops on `Committed/Complete`
+  (`service_thread_apply.go:69`). Repair re-plans from the original request on each
+  attempt (`dependency_repair.go:632-645`); `normalizeRepairEditSource` (`:817`) is
+  exact by ID, slug or local path with no fuzzy tiers. See hypothesis H-a.
+
+**Local paths (shared contract; cross-check depth only):**
+
+- Optional ports with ByID methods: `core/store.go` (task, Thread, epic, audit and
+  research path sources). Service methods: `selected_entity_path.go:11/24/37/50/63`.
+- FS implementations: `paths.go:52-100`. Task uses `resolveTaskMutationTarget`
+  (`fsstore.go:344`); epic uses whole-stem exact; audit and research use exact; Thread
+  uses `resolveThreadPathExact`.
+- TUI callers: `localPathLookup` (`tui/commands.go:40-48`); detail joins at
+  `commands.go:137/217/286/388` and `thread_projection.go:67`.
+- `Model.Update` handles `localPathResultMsg` at `model.go:392-410`. A yank returns
+  the `copyToClipboard` command (`model.go:1583-1589`) and performs no I/O in `Update`.
+
+### Commands run versus inherited
+
+**Inherited, not rerun:** the owner's `just build`, `just test` (full race), `just lint`,
+`just docs-check`, and planning `lint --links`. I ran no planning command against the
+source checkout.
+
+**Run by me in `$SANDBOX`** (GOCACHE in session scratchpad; go1.27.2 darwin/arm64):
+
+1. `go test -race -count=3 ./internal/{store,core,tui}/ -run '<the 11 named tests>'`:
+   all 11 passed 3/3.
+2. `go test -race -count=3 ./internal/core/ ./internal/tui/ -run 'TestEntityMutationsShareSelectionAndWriteRetryBudget|TestSelectedNonTaskActionsRefuseEmptyEvidenceBeforeAdapter|TestEntityMutationSelectionRequiresSourceEvidence|TestQueuedSelectedNonTaskActionsDoNotReselect'`:
+   passed 3/3.
+3. Cross-check:
+   `go test -race -count=3 ./internal/tui/ -run 'TestSelectedLocalPathActionsRefuseImpostorsAtEitherLookup/kind=0/'`.
+   All 16 task subtests (E/Y × initial/confirmation × missing/impostor/case-folded/duplicate)
+   passed 3/3. They drive real `Model.Update` key presses into the queued lookup and
+   confirmation. I executed no effect.
+4. Restored baseline on a clean tree at `b2e6f072`:
+   `go test -race -count=1 ./internal/core/... ./internal/store/... ./internal/tui/... ./internal/cli/... ./internal/wire/...`.
+   All ok.
+5. Mutation runs M1–M7 (ledger below), each preceded by `go build ./...` and followed
+   by `git checkout -- <file>` with a clean-tree check.
+6. L1 probes: a sandbox Go probe, the same probe on a `git archive 2b8d05fc` export, and
+   the built CLI (`go build -o <scratchpad>/bin/tskflwctl ./cmd/tskflwctl`) against a
+   throwaway fixture.
+7. Discrimination check: I ported
+   `TestAuditHeaderRepairUsesOccurrenceIdentityWithDuplicateLabels` to the base export.
+   It fails there with `"same-label" matches 2 audits … ambiguous match`, so the test
+   discriminates.
+
+**Harness note:** My first package run put `GOTMPDIR` under the session directory. Its
+parent contains a `tasks/` folder that CLI discovery treats as a planning root, so five
+`internal/cli` startup and discovery tests failed (for example
+`TestRoot_NotAPlanningRepo`). All five pass with the default `GOTMPDIR`, so these are
+not attributable to the change.
+
+**Not run:** `just lint`, `just docs-check`, and full `just test`. None of my changes
+remain to lint.
+
+### Mutation ledger
+
+Every edit compiled; there were no invalid probes. Every file was restored with
+`git checkout --` and a clean `git status` was confirmed.
+
+| # | Exact edit | Intended test | Observed | Result |
+| --- | --- | --- | --- | --- |
+| M1 | `dependency_operations.go:176` `planner = func(graph …` → `_ = func(graph …` (endpoint binding removed) | `TestGraphRetriesRetainBindingAcrossUnplannedConflicts/dependency`, `TestDependencyRetriesPinBothEndpointsAndRecomputeCurrentEdges` | core: `dependency binding drift: {TaskWrites:[{TaskID:9ss0kg30xkr3 …` (impostor). store: add/remove × dependent/prerequisite rename/missing failed with `endpoint identity drift` or `missing endpoint was retargeted … AppliedTaskIDs:[…] err=<nil>`; at least 7 of 8 shown before output truncation | Killed; restored, green |
+| M2 | `service_thread.go:196` `if selected == nil {` → `if selected == nil \|\| selected != nil {` (mutation planner forgets selection on every callback) | `TestGraphRetriesRetainBindingAcrossUnplannedConflicts/{membership,start}`, `TestThreadRetriesKeepSelectedThreadAndMemberIdentities` | core: `Thread binding drift: {ThreadID:kbssa9dcgv1g …}`. store: `start/rename` started the impostor (`Description:impostor`); `start/missing` and `add/missing` gave `missing endpoint was not refused: err=<nil> unchanged=false`; `add/rename` member drift; `remove/rename` stale membership replay | Killed; restored |
+| M3 | `service_thread.go:93`, same edit (creation planner forgets selection) | `TestThreadCreationBindsMembersBeforeCollisionValidation` | `collision retry changed member selection: … Tasks:[q1am50pntm9a]` (impostor). Also failed: core `/creation`, `create/rename`, `create/missing` | Killed; restored |
+| M4 | Coordinated: the creation planner never binds; the retry loop binds only from a validated `result.Plan` when present | `TestThreadCreationBindsMembersBeforeCollisionValidation` | Killed by the collision test and core `/creation`. All 8 `TestThreadRetriesKeepSelectedThreadAndMemberIdentities` subtests passed, including the post-validation `create/*` verify-hook conflicts. | Killed by intended test; restored |
+| M5 | `entity_target.go:11/29/47` `if target.ID == "" {` → `if target.ID == "" \|\| target.ID != "" {` | `TestNonTaskRetriesRetainSelectedSourceIdentity` | 16/18 failed: `selected source did not receive the write` (renamed) and `missing selected identity was reselected: err=<nil> unchanged=false`. `audit_headers/*` passed as expected; it uses the snapshot ID, not the wrapper. | Killed; restored |
+| M6 | Coordinated store: `store/entity_target.go:42` `return s.resolveAuditPath(target.ID)` → `return s.resolveAudit(target.ID)` (fuzzy) | store/core write tests | Survived in `internal/core` and `internal/store` (both packages fully green). Killed in `internal/tui` by `TestQueuedSelectedNonTaskActionsDoNotReselect/audit_move/impostor` (real FS store) and 8 audit (`kind=3`) local-path impostor/case-folded subtests, which share the helper | Killed cross-package; restored |
+| M7 | Cross-check: `tui/commands.go:40` `svc.TaskPathByID(id)` → `svc.TaskPath(id)` | `TestSelectedLocalPathActionsRefuseImpostorsAtEitherLookup/kind=0` | 8 impostor/case-folded subtests: `selected local action accepted another source: effect=true` (the returned clipboard/editor command was not executed). Missing/duplicate still refused | Killed; restored |
+
+**Why the collision case differs from a post-validation CAS conflict (M4):** In a
+verify-hook or CAS conflict, the adapter has already assigned `result.Plan`, so binding
+from the validated receipt would be enough. A creation-ID collision conflicts inside
+`ValidateThreadCreationPlan`, before `result.Plan` exists (`threadcreation.go:70-73`).
+Only planner-time capture survives that. M4 shows that only
+`TestThreadCreationBindsMembersBeforeCollisionValidation` and the core fake pin this
+case.
+
+### Second-pass systemic challenges
+
+- **A shared helper confusing a label with identity:** Reproduced. This is L1: the
+  basename-derived key in `verifyUnchanged`.
+- **Selection failure versus write conflict:** Falsified as a defect.
+  - One budget: `retryOnConflict` (`retry.go:62`) wraps both selection and write. The
+    core budget test passed 3/3.
+  - One timestamp: epic and research timestamps are computed before the loop, and the
+    test asserts `clocks == 1`.
+  - Failed selection binds nothing: `target.ID`, the dependency planner and the Thread
+    `selected` are set only after success.
+  - An empty result after selection does not erase binding: shown by
+    `retryEndpointStore` call 3 and by M2–M4.
+- **Fresh authorization and current state:** Falsified as a defect.
+  - Thread policy, membership and analysis are recomputed by the adapter on every
+    attempt.
+  - The dependency planner recomputes from current edges; the store test keeps a
+    concurrent `extra` edge, and M1 shows the impostor drift that binding prevents.
+- **Committed results and durable prefixes:** Falsified as a defect.
+  - Thread loops require `!result.Committed`.
+  - Dependency add/remove plans write exactly one dependent, and `AppliedTaskIDs` stops
+    the loop.
+  - Preview is never retried in any of the three loops.
+- **Permission/no-op ordering:** Noted, not a new defect.
+  - The new wrappers resolve the human reference before the adapter's
+    `authorizeMutation`. On a read-only policy, an unknown reference therefore reports
+    not-found rather than a permission refusal.
+  - No write occurs, and this matches the merged `retryTaskMutation` precedent
+    (`service_task.go:512-524`).
+  - Duplicate-ID refusal precedes callback, no-op and preview
+    (`TestSelectedAuditPortsRefuseDuplicateIdentityBeforeCallbackOrNoop`).
+- **Test integrity:** Held.
+  - `SnapshotTree` compares bytes, modes and symlink targets
+    (`internal/testutil/snapshot.go:11-58`).
+  - Hooks assert that they fired, and fixtures use distinct `testutil.TaskID` seeds.
+  - The core fakes do not re-resolve references.
+
+### Surviving hypothesis ledger
+
+- **H-a (unresolved; out of scope by the brief):**
+  - `RepairTaskGraph` re-normalizes the original request on each attempt
+    (`dependency_repair.go:633-635`).
+  - A CLI selector that is neither path- nor ID-shaped becomes an exact `TaskSlug`
+    (`internal/cli/task_dependency_repair.go:139-146`), matched by label
+    (`dependency_repair.go:827-833`).
+  - So a slug swap between attempts could select a different record. However,
+    `authorizeRequestedRepair` (`:753-771`) still requires an identical repairable
+    defect on that record, and the operation is removal-only.
+  - Not demonstrated. If repair ever joins this contract, consider binding the source
+    ID after the first successful normalization.
+- **H-b (falsified):** No changed selected-write CAS site falls back to fuzzy
+  resolution. See the CAS sites cited in the inventory.
+- **H-c (falsified):** Bound Thread planners do not replay derived state.
+- **H-d (coverage observation, not a defect):** The store's exact audit
+  selected-write resolver is pinned only by TUI-package tests that use the real FS store
+  (M6). A store-level test with an ID-shaped alias would localize a failure.
+
+### Isolation attestation
+
+Created with `"$SOURCE_ROOT/scripts/isolated-review-workspace.sh" create --source
+/Users/andyeschbacher/git/andy-esch/taskflow --deliverable <AUDIT_REL> --print-path`,
+which was run from the source root. All inspection, builds, tests, mutations and report
+edits happened in the sandbox. Base-commit comparisons used a `git archive` export in
+the session scratchpad, which has no Git metadata. The CLI fixture was a throwaway
+temporary directory, since deleted. All probes were restored, and only the assigned
+audit differs. Output of `verify` before transfer:
+
+```text
+sandbox_path=/private/tmp/isolated-review.L9oB5P
+git_dir=/private/tmp/isolated-review.L9oB5P/.git
+baseline_commit=b2e6f072212f977a9bcacda93bf2f5419d0e1f56
+source_blob=aa6f6ff47113b9869c966f43448cfdfbe5cc59c9
+source_fingerprint=e663a99ac59d3b7c72285d28fdfa53dbe0ab4afc
+deliverable=planning/audits/6gm8vm7aq7zt-2026-10-16-selected-identity-safety-implementation-claude.md
+push_guard=isolated-review-push-disabled://source-is-read-only
+deliverable_changed=true
+verify=passed
+transfer=pending
+```
+
+## Owner triage (2026-10-16)
+
+Delivery confirmed before owner edits with the source helper: sandbox
+`/private/tmp/isolated-review.L9oB5P`, `transfer=succeeded`, `delivery=confirmed`,
+transferred blob `1726c1a82cc303b8c6d0715bbb41e75a3a10875f`, at
+`2026-10-16T12:33:17Z`. The review's production traces and mutation distinctions
+match the captured implementation; its narrow needs-changes verdict was actionable.
+
+L1 reproduced in four ordinary/selected field/lifecycle write cases, while previews
+and ordinary stems passed. The shared CAS helper now receives an explicit resolver
+key; no filename-shape inference or fuzzy epic fallback remains. Interactive editor
+callers supply their established source key separately from diagnostic labels.
+[Whole-stem write tests](../../internal/store/epic_selected_cas_test.go) and
+[resolver-key/label tests](../../internal/store/cas_test.go) pin the fix.
+
+H-d was useful localized coverage advice rather than a product defect. Added
+`TestSelectedAuditPortsRefuseIDShapedImpostors` directly in the store package so the
+shared exact audit resolver is no longer pinned only by cross-package TUI tests.
+Owner temporarily restored fuzzy `resolveAudit` in that helper: the new test compiled
+and failed at the intended impostor no-op assertion (`err=<nil>`). Restoring exact
+lookup passed with `-race -count=3`.
+
+H-a was initially an unproven, explicitly out-of-scope hypothesis, not a demonstrated
+review finding. Owner reproduced it through a real-store pre-verify slug swap and
+promoted it to H1 below, tracked in
+[the explicit graph-repair follow-up](../tasks/6gm9ny98zyf2-pin-explicit-graph-repair-source-selections-across-retries.md).
+That implementation is outside the current three-task PR and is next-up in the
+same safety Thread. The original removal-only/strict-improvement gates still hold,
+but do not establish that the selected physical task remained the same.
+
+Final owner gates after the CAS fix: `just build`, `just test` (full race suite),
+`just lint`, `just docs-check`, focused core/store/TUI `-race -count=3` checks,
+planning `lint --links` and both audit lint calls pass.
+
+## Findings
+
+#### H1. Explicit graph-repair retries can repair another task after a slug swap · **Status:** tracked by 6gm9ny98zyf2
+
+**File:** internal/core/dependency_repair.go:632 | **Component:** core,store
+**Effort:** M · **Urgency:** soon
+
+Owner follow-up to the review's surviving hypothesis H-a: a compiler-valid real-store race probe seeded distinct A/alpha and B/bravo with the same invalid dependency declaration. The pre-verify hook renamed A to A-renamed and B to B-alpha without changing either ID or contents. The initial attempt detected source drift, but RepairTaskGraph retried the original TaskSlug selector, returned nil, and applied the removal to B instead of A. The remaining graph was strictly improved, so removal-only and defect authorization did not prevent wrong-source selection. Full reproduction and bounded scope are recorded in task 6gm9ny98zyf2; the temporary reproduction probe was removed rather than retained as passing safety coverage.
+
+**Recommendation:** Retain first-selected physical source evidence for explicit repair selectors while recomputing fresh defects and policy; preserve duplicate-ID disambiguation and separate auto-cleanup semantics.
+
+**Resolution:** Owner confirmed H-a with a real-store alias-swap probe. Task
+    6gm9ny98zyf2 is next-up in Finish selected identity safety; implementation
+    stays outside the current three-task PR.
