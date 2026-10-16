@@ -55,6 +55,9 @@ type TaskGraphRepairDiagnosis struct {
 // TaskGraphRepairRequest is convergent user intent. Auto selects only operations
 // whose information-loss policy is explicitly safe; Edits are reauthorized
 // against the current guarded snapshot rather than trusted as an old plan.
+// Service binds explicit source ID and local path after the first successful
+// plan. Moving or removing that occurrence requires a new call, not ID-only
+// rename following or alias fallback. Auto alone deliberately rediagnoses sources.
 type TaskGraphRepairRequest struct {
 	Auto  bool
 	Edits []TaskGraphSourceEdit
@@ -348,13 +351,9 @@ func PlanTaskGraphRepair(graph *TaskGraph, request TaskGraphRepairRequest) (Task
 		if shapeErr := validateTaskGraphRepairEditShape(requested); shapeErr != nil {
 			return TaskGraphRepairPlan{}, shapeErr
 		}
-		requested, sourcePresent, normalizeErr := normalizeRepairEditSource(graph, requested)
+		requested, normalizeErr := normalizeRepairEditSource(graph, requested)
 		if normalizeErr != nil {
 			return TaskGraphRepairPlan{}, normalizeErr
-		}
-		if !sourcePresent {
-			selections[sourceEditKey(requested)] = requested
-			continue
 		}
 		selections[sourceEditKey(requested)] = requested
 		if requested.Action == TaskGraphSourceDropEmptyField {
@@ -623,18 +622,32 @@ func (s *Service) InspectTaskGraphRepair() (TaskGraphRepairReceipt, error) {
 // RepairTaskGraph applies source-declaration repair intent through the only
 // capability permitted to accept GraphBroken. Pre-write conflicts are retried;
 // a durable prefix is always returned immediately for operator inspection.
+// Only explicit source selections survive retries, not revisions or write sets:
+// every attempt reauthorizes the current declarations at the selected ID/path.
 func (s *Service) RepairTaskGraph(request TaskGraphRepairRequest, dryRun bool) (TaskGraphRepairReceipt, error) {
 	if s.graphRepairs == nil {
 		return TaskGraphRepairReceipt{}, fmt.Errorf("task graph repair is unavailable from this store")
 	}
 	now := s.now()
+	request.Edits = append([]TaskGraphSourceEdit(nil), request.Edits...)
+	var selectedSources []TaskGraphSourceRef
 	var receipt TaskGraphRepairReceipt
 	for attempt := 0; ; attempt++ {
 		result, err := s.graphRepairs.MutateTaskGraphRepair(now, dryRun, func(graph *TaskGraph) (TaskGraphRepairPlan, error) {
-			return PlanTaskGraphRepair(graph, request)
+			edits, sources, err := resolveRepairRetryEdits(graph, request.Edits, selectedSources)
+			if err != nil {
+				return TaskGraphRepairPlan{}, err
+			}
+			plan, err := PlanTaskGraphRepair(graph, TaskGraphRepairRequest{Auto: request.Auto, Edits: edits})
+			if err == nil && selectedSources == nil {
+				// Bind inside the successful callback: a later validation conflict
+				// can return an empty result, and must not erase these selections.
+				selectedSources = sources
+			}
+			return plan, err
 		})
 		receipt = taskGraphRepairReceipt(result)
-		if dryRun || !errors.Is(err, domain.ErrConflict) || len(result.AppliedSources) > 0 || attempt >= s.maxRetries {
+		if dryRun || !errors.Is(err, domain.ErrConflict) || result.Committed || len(result.AppliedSources) > 0 || attempt >= s.maxRetries {
 			if err != nil {
 				return receipt, &TaskGraphRepairFailure{Cause: err, Receipt: receipt}
 			}
@@ -642,6 +655,50 @@ func (s *Service) RepairTaskGraph(request TaskGraphRepairRequest, dryRun bool) (
 		}
 		s.retrySleep(attempt + 1)
 	}
+}
+
+// resolveRepairRetryEdits binds readable occurrences, not representative task
+// IDs. Broken graphs may contain duplicate IDs at different paths. A revision is
+// CAS evidence, not identity: fresh content at the same ID/path is reauthorized.
+// Opaque Location is only a caller-supplied stale-context check, never authority.
+func resolveRepairRetryEdits(graph *TaskGraph, edits []TaskGraphSourceEdit, selected []TaskGraphSourceRef) ([]TaskGraphSourceEdit, []TaskGraphSourceRef, error) {
+	normalized := make([]TaskGraphSourceEdit, len(edits))
+	sources := make([]TaskGraphSourceRef, len(edits))
+	for i, edit := range edits {
+		if err := validateTaskGraphRepairEditShape(edit); err != nil {
+			return nil, nil, err
+		}
+		if selected == nil {
+			resolved, err := normalizeRepairEditSource(graph, edit)
+			if err != nil {
+				return nil, nil, err
+			}
+			normalized[i], sources[i] = resolved, resolved.Source
+			continue
+		}
+		records, err := graph.SourceRecords()
+		if err != nil {
+			return nil, nil, err
+		}
+		var matches []TaskGraphSourceRef
+		for _, record := range records {
+			if record.Source.TaskID == selected[i].TaskID && record.Source.LocalPath == selected[i].LocalPath {
+				matches = append(matches, record.Source)
+			}
+		}
+		if len(matches) == 0 {
+			return nil, nil, fmt.Errorf("%w: selected graph-repair source %s at %s moved, disappeared, became unreadable or changed identity; inspect the graph and rerun repair", domain.ErrNotFound, selected[i].TaskID, selected[i].LocalPath)
+		}
+		if len(matches) != 1 {
+			return nil, nil, fmt.Errorf("%w: selected graph-repair source %s at %s is no longer a unique occurrence", domain.ErrAmbiguous, selected[i].TaskID, selected[i].LocalPath)
+		}
+		if edit.Source.Location != "" && edit.Source.Location != matches[0].Location {
+			return nil, nil, fmt.Errorf("%w: readable source location changed", domain.ErrConflict)
+		}
+		edit.Source = matches[0]
+		normalized[i], sources[i] = edit, matches[0]
+	}
+	return normalized, sources, nil
 }
 
 func taskGraphRepairReceipt(result TaskGraphRepairMutationResult) TaskGraphRepairReceipt {
@@ -814,13 +871,13 @@ func repairEditTargetPresent(graph *TaskGraph, requested TaskGraphSourceEdit) (b
 	return false, nil
 }
 
-func normalizeRepairEditSource(graph *TaskGraph, edit TaskGraphSourceEdit) (TaskGraphSourceEdit, bool, error) {
+func normalizeRepairEditSource(graph *TaskGraph, edit TaskGraphSourceEdit) (TaskGraphSourceEdit, error) {
 	if edit.Source.TaskID == "" && edit.Source.TaskSlug == "" && edit.Source.LocalPath == "" {
-		return TaskGraphSourceEdit{}, false, fmt.Errorf("%w: repair source ID, slug, or local path is required; location is not a selector", domain.ErrValidation)
+		return TaskGraphSourceEdit{}, fmt.Errorf("%w: repair source ID, slug, or local path is required; location is not a selector", domain.ErrValidation)
 	}
 	records, err := graph.SourceRecords()
 	if err != nil {
-		return TaskGraphSourceEdit{}, false, err
+		return TaskGraphSourceEdit{}, err
 	}
 	matches := make([]TaskGraphSourceRef, 0, 1)
 	for _, record := range records {
@@ -833,18 +890,18 @@ func normalizeRepairEditSource(graph *TaskGraph, edit TaskGraphSourceEdit) (Task
 	}
 	switch len(matches) {
 	case 0:
-		return TaskGraphSourceEdit{}, false, fmt.Errorf("%w: repair source %+v does not identify a readable task record", domain.ErrNotFound, edit.Source)
+		return TaskGraphSourceEdit{}, fmt.Errorf("%w: repair source %+v does not identify a readable task record", domain.ErrNotFound, edit.Source)
 	case 1:
 		if edit.Source.Location != "" && edit.Source.Location != matches[0].Location {
-			return TaskGraphSourceEdit{}, false, fmt.Errorf("%w: readable source location changed", domain.ErrConflict)
+			return TaskGraphSourceEdit{}, fmt.Errorf("%w: readable source location changed", domain.ErrConflict)
 		}
 		if !hasLocalRepairPath(matches[0]) {
-			return TaskGraphSourceEdit{}, false, fmt.Errorf("%w: task %s has no explicit local repair path", domain.ErrValidation, matches[0].TaskID)
+			return TaskGraphSourceEdit{}, fmt.Errorf("%w: task %s has no explicit local repair path", domain.ErrValidation, matches[0].TaskID)
 		}
 		edit.Source = matches[0]
-		return edit, true, nil
+		return edit, nil
 	default:
-		return TaskGraphSourceEdit{}, false, fmt.Errorf("%w: repair source %+v matches %d task records; use its exact local path", domain.ErrAmbiguous, edit.Source, len(matches))
+		return TaskGraphSourceEdit{}, fmt.Errorf("%w: repair source %+v matches %d task records; use its exact local path", domain.ErrAmbiguous, edit.Source, len(matches))
 	}
 }
 

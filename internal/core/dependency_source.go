@@ -72,7 +72,7 @@ const (
 	TaskGraphSourceDropEmptyField  TaskGraphSourceEditAction = "drop-empty-field"
 )
 
-// TaskGraphSourceEdit is the narrow materialization vocabulary for future graph
+// TaskGraphSourceEdit is the narrow materialization vocabulary for guarded graph
 // repair. Drop targets one occurrence; dedupe ignores Occurrence and retains at
 // most one matching value, making retries independent of occurrence renumbering.
 type TaskGraphSourceEdit struct {

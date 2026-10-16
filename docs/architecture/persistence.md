@@ -146,7 +146,16 @@ per-step CAS.
 Malformed Threads make impact evidence incomplete but cannot prevent repairing
 underlying tasks. Pathless declarations remain diagnostic, not locally executable
 targets. A manifest is convergent intent, not a stale replacement snapshot.
-See [repair regressions](../../internal/store/graphrepair_test.go).
+Within a call, explicit selections retain their source ID plus exact local path;
+rename, deletion and loss of readable occurrence require inspection and a new call.
+Missing declarations at a retained source can converge to a no-op; missing sources
+cannot. Current defects and requested occurrences are reauthorized, not cached.
+Only caller-supplied `Location` remains a stale-context constraint; it never grants
+path authority. Auto cleanup independently diagnoses fresh sources on each attempt,
+including in mixed auto/explicit calls. See
+[repair regressions](../../internal/store/graphrepair_test.go) and
+[selection/replanning tests](../../internal/store/graphrepair_target_test.go), with
+[portable retry evidence](../../internal/core/dependency_repair_retry_test.go).
 
 ## Managed audit bodies
 
