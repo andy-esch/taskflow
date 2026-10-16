@@ -639,7 +639,7 @@ planning `lint --links` and both audit lint calls pass.
 
 ## Findings
 
-#### H1. Explicit graph-repair retries can repair another task after a slug swap · **Status:** tracked by 6gm9ny98zyf2
+#### H1. Explicit graph-repair retries can repair another task after a slug swap · **Status:** fixed
 
 **File:** internal/core/dependency_repair.go:632 | **Component:** core,store
 **Effort:** M · **Urgency:** soon
@@ -648,6 +648,8 @@ Owner follow-up to the review's surviving hypothesis H-a: a compiler-valid real-
 
 **Recommendation:** Retain first-selected physical source evidence for explicit repair selectors while recomputing fresh defects and policy; preserve duplicate-ID disambiguation and separate auto-cleanup semantics.
 
-**Resolution:** Owner confirmed H-a with a real-store alias-swap probe. Task
-    6gm9ny98zyf2 is next-up in Finish selected identity safety; implementation
-    stays outside the current three-task PR.
+**Resolution:** Implemented in task 6gm9ny98zyf2: explicit graph-repair retries
+    retain source ID plus exact local path, refuse moved/missing occurrences,
+    and reauthorize fresh defects. Red-first real-store slug swap, portable
+    empty-result conflicts, duplicate-ID and mixed-auto regressions pass; both
+    independent repair reviews are processed with no product findings.
