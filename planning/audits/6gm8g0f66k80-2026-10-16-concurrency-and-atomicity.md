@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gm8g0f66k80
-bucket: open
+bucket: closed
 area: concurrency-and-atomicity
 date: "2026-10-16"
 updated_at: "2026-10-16"
@@ -87,7 +87,7 @@ atomic write with a content CAS. `fix.go` was the only file with writes and no C
 
 ## Findings
 
-#### M1. lint --fix id repair relocates a file with the clobbering writer, silently widening its mode · **Status:** open
+#### M1. lint --fix id repair relocates a file with the clobbering writer, silently widening its mode · **Status:** tracked by 6gmbfxy1d561
 
 **File:** internal/store/fix.go:95 | **Component:** store
 **Effort:** S · **Urgency:** soon
@@ -142,7 +142,13 @@ path rather than only the source.
 
 **Recommendation:** In fix.go's rename branch, stat the source and call createFileAtomicExactMode(renamed, fixed, sourceMode) instead of writeFileAtomic, mapping os.IsExist to ErrConflict as rename.go does.
 
-#### M2. An interrupted id-repair relocation leaves a duplicate id that freezes every guarded mutation · **Status:** open
+**Resolution:** Owner code inspection confirms the relocation uses clobbering
+    writeFileAtomic with 0644 fallback. Track mode preservation and exclusive
+    destination creation together with source CAS and partial outcomes in the
+    bounded lint relocation task; independent of explicit graph-repair selector
+    retries.
+
+#### M2. An interrupted id-repair relocation leaves a duplicate id that freezes every guarded mutation · **Status:** tracked by 6gmbfxy1d561
 
 **File:** internal/store/fix.go:91 | **Component:** store
 **Effort:** S · **Urgency:** soon
@@ -195,7 +201,13 @@ doing them together costs one review instead of two.
 
 **Recommendation:** Re-verify the source bytes immediately before os.Remove and record the written destination in the FixResult, so an interrupted repair reports the committed half instead of returning an error that omits it.
 
-#### L1. A replaced watcher's final event can pin the TUI live-reload indicator to off · **Status:** open
+**Resolution:** Accept the missing pre-remove source CAS and destination-written
+    receipt. The copied-valid-ID probe does not establish that actual spelling
+    repair creates duplicate canonical IDs: the retained original has an invalid
+    filename ID and was already unhealthy. Track non-destructive partial
+    reporting, not a promise to eliminate crash windows or auto-delete copies.
+
+#### L1. A replaced watcher's final event can pin the TUI live-reload indicator to off · **Status:** tracked by 6gmbfxy96tpw
 
 **File:** internal/tui/model.go:576 | **Component:** tui
 **Effort:** XS · **Urgency:** eventually
@@ -238,6 +250,12 @@ watcher's channel, run the atlas-navigation swap, and assert `watchOff` is false
 afterwards. Labelled Low on that basis rather than Medium.
 
 **Recommendation:** Carry the watcher generation on fsEventMsg and watcherReconciledMsg and ignore a message whose generation is not current, matching the guard debounceMsg and errMsg already use.
+
+**Resolution:** Owner inspection confirms both watcher message reducers accept
+    results without resource identity. The proposed fsnotify race is not yet
+    reproduced. Track deterministic stale-result probes, current-watcher
+    recovery and cross-session dirtyGen reuse; scoped separately in the TUI
+    navigation Thread.
 
 ## What audited clean
 
@@ -392,6 +410,6 @@ the audited lens, including ones today's code does *not* violate.
 <!-- candidate-tasks:v1 · ○ open · ● in-progress · ✔ fixed · → tracked · ◌ deferred · ◌ superseded · ✘ wontfix -->
 <!-- Add or replace one row with `tskflwctl audit finding <audit> <code> --candidate "<one line>"`; an empty value removes it. -->
 
-- ○ M1 · open — `tskflwctl task new "lint --fix id repair must relocate through the no-clobber, mode-preserving create" --epic 21-code-quality-architecture-hardening --tags store --tier 2 --priority high --description "FixFrontmatter.repairInvalidID relocates via writeFileAtomic, so the repaired file loses the source mode and an existing destination would be clobbered; adopt rename.go createFileAtomicExactMode sequence and pin the 0600 invariant."`
-- ○ M2 · open — `tskflwctl task new "Make the lint --fix id-repair relocation resumable and self-describing" --epic 21-code-quality-architecture-hardening --tags store --tier 3 --priority medium --description "The create-then-remove pair in FixFrontmatter has no pre-remove CAS and no receipt for the written destination, so an interrupted repair leaves a duplicate stable id that breaks the task graph repo-wide; mirror rename.go verifyTaskRenamePath plus a DestinationWritten-style receipt."`
-- ○ L1 · open — `tskflwctl task new "Generation-guard the TUI watcher messages like the debounce tick" --epic 18-tui-bubble-tea-interactive-planning-browser --tags tui --tier 4 --priority low --description "fsEventMsg and watcherReconciledMsg carry no watcher identity, so a closed watchers last event can set watchOff for the live replacement; stamp a watcher generation and drop stale messages as debounceMsg already does."`
+- → M1 · tracked — Tracked by task 6gmbfxy1d561: no-clobber, mode-preserving lint ID relocation with source evidence and partial outcomes.
+- → M2 · tracked — Consolidated into task 6gmbfxy1d561 with M1: pre-remove source CAS and destination-written/source-retained recovery; no automatic deletion or crash-atomicity promise.
+- → L1 · tracked — Tracked by task 6gmbfxy96tpw in Refine Thread and TUI navigation: reproduce stale watcher/session results, guard event/reconcile/debounce messages, preserve current recovery.

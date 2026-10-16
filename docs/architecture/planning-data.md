@@ -74,8 +74,16 @@ write sets are derived again. Pre-planner contention establishes no selection;
 committed outcomes and durable prefixes are never automatically replayed.
 See [portable retry tests](../../internal/core/graph_retry_target_test.go) and
 [real-store graph tests](../../internal/store/graph_retry_target_test.go).
-Explicit graph-repair selector binding remains a
-[tracked gap](../../planning/tasks/6gm9ny98zyf2-pin-explicit-graph-repair-source-selections-across-retries.md).
+Explicit graph repair binds each selected source ID **and local path** at the first
+successful guarded plan. Broken graphs may have duplicate IDs, so retries never
+follow a rename by ID alone or resolve the original slug/path again. A moved,
+missing, unreadable or identity-changed occurrence is refused; inspect and rerun.
+Current content, defects, labels and effects are still derived afresh at that
+address. This is logical source identity, not inode continuity: replacing bytes
+at the identical ID/path is not distinguishable from another content edit.
+Auto-only repair deliberately rediagnoses the current source set. See
+[portable repair retries](../../internal/core/dependency_repair_retry_test.go) and
+[real-store drift tests](../../internal/store/graphrepair_target_test.go).
 
 Already-selected local navigation uses the optional `*PathByID` Service methods,
 not the ordinary reference-based path methods. Each adapter must resolve a unique

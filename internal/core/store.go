@@ -142,6 +142,9 @@ type TaskGraphRepairPlanner func(*TaskGraph) (TaskGraphRepairPlan, error)
 // TaskGraphRepairStore is deliberately separate from ordinary graph mutation.
 // Its implementation owns the guarded task+Thread evidence snapshot, repair-only
 // validation, surgical materialization, and durable-prefix receipt.
+// Service retains successful explicit source ID/path selections from the callback
+// even if the adapter subsequently returns an empty conflict result. Fresh source
+// revisions, defect authorization and effects are required on every attempt.
 type TaskGraphRepairStore interface {
 	MutateTaskGraphRepair(now time.Time, dryRun bool, planner TaskGraphRepairPlanner) (TaskGraphRepairMutationResult, error)
 }

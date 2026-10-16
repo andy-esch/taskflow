@@ -274,12 +274,12 @@ func TestMutateTaskGraphRepairReportsAndConvergesDurablePrefix(t *testing.T) {
 	testHookAfterGraphRepairWrite = func(_ core.TaskGraphSourceRef, index int) error {
 		if index == 0 {
 			testHookAfterGraphRepairWrite = nil
-			return fmt.Errorf("injected stop")
+			return fmt.Errorf("injected stop: %w", domain.ErrConflict)
 		}
 		return nil
 	}
 
-	service := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())), core.WithRetry(0, func(int) {}))
+	service := core.MustNewService(testutil.Must(NewFS(root, core.UnrestrictedMutations())), core.WithRetry(3, func(int) { t.Fatal("durable prefix was retried") }))
 	partial, err := service.RepairTaskGraph(request, false)
 	if err == nil || !partial.Committed || len(partial.AppliedFiles) != 1 || len(partial.RemainingFiles) != 1 || partial.FinalHealth != core.GraphBroken {
 		t.Fatalf("partial receipt=%+v err=%v", partial, err)
