@@ -5,8 +5,8 @@ import (
 	"github.com/andy-esch/taskflow/internal/wire"
 )
 
-// planningRepairCommandFailure adds invocation context to the core partial
-// relocation receipt, including when stdout's writer returns an error. Process
+// planningRepairCommandFailure adds invocation context to the core completed
+// repair prefix or partial relocation, including returned stdout errors. Process
 // termination (for example SIGPIPE on stdout) can prevent stderr reporting.
 type planningRepairCommandFailure struct {
 	cause     error

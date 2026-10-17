@@ -176,7 +176,7 @@ func WriteError(w io.Writer, err error, asJSON bool) {
 	if errors.As(err, &planningErr) {
 		details := wire.ToPlanningRepairEnvelope(planningErr.result, planningErr.dryRun, planningErr.workspace)
 		payload.Error.PlanningRepair = &details
-		if outcome := planningErr.result.Relocation; outcome != nil && outcome.DestinationWritten && payload.Error.Filesystem != nil {
+		if planningErr.result.Committed && payload.Error.Filesystem != nil {
 			payload.Error.Filesystem.Retryable = false
 		}
 	}

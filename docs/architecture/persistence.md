@@ -117,6 +117,19 @@ writes nothing and reserves nothing. Checked guard release retains both primary
 and finalization errors, including on a no-op; earlier completed repairs stay in
 the returned prefix. Raw writers retain the final check-to-replace window.
 
+[RepairPlanning](../../internal/core/planning_maintenance.go) distinguishes actual
+completed repairs/cleanup from proposals and skipped rows. A failed workflow
+after durable progress requires inspection and plain lint before deciding how to
+continue, never automatic whole-batch replay. CLI error recovery retains that
+prefix even on returned stdout errors and suppresses transient retry hints after
+commit. Output failures retain residual validation and its exit classification;
+joined filesystem details describe one matched error, not a mix of separate causes.
+The existing fixed/skipped/dry-run wire meanings are unchanged; internal
+commit classification does not add a JSON field. See
+[in-place regressions](../../internal/store/fix_inplace_test.go),
+[portable orchestration tests](../../internal/core/planning_maintenance_test.go)
+and [CLI recovery tests](../../internal/cli/planning_repair_failure_test.go).
+
 [Lint spelling repair](../../internal/store/fix_relocation.go) rechecks source bytes
 and existing identity/reference authorization before exclusive destination creation,
 preserving source permissions. It checks both copies before source removal. Raw
