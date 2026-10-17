@@ -448,6 +448,8 @@ type Fixer interface {
 	// planning documents (or previews them when dryRun is true).
 	// An error must retain the completed/proposed prefix; callers must not retry
 	// the multi-document operation wholesale. Authorization belongs to the adapter.
+	// A destination-written/source-not-removed relocation is not a completed row:
+	// return [FrontmatterRepairFailure] with its local action evidence alongside it.
 	FixFrontmatter(dryRun bool) ([]domain.FixResult, error)
 }
 

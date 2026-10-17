@@ -90,6 +90,24 @@ func TestRepairPlanningRetainsActualBodyRepairPrefix(t *testing.T) {
 	}
 }
 
+func TestRepairPlanningRetainsPartialRelocationBesideCompletedPrefix(t *testing.T) {
+	failure := &FrontmatterRepairFailure{Cause: domain.ErrConflict, Relocation: FrontmatterRepairRelocation{
+		SourcePath: "/planning/tasks/bad.md", DestinationPath: "/planning/tasks/corrected.md", DestinationWritten: true,
+	}}
+	fake := &maintenanceStore{fixes: []domain.FixResult{{Path: "/planning/tasks/earlier.md", Changes: []string{"tags normalized"}}}, fixErr: failure}
+	result, err := MustNewService(fake).RepairPlanning(false)
+	if !errors.Is(err, domain.ErrConflict) || len(result.Fixes) != 1 || result.Relocation == nil || *result.Relocation != failure.Relocation {
+		t.Fatalf("result=%+v err=%v", result, err)
+	}
+	if !slices.Equal(fake.events, []string{"frontmatter/false"}) {
+		t.Fatalf("partial relocation reached later phases: %v", fake.events)
+	}
+	failure.Relocation.DestinationPath = "changed adapter receipt"
+	if result.Relocation.DestinationPath != "/planning/tasks/corrected.md" {
+		t.Fatal("application retained mutable adapter outcome")
+	}
+}
+
 func (f *maintenanceStore) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	f.events = append(f.events, fmt.Sprintf("frontmatter/%t", dryRun))
 	return f.fixes, f.fixErr

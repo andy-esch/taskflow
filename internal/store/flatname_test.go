@@ -126,3 +126,18 @@ func TestEntityIDWriteValidationRejectsCaseWithoutNormalizing(t *testing.T) {
 		t.Fatalf("mixed spelling advice = %q", reason)
 	}
 }
+
+func TestOccupiedSpellingProblemOnlyContextualizesCanonicalSiblings(t *testing.T) {
+	entries := map[string]bool{"6fbj870001t6-bad-id.md": true}
+	for _, name := range []string{"notes.md", "6fbj87000ut6-bad-id.md", "6fbj870001t6-bad-id.md", "6fbj87000lt6-other-slug.md"} {
+		if got := occupiedSpellingProblem(name, entries); got != "" {
+			t.Errorf("unrelated name %q got collision advice: %s", name, got)
+		}
+	}
+	for _, name := range []string{"6fbj87000lt6-bad-id.md", "6FBJ870001T6-bad-id.md"} {
+		got := occupiedSpellingProblem(name, entries)
+		if !strings.Contains(got, "already exists") || strings.Contains(got, "rename to") {
+			t.Errorf("occupied name %q got unsafe advice: %s", name, got)
+		}
+	}
+}

@@ -1,6 +1,7 @@
 package store
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -43,6 +44,10 @@ func scanDirSourcesWithReader[T any](dir string, readFile func(string) ([]byte, 
 	}
 	var out []T
 	var problems []sourceFileProblem
+	entryNames := make(map[string]bool, len(entries))
+	for _, entry := range entries {
+		entryNames[entry.Name()] = true
+	}
 	for _, e := range entries {
 		if !markdownDoc(e) {
 			continue
@@ -64,6 +69,11 @@ func scanDirSourcesWithReader[T any](dir string, readFile func(string) ([]byte, 
 		}
 		v, err := parse(path, content)
 		if err != nil {
+			if errors.Is(err, errBadEntityID) {
+				if reason := occupiedSpellingProblem(e.Name(), entryNames); reason != "" {
+					err = fmt.Errorf("%w: %q %s", errBadEntityID, e.Name(), reason)
+				}
+			}
 			problem := domain.FileProblem{Path: path, Message: err.Error()}
 			if entityID, slug, ok := splitFlatName(strings.TrimSuffix(e.Name(), ".md")); ok {
 				problem.EntityID = entityID
