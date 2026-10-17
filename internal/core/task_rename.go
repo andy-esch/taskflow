@@ -9,6 +9,8 @@ import (
 // TaskRenameMutationResult is the store-owned outcome of a task rename and its
 // multi-document inbound-link cascade. Planned counts describe the guarded plan;
 // applied counts are its durable prefix when a later write or cleanup fails.
+// DestinationWritten and SourceRemoved record this operation's actions, not
+// present path existence after an out-of-band edit.
 type TaskRenameMutationResult struct {
 	Task               domain.Task
 	FromSlug           string
@@ -29,6 +31,9 @@ type TaskRenameMutationResult struct {
 // TaskRenameReceipt is the adapter-neutral public result. Committed means at
 // least one document changed durably; Complete means the destination is the sole
 // authoritative task path and the entire guarded cascade plan was applied.
+// These are completion-time observations, not guarantees against later raw edits.
+// Action flags do not certify that either path currently exists. See
+// docs/architecture/persistence.md#ordinary-create-and-task-rename.
 type TaskRenameReceipt struct {
 	Task               domain.Task
 	FromSlug           string
@@ -103,7 +108,7 @@ func taskRenameFailureRemedy(result TaskRenameMutationResult) string {
 	case result.Complete:
 		return "inspect the renamed task by stable id before retrying; the planned rename is already complete"
 	case result.DestinationWritten && !result.SourceRemoved:
-		return "inspect the old and destination task files before retrying; if the destination is correct, remove the retained old source to restore one stable-id owner"
+		return "inspect the old and destination task paths before retrying; compare and reconcile any surviving copies, and remove the old source only after verifying the destination preserves the intended content"
 	case result.Committed:
 		return "resolve the reported error, then rerun the same rename by stable task id; the durable link-rewrite prefix is convergent"
 	default:

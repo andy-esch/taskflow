@@ -189,6 +189,12 @@ func WriteError(w io.Writer, err error, asJSON bool) {
 	if errors.As(err, &renameErr) {
 		details := wire.ToTaskRenameRecoveryJSON(renameErr.receipt, renameErr.workspace)
 		payload.Error.TaskRename = &details
+		// A transient read/unlink/cleanup cause does not make a rename safely
+		// replayable after the destination was written. Preserve core's inspection
+		// guidance instead of advertising a blind filesystem retry.
+		if renameErr.receipt.DestinationWritten && payload.Error.Filesystem != nil {
+			payload.Error.Filesystem.Retryable = false
+		}
 	}
 	var threadErr *threadCreationCommandFailure
 	if errors.As(err, &threadErr) {
