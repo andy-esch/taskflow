@@ -12,6 +12,11 @@ advisories; missing, ambiguous, or structurally unsafe references are errors.
 --fix repairs ordinary frontmatter and missing ids. It never normalizes or changes
 graph-owned task fields (depends_on, blocked_by, dependencies, or blocks); a
 would-be graph repair is skipped and reported for deliberate remediation.
+ID spelling moves preserve source permissions and refuse destination collisions or
+source drift. If creation succeeds but removal fails, the partial move is not
+counted as fixed. Compare and merge both copies without overwriting either, then
+deliberately remove or archive the copy not kept outside scanned entity directories.
+lint --fix refuses while both paths exist; retrying does not reconcile them.
 
 ```
 tskflwctl lint [flags]

@@ -413,6 +413,18 @@ func TestJSONSchema_ValidatesRealOutput(t *testing.T) {
 		def  string
 		emit func(io.Writer) error
 	}{
+		{"FixEnvelope", func(w io.Writer) error {
+			return emit(w, ToPlanningRepairEnvelope(core.PlanningRepairResult{
+				Fixes:      []domain.FixResult{{Path: "earlier.md", Changes: []string{"tags normalized"}}},
+				Relocation: &core.FrontmatterRepairRelocation{SourcePath: "/planning/old.md", DestinationPath: "/planning/new.md", DestinationWritten: true},
+			}, false, WorkspaceJSON{}))
+		}},
+		{"ErrorEnvelope", func(w io.Writer) error {
+			recovery := ToPlanningRepairEnvelope(core.PlanningRepairResult{
+				Relocation: &core.FrontmatterRepairRelocation{SourcePath: "/planning/old.md", DestinationPath: "/planning/new.md", DestinationWritten: true},
+			}, false, WorkspaceJSON{})
+			return emit(w, ErrorEnvelope{SchemaVersion: SchemaVersion, Error: ErrorItem{Code: "conflict", Message: "inspect both paths", PlanningRepair: &recovery}})
+		}},
 		{"TasksEnvelope", func(w io.Writer) error {
 			return emit(w, ToTasksEnvelope([]core.LoadedRecord[domain.Task]{loadedTask(task), loadedTask(beta)}, nil))
 		}},

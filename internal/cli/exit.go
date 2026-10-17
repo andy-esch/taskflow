@@ -132,7 +132,8 @@ func schemaExitCodes() []wire.SchemaExitCode {
 // WriteError reports a fatal error on w: prose normally, a versioned JSON
 // envelope when the run was --json — an agent driving --json must never have
 // to parse prose to learn why a command failed (decided 2026-06-12). It goes
-// to stderr either way; stdout stays empty on failure.
+// to stderr either way; a command may also have emitted a durable-progress
+// receipt to stdout before failing.
 func WriteError(w io.Writer, err error, asJSON bool) {
 	// A prompt abort only reaches here on a TTY (the gate is closed under --json),
 	// so it's the human path: a quiet line, never a scary "error:" or a JSON
@@ -170,6 +171,14 @@ func WriteError(w io.Writer, err error, asJSON bool) {
 	if errors.As(err, &repairErr) {
 		details := wire.ToTaskGraphRepairJSON(repairErr.receipt, repairErr.workspace)
 		payload.Error.GraphRepair = &details
+	}
+	var planningErr *planningRepairCommandFailure
+	if errors.As(err, &planningErr) {
+		details := wire.ToPlanningRepairEnvelope(planningErr.result, planningErr.dryRun, planningErr.workspace)
+		payload.Error.PlanningRepair = &details
+		if outcome := planningErr.result.Relocation; outcome != nil && outcome.DestinationWritten && payload.Error.Filesystem != nil {
+			payload.Error.Filesystem.Retryable = false
+		}
 	}
 	var lifecycleErr *taskLifecycleCommandFailure
 	if errors.As(err, &lifecycleErr) {

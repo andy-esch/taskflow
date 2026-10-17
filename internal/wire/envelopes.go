@@ -932,6 +932,8 @@ type FixEnvelope struct {
 	Fixed         []domain.FixResult    `json:"fixed"`
 	Unreadable    []LintLoadProblemJSON `json:"unreadable"`
 	Remaining     []LintTaskJSON        `json:"remaining"`
+	// Relocation is partial progress inside a frontmatter move, not a fixed row.
+	Relocation *FrontmatterRepairRelocationJSON `json:"relocation,omitempty"`
 	// Workspace proves WHICH planning tree this receipt describes — see WorkspaceJSON.
 	Workspace WorkspaceJSON `json:"workspace"`
 }
@@ -1127,6 +1129,7 @@ type ErrorItem struct {
 	Created            *CreatedRecoveryJSON       `json:"created,omitempty"`
 	DependencyMutation *DependencyMutationJSON    `json:"dependency_mutation,omitempty"`
 	GraphRepair        *TaskGraphRepairJSON       `json:"graph_repair,omitempty"`
+	PlanningRepair     *FixEnvelope               `json:"planning_repair,omitempty"`
 	TaskLifecycle      *TaskLifecycleRecoveryJSON `json:"task_lifecycle,omitempty"`
 	TaskRename         *TaskRenameRecoveryJSON    `json:"task_rename,omitempty"`
 	ThreadMutation     *ThreadMutationJSON        `json:"thread_mutation,omitempty"`

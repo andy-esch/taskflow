@@ -158,6 +158,11 @@ Maintenance and completion are narrow sibling capabilities, not mandatory method
 on every Store. [RepairPlanning/LintWithLinks](../../internal/core/planning_maintenance.go)
 keep frontmatter-before-body ordering, preview behavior and completed prefixes on
 later failure; repair is never retried wholesale.
+An interrupted ID spelling move keeps local action evidence in the core repair
+receipt, separate from completed/proposed `FixResult` rows and semantic entities.
+The optional wire relocation is recovery data, never path authority; see
+[frontmatter repair evidence](../../internal/core/frontmatter_repair.go) and
+[receipt regressions](../../internal/core/planning_maintenance_test.go).
 [CompleteEntities](../../internal/core/completion.go) retains damaged records and
 counts aliases before state exclusion. A label is executable only when the adapter
 certifies it, respecting case-folded ambiguity and ID precedence; already-selected

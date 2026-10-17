@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/spf13/cobra"
@@ -21,7 +22,12 @@ func newLintCmd(app *App) *cobra.Command {
 			"advisories; missing, ambiguous, or structurally unsafe references are errors.\n\n" +
 			"--fix repairs ordinary frontmatter and missing ids. It never normalizes or changes\n" +
 			"graph-owned task fields (depends_on, blocked_by, dependencies, or blocks); a\n" +
-			"would-be graph repair is skipped and reported for deliberate remediation.",
+			"would-be graph repair is skipped and reported for deliberate remediation.\n" +
+			"ID spelling moves preserve source permissions and refuse destination collisions or\n" +
+			"source drift. If creation succeeds but removal fails, the partial move is not\n" +
+			"counted as fixed. Compare and merge both copies without overwriting either, then\n" +
+			"deliberately remove or archive the copy not kept outside scanned entity directories.\n" +
+			"lint --fix refuses while both paths exist; retrying does not reconcile them.",
 		Example: "  tskflwctl lint\n  tskflwctl lint --fix --dry-run\n  tskflwctl lint --links\n  tskflwctl lint --json",
 		Args:    cobra.NoArgs,
 		// Safety is a command capability, not a statement about one flag set:
@@ -79,12 +85,17 @@ func runLintFix(app *App, dryRun bool) error {
 	if err != nil {
 		// A later repair or post-lint failure can follow durable edits: report that
 		// prefix (or dry-run proposals) so the user can reconcile what landed.
-		if len(results) > 0 {
+		if len(results) > 0 || repaired.Relocation != nil {
 			if app.JSON {
-				_ = render.FixJSON(app.Out, results, nil, nil, dryRun, app.workspace())
+				if outputErr := render.PlanningRepairJSON(app.Out, repaired, dryRun, app.workspace()); outputErr != nil {
+					err = errors.Join(err, outputErr)
+				}
 			} else {
-				render.FixHuman(app.Out, app.Style, results, nil, dryRun)
+				render.PlanningRepairHuman(app.Out, app.Style, repaired, dryRun)
 			}
+		}
+		if repaired.Relocation != nil {
+			return &planningRepairCommandFailure{cause: err, result: repaired, dryRun: dryRun, workspace: app.workspace()}
 		}
 		return err
 	}
