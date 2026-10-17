@@ -7,7 +7,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 	"testing"
+
+	"github.com/spf13/cobra"
 
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -143,5 +146,107 @@ func TestWriteErrorCarriesStructuredTaskRenameRecovery(t *testing.T) {
 		got.Remedy != receipt.Remedy || got.Workspace.PlanningRoot != "/repo/planning" ||
 		!errors.Is(err, domain.ErrConflict) {
 		t.Fatalf("task rename recovery envelope = %+v", envelope)
+	}
+}
+
+type partialDestinationRenameStore struct {
+	cliPlanningStub
+	result core.TaskRenameMutationResult
+	cause  error
+	calls  int
+}
+
+func (s *partialDestinationRenameStore) RenameTask(string, string, bool) (core.TaskRenameMutationResult, error) {
+	s.calls++
+	return s.result, s.cause
+}
+
+func TestTaskRenameCommandRetainsDestinationFailureAndRequiresInspection(t *testing.T) {
+	for _, transient := range []bool{false, true} {
+		for _, asJSON := range []bool{false, true} {
+			t.Run(map[bool]string{false: "conflict/", true: "transient/"}[transient]+map[bool]string{false: "human", true: "json"}[asJSON], func(t *testing.T) {
+				cause := error(domain.ErrConflict)
+				if transient {
+					cause = &os.PathError{Op: "read", Path: "/planning/tasks/new-title.md", Err: syscall.EBUSY}
+					if details := filesystemDetails(cause); details == nil || !details.Retryable {
+						t.Fatal("transient fixture must need the committed-destination retry override")
+					}
+				}
+				fake := &partialDestinationRenameStore{
+					cliPlanningStub: cliPlanningStub{witness: core.NewSourceSetID()},
+					result: core.TaskRenameMutationResult{
+						Task: domain.Task{ID: "6fjangd7kva1", Slug: "new-title"}, FromSlug: "old",
+						SourcePath: "/planning/tasks/old.md", DestinationPath: "/planning/tasks/new-title.md",
+						PlannedDocuments: 2, AppliedDocuments: 2, PlannedLinks: 1, AppliedLinks: 1,
+						Changed: true, Committed: true, DestinationWritten: true,
+					},
+					cause: cause,
+				}
+				var stdout, stderr bytes.Buffer
+				cmd, app := newTestRootCmdWithApp(strings.NewReader(""), &stdout, &stderr)
+				app.Svc = core.MustNewService(fake)
+				cmd.PersistentPreRunE = func(command *cobra.Command, _ []string) error { return app.bindCommandSafety(command) }
+				args := []string{"task", "rename", "old", "New title"}
+				if asJSON {
+					args = append(args, "--json")
+				}
+				cmd.SetArgs(args)
+				err := cmd.Execute()
+				var partial *core.TaskRenameFailure
+				if !errors.Is(err, cause) || !errors.As(err, &partial) || fake.calls != 1 || stdout.Len() != 0 {
+					t.Fatalf("command lost failure, reported success, or replayed rename: %v calls=%d stdout=%s", err, fake.calls, stdout.String())
+				}
+				WriteError(&stderr, err, asJSON)
+				for _, expected := range []string{fake.result.SourcePath, fake.result.DestinationPath, "before retrying", "only after verifying"} {
+					if !strings.Contains(stderr.String(), expected) {
+						t.Errorf("recovery omits %q: %s", expected, stderr.String())
+					}
+				}
+				if !asJSON {
+					return
+				}
+				var envelope wire.ErrorEnvelope
+				if err := json.Unmarshal(stderr.Bytes(), &envelope); err != nil {
+					t.Fatal(err)
+				}
+				got := envelope.Error.TaskRename
+				if got == nil || !got.Committed || !got.DestinationWritten || got.Complete || got.SourceRemoved || got.AppliedDocuments != 2 || got.AppliedLinks != 1 || got.SourcePath != fake.result.SourcePath || got.DestinationPath != fake.result.DestinationPath || got.Remedy != partial.Receipt.Remedy {
+					t.Fatalf("structured receipt lost historical actions: %+v", envelope)
+				}
+				if transient {
+					if envelope.Error.Filesystem == nil || envelope.Error.Filesystem.Retryable || envelope.Error.Filesystem.Operation != "read" || envelope.Error.Code != "error" {
+						t.Fatalf("post-destination failure advertised blind retry or lost cause: %+v", envelope)
+					}
+				} else if envelope.Error.Code != "conflict" || envelope.Error.Filesystem != nil {
+					t.Fatalf("conflict classification changed: %+v", envelope)
+				}
+			})
+		}
+	}
+}
+
+func TestTaskRenameFilesystemRetryHintRespectsDestinationCommit(t *testing.T) {
+	for _, written := range []bool{false, true} {
+		receipt := core.TaskRenameReceipt{
+			Task: domain.Task{ID: "6fjangd7kva1", Slug: "new-title"}, FromSlug: "old",
+			PlannedDocuments: 2, AppliedDocuments: 1, PlannedLinks: 1, AppliedLinks: 1,
+			Changed: true, Committed: true, DestinationWritten: written,
+		}
+		if written {
+			receipt.AppliedDocuments = 2
+		}
+		cause := &os.PathError{Op: "read", Path: "/planning/tasks/task.md", Err: syscall.EBUSY}
+		failure := &taskRenameCommandFailure{
+			cause: &core.TaskRenameFailure{Cause: cause, Receipt: receipt}, receipt: receipt,
+		}
+		var output bytes.Buffer
+		WriteError(&output, failure, true)
+		var envelope wire.ErrorEnvelope
+		if err := json.Unmarshal(output.Bytes(), &envelope); err != nil {
+			t.Fatal(err)
+		}
+		if envelope.Error.Filesystem == nil || envelope.Error.Filesystem.Retryable != !written {
+			t.Fatalf("destination_written=%t gave incorrect retry hint: %s", written, output.String())
+		}
 	}
 }

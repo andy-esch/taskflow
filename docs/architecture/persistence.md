@@ -92,10 +92,21 @@ without copying filesystem lock ordering.
 [RenameTask](../../internal/store/rename.go) captures the source before waiting,
 replans inbound links under the guard, and CAS-checks every write. Links commit first,
 exclusive destination create second, source deletion last; destination permissions
-come from the source. A pre-destination prefix is convergent and resumable by stable ID.
-A destination-written/source-retained failure preserves both for inspection, not
-destructive retry. Preview claims no reservation. See
-[rename regressions](../../internal/store/rename_test.go) and ADR-0003's amendment.
+come from the source. Preflight rejects occupied destination entries, including
+dangling symlinks, before cascade writes and during preview. Exclusive creation
+still refuses entries arriving after that check; such a late conflict can leave a
+committed link prefix. Immediately before source deletion, both the destination's
+regular-file type, exact materialized bytes and the original source are rechecked.
+A byte-identical symlink is refused because planning scans exclude it. Destination drift
+refuses source removal without rolling back already-written inbound links or
+overwriting raw edits. A pre-destination prefix is convergent and resumable by stable ID.
+A destination-written/source-not-removed failure requires inspection and deliberate
+reconciliation, not destructive retry. Receipt flags record actions, not current
+path existence: a raw writer may already have removed or replaced a reported path.
+The final check-to-unlink window remains; this is not a crash-atomic move.
+Preview claims no reservation. See
+[rename regressions](../../internal/store/rename_test.go),
+[destination-loss probes](../../internal/store/rename_destination_test.go) and ADR-0003's amendment.
 
 ## Ordinary frontmatter ID repair
 
