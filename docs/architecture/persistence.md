@@ -97,6 +97,32 @@ A destination-written/source-retained failure preserves both for inspection, not
 destructive retry. Preview claims no reservation. See
 [rename regressions](../../internal/store/rename_test.go) and ADR-0003's amendment.
 
+## Ordinary frontmatter ID repair
+
+[Lint spelling repair](../../internal/store/fix_relocation.go) rechecks source bytes
+and existing identity/reference authorization before exclusive destination creation,
+preserving source permissions. It checks both copies before source removal. Raw
+editors still have a final check-to-effect window; this is not a crash-atomic move
+or automatic recovery from ambiguous copies.
+
+A destination-written/source-removal failure returns completed repairs **and**
+[core-owned relocation evidence](../../internal/core/frontmatter_repair.go), not a
+new fixed row. Action flags record what this repair did, not current path existence.
+`lint --fix` refuses while both paths exist; retrying does not reconcile them.
+Back up both copies outside scanned entity directories, compare and merge intended
+content into a record with a consistent canonical filename and `id:`, then
+deliberately remove or archive the redundant copy. Never rename over an occupied
+destination: either copy may contain unique edits. Plain lint reports an occupied
+canonical sibling with this reconciliation guidance, not a rename instruction.
+
+CLI stdout and JSON error recovery retain the receipt, including when no earlier
+repair completed. Returned stdout writer errors preserve it for stderr reporting;
+process termination (such as SIGPIPE on a broken stdout pipe) can prevent that
+report. Signal handling is unchanged; inspect the files with plain lint afterward.
+A committed destination never advertises a blind filesystem retry. See
+[store regressions](../../internal/store/fix_relocation_test.go) and
+[CLI recovery tests](../../internal/cli/planning_repair_failure_test.go).
+
 ## Guarded graph and lifecycle writes
 
 All planner callbacks are pure over taskflow-owned immutable snapshots. While a

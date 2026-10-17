@@ -4,7 +4,7 @@ id: 6gm8g0f66k80
 bucket: closed
 area: concurrency-and-atomicity
 date: "2026-10-16"
-updated_at: "2026-10-16"
+updated_at: "2026-10-17"
 ---
 
 # Audit: concurrency-and-atomicity — 2026-10-16
@@ -87,7 +87,7 @@ atomic write with a content CAS. `fix.go` was the only file with writes and no C
 
 ## Findings
 
-#### M1. lint --fix id repair relocates a file with the clobbering writer, silently widening its mode · **Status:** tracked by 6gmbfxy1d561
+#### M1. lint --fix id repair relocates a file with the clobbering writer, silently widening its mode · **Status:** fixed
 
 **File:** internal/store/fix.go:95 | **Component:** store
 **Effort:** S · **Urgency:** soon
@@ -142,13 +142,14 @@ path rather than only the source.
 
 **Recommendation:** In fix.go's rename branch, stat the source and call createFileAtomicExactMode(renamed, fixed, sourceMode) instead of writeFileAtomic, mapping os.IsExist to ErrConflict as rename.go does.
 
-**Resolution:** Owner code inspection confirms the relocation uses clobbering
-    writeFileAtomic with 0644 fallback. Track mode preservation and exclusive
-    destination creation together with source CAS and partial outcomes in the
-    bounded lint relocation task; independent of explicit graph-repair selector
-    retries.
+**Resolution:** Implemented in task 6gmbfxy1d561: exclusive exact-mode
+    destination creation, source evidence rechecks and collision refusal. Modes
+    0600 and 0664 under umask 022 are retained; compiler-valid
+    no-clobber/exact-mode mutations are killed. Claude findings are resolved;
+    Antigravity overlap and evidence limits are recorded. Full race tests, build
+    and lint pass.
 
-#### M2. An interrupted id-repair relocation leaves a duplicate id that freezes every guarded mutation · **Status:** tracked by 6gmbfxy1d561
+#### M2. An interrupted id-repair relocation leaves a duplicate id that freezes every guarded mutation · **Status:** fixed
 
 **File:** internal/store/fix.go:91 | **Component:** store
 **Effort:** S · **Urgency:** soon
@@ -201,11 +202,14 @@ doing them together costs one review instead of two.
 
 **Recommendation:** Re-verify the source bytes immediately before os.Remove and record the written destination in the FixResult, so an interrupted repair reports the committed half instead of returning an error that omits it.
 
-**Resolution:** Accept the missing pre-remove source CAS and destination-written
-    receipt. The copied-valid-ID probe does not establish that actual spelling
-    repair creates duplicate canonical IDs: the retained original has an invalid
-    filename ID and was already unhealthy. Track non-destructive partial
-    reporting, not a promise to eliminate crash windows or auto-delete copies.
+**Resolution:** Validated relocation gap fixed in 6gmbfxy1d561:
+    source/destination checks retain concurrent bytes; interrupted moves expose
+    typed partial receipts beside earlier repairs, explicit two-copy
+    reconciliation and no blind retry. Correction retained: copying a
+    canonical-ID record did not reproduce the actual interrupted spelling
+    repair, whose source filename remains invalid, so the claimed new
+    duplicate-canonical-ID consequence was not established. Crash atomicity and
+    automatic ambiguous-copy deletion remain out of scope.
 
 #### L1. A replaced watcher's final event can pin the TUI live-reload indicator to off · **Status:** tracked by 6gmbfxy96tpw
 
@@ -410,6 +414,6 @@ the audited lens, including ones today's code does *not* violate.
 <!-- candidate-tasks:v1 · ○ open · ● in-progress · ✔ fixed · → tracked · ◌ deferred · ◌ superseded · ✘ wontfix -->
 <!-- Add or replace one row with `tskflwctl audit finding <audit> <code> --candidate "<one line>"`; an empty value removes it. -->
 
-- → M1 · tracked — Tracked by task 6gmbfxy1d561: no-clobber, mode-preserving lint ID relocation with source evidence and partial outcomes.
-- → M2 · tracked — Consolidated into task 6gmbfxy1d561 with M1: pre-remove source CAS and destination-written/source-retained recovery; no automatic deletion or crash-atomicity promise.
+- ✔ M1 · fixed — Implemented in task 6gmbfxy1d561: exclusive, exact-mode lint ID relocation with source evidence and partial outcomes.
+- ✔ M2 · fixed — Implemented with M1 in task 6gmbfxy1d561: source/destination verification and explicit partial recovery; the claimed duplicate-canonical-ID consequence was not established.
 - → L1 · tracked — Tracked by task 6gmbfxy96tpw in Refine Thread and TUI navigation: reproduce stale watcher/session results, guard event/reconcile/debounce messages, preserve current recovery.

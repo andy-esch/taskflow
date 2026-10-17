@@ -71,13 +71,40 @@ func flatNameProblem(stem string) string {
 	lower := strings.ToLower(cand)
 	if fixed, ok := id.Canonicalize(lower); ok && len(lower) == len(cand) {
 		// Casing and i/l/o spelling can preserve the same decoded identity.
-		// This is manual advice, not authority for the automatic repair writer.
-		return reason + fmt.Sprintf(" — rename to %q and match the `id:` field", fixed+stem[id.Length:]+".md")
+		// Pure filename advice cannot establish destination availability. Scans
+		// replace it with two-copy guidance when their entry snapshot has a sibling.
+		// Neither diagnostic grants authority to the automatic repair writer.
+		return reason + fmt.Sprintf(" — rename to %q only if that path is absent, and match the `id:` field; otherwise compare both copies without overwriting either", fixed+stem[id.Length:]+".md")
 	}
 	if strings.ContainsAny(cand, "uU") {
 		return reason + " — u has no canonical decode, so this id must be replaced deliberately"
 	}
 	return reason + " — no canonical decode is established; inspect the intended id manually"
+}
+
+// occupiedSpellingProblem contextualizes a parse failure using the same directory
+// entries as the scan, without another filesystem read or I/O in pure parsers.
+// Even a directory or symlink occupies the name: never advise overwriting it.
+func occupiedSpellingProblem(base string, entries map[string]bool) string {
+	stem := strings.TrimSuffix(base, ".md")
+	if len(stem) < id.Length+2 || stem[id.Length] != '-' {
+		return ""
+	}
+	cand := stem[:id.Length]
+	reason := invalidEntityIDReason(cand)
+	if reason == "" {
+		return ""
+	}
+	lower := strings.ToLower(cand)
+	fixed, ok := id.Canonicalize(lower)
+	if !ok || len(lower) != len(cand) {
+		return ""
+	}
+	destination := fixed + stem[id.Length:] + ".md"
+	if !entries[destination] {
+		return ""
+	}
+	return reason + fmt.Sprintf(" — canonical sibling %q already exists; compare and merge both copies without overwriting either, then deliberately remove or archive the copy not kept outside scanned entity directories; keep the surviving filename and `id:` field consistent; lint --fix refuses while both paths exist", destination)
 }
 
 // Use the same strict classification for filenames and write-time validation.

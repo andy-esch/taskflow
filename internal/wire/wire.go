@@ -375,7 +375,12 @@ import (
 // 1.88: ADDITIVE — task authoring conventions direct callers to the already
 // shipped guarded dependency commands instead of describing them as future work.
 // JSON shapes, valid inputs, vocabularies, and mutation semantics are unchanged.
-const SchemaVersion = "1.88"
+// 1.89: ADDITIVE — lint --fix receipts may include optional relocation evidence
+// for a destination-written/source-not-removed ID spelling repair. Error output
+// carries optional planning_repair recovery with the same receipt; fixed/skipped
+// rows and exit codes are unchanged. A partial move requires deliberate two-copy
+// reconciliation; filesystem retry hints are false after destination commit.
+const SchemaVersion = "1.89"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.

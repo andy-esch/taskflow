@@ -983,10 +983,29 @@ func FixHuman(w io.Writer, st Style, results []domain.FixResult, remaining []cor
 // FixJSON writes the structured fix report: what was repaired (`fixed`), any files
 // that still can't be read after the pass (`unreadable`), and the per-entity lint
 // findings the pass could NOT repair (`remaining` — report-only epics, unfixable
-// task issues). All three are empty on a dry-run (which writes nothing) — so a
-// --json consumer learns the residual breakage without parsing the prose error.
+// task issues). A dry-run reports proposed fixes but does not perform post-write
+// lint — a consumer learns the residual breakage without parsing the prose error.
 func FixJSON(w io.Writer, results []domain.FixResult, problems []core.LoadProblem, remaining []core.LintResult, dryRun bool, ws wire.WorkspaceJSON) error {
 	return wire.EncodeJSON(w, wire.ToFixEnvelope(results, problems, remaining, dryRun, ws))
+}
+
+// PlanningRepairJSON includes an interrupted local relocation without calling
+// its still-incomplete source move a fixed file.
+func PlanningRepairJSON(w io.Writer, result core.PlanningRepairResult, dryRun bool, ws wire.WorkspaceJSON) error {
+	return wire.EncodeJSON(w, wire.ToPlanningRepairEnvelope(result, dryRun, ws))
+}
+
+// PlanningRepairHuman keeps completed/proposed counts separate from a partial
+// move. Even with no earlier fixed files, an interrupted relocation is not
+// "nothing to fix". Paths describe historical actions, not current existence.
+func PlanningRepairHuman(w io.Writer, st Style, result core.PlanningRepairResult, dryRun bool) {
+	if len(result.Fixes) > 0 || result.Relocation == nil {
+		FixHuman(w, st, result.Fixes, result.LintResults, dryRun)
+	}
+	if outcome := result.Relocation; outcome != nil {
+		fmt.Fprintf(w, "%s\n  source: %s\n  destination: %s\n  destination written: %t · source removed: %t\n  compare and merge both copies without overwriting either\n  deliberately remove or archive the copy not kept outside scanned entity directories\n  lint --fix refuses while both paths exist; retrying does not reconcile them\n",
+			st.Warn("partial ID relocation"), outcome.SourcePath, outcome.DestinationPath, outcome.DestinationWritten, outcome.SourceRemoved)
+	}
 }
 
 // ProblemsHuman writes per-file load problems (unreadable frontmatter).

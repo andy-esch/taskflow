@@ -20,8 +20,10 @@ import (
 // known list fields) and — for flat id-led entities — backfilling a missing stable id from
 // the id that already leads the flat filename (ADR-0003 §4), so the frontmatter
 // copy can never drift from the name. Epics keep their NN-slug identity and are
-// text-normalized only. Under the flat layout there is no relocation: a bad
-// status/bucket is lint-flagged, not moved. When dryRun is true nothing is written.
+// text-normalized only. Status/bucket drift is lint-flagged, not relocated; the
+// only move is a safe, unreferenced ID spelling correction. Failed relocation
+// retains completed rows plus a core.FrontmatterRepairFailure with local progress.
+// When dryRun is true nothing is written.
 func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	if err := s.authorizeMutation(); err != nil {
 		return nil, err
@@ -68,7 +70,7 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 				}
 			}
 			fixed, changes := fixFrontmatterText(content)
-			// An id-led name whose id is misspelled is repairable in place: i/l/o have a
+			// An id-led name whose id is misspelled is repairable: i/l/o have a
 			// canonical Crockford decode, so the same identity can be spelled legally
 			// without becoming a different entity. Done before the content fixers because
 			// it may rewrite the `id:` field they would otherwise leave inconsistent.
@@ -89,14 +91,11 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 					changes = append(changes, note)
 				}
 				if renamed != "" {
-					// The file moved; write the repaired content at its new name and skip
-					// the shared write below, which still points at the old path.
+					// Create the corrected spelling exclusively, retaining source mode
+					// and byte evidence. A partial move is not a completed fixed row.
 					if !dryRun {
-						if err := writeFileAtomic(renamed, fixed, 0o644); err != nil {
+						if err := s.relocateFixedFrontmatter(path, renamed, content, fixed); err != nil {
 							return err
-						}
-						if err := os.Remove(path); err != nil {
-							return fmt.Errorf("remove %s after rename: %w", path, err)
 						}
 					}
 					results = append(results, domain.FixResult{Path: path, Changes: changes})
@@ -168,17 +167,20 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	return results, nil
 }
 
+var testHookBeforeFixIDDestinationCreate func(source, destination string)
+var testHookBeforeFixIDSourceRemove func(source, destination string) error
+
 // repairInvalidID canonicalises a misspelled entity id in BOTH the filename and the `id:`
-// field, returning the new path when it renamed. i/l/o have a canonical Crockford decode
+// field, returning a proposed new path without writing. i/l/o have a canonical Crockford decode
 // (1, 1, 0), so the repaired id keeps the same decoded value, the same sort position, and
 // therefore the same identity — it is a spelling fix, not a new entity.
 //
-// It REFUSES in two cases, reporting rather than repairing:
+// It refuses unsupported spelling, references, and occupied same/cross-kind identity:
 //
 //   - u, which Crockford excludes with no digit it stands for. "Repairing" it would mean
 //     choosing a different value, i.e. a different identity.
 //   - an id referenced ANYWHERE else in the planning tree. Renaming the file would leave
-//     those references dangling, and this repo has no rename cascade yet — so a silent fix
+//     those references dangling; spelling repair deliberately has no cascade — a silent fix
 //     would trade one broken file for several broken links. The operator is told where.
 func (s *FS) repairInvalidID(dir, filename string, content []byte) (out []byte, renamed, note string, err error) {
 	stem := strings.TrimSuffix(filename, ".md")
@@ -210,6 +212,8 @@ func (s *FS) repairInvalidID(dir, filename string, content []byte) (out []byte, 
 	target := filepath.Join(dir, good+stem[id.Length:]+".md")
 	if _, err := os.Stat(target); err == nil {
 		return content, "", fmt.Sprintf("id %q not repaired: %s already exists", bad, filepath.Base(target)), nil
+	} else if !os.IsNotExist(err) {
+		return content, "", "", fmt.Errorf("inspect ID repair destination %s: %w", target, err)
 	}
 	owner, err := candidateIDOwner(good, func() ([]candidate, error) {
 		return flatCandidates(dir)

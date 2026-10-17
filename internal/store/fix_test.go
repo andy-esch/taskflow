@@ -144,6 +144,9 @@ func TestFixRepairsMisspelledIDInFilenameAndFrontmatter(t *testing.T) {
 	r := testutil.NewRepo(t)
 	r.Epic("01-e.md", "---\nstatus: active\ndescription: e\n---\n# E\n")
 	testutil.Write(t, filepath.Join(r.Root, "tasks", "6fbj87000lt6-bad-id.md"), "---\nschema: 1\nid: 6fbj87000lt6\nstatus: ready-to-start\nepic: 01-e\ndescription: d\n---\n# Bad\n")
+	if err := os.Chmod(filepath.Join(r.Root, "tasks", "6fbj87000lt6-bad-id.md"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	results, err := testutil.Must(NewFS(r.Root, core.UnrestrictedMutations())).FixFrontmatter(false)
 	if err != nil {
@@ -159,6 +162,9 @@ func TestFixRepairsMisspelledIDInFilenameAndFrontmatter(t *testing.T) {
 	}
 	if !strings.Contains(string(body), "id: 6fbj870001t6") {
 		t.Errorf("frontmatter id was not moved with the filename:\n%s", body)
+	}
+	if info, err := os.Stat(fixed); err != nil || info.Mode().Perm() != 0o600 {
+		t.Errorf("relocation widened source permissions: info=%v err=%v", info, err)
 	}
 	if _, err := os.Stat(filepath.Join(r.Root, "tasks", "6fbj87000lt6-bad-id.md")); !os.IsNotExist(err) {
 		t.Error("the misspelled filename survived the repair")
@@ -199,7 +205,7 @@ func TestFixRefusesCanonicalIDRepairOwnedBySameKind(t *testing.T) {
 }
 
 // The guard that matters: renaming a referenced id would leave those links dangling, and
-// this repo has no rename cascade. Refusing loudly beats trading one broken file for
+// ID spelling repair deliberately has no reference cascade. Refusing beats trading one broken file for
 // several broken references.
 func TestFixRefusesToRepairAnIDThatIsReferencedElsewhere(t *testing.T) {
 	r := testutil.NewRepo(t)

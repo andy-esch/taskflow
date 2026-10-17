@@ -1,6 +1,7 @@
 package core
 
 import (
+	"errors"
 	"fmt"
 
 	"github.com/andy-esch/taskflow/internal/domain"
@@ -13,6 +14,9 @@ type PlanningRepairResult struct {
 	Fixes       []domain.FixResult
 	LintResults []LintResult
 	Problems    []LoadProblem
+	// Relocation reports progress inside a failed frontmatter move separately
+	// from completed/proposed fixes. It is local adapter evidence, not authority.
+	Relocation *FrontmatterRepairRelocation
 }
 
 // RepairPlanning performs ordinary frontmatter repairs, then finding-header
@@ -36,6 +40,11 @@ func (s *Service) RepairPlanning(dryRun bool) (PlanningRepairResult, error) {
 	var err error
 	result.Fixes, err = s.frontmatterRepairs.FixFrontmatter(dryRun)
 	if err != nil {
+		var failure *FrontmatterRepairFailure
+		if errors.As(err, &failure) {
+			outcome := failure.Relocation
+			result.Relocation = &outcome
+		}
 		return result, err
 	}
 	headers, err := s.FixFindingHeaders(dryRun)
