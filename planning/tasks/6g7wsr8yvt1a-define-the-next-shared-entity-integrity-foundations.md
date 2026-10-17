@@ -50,6 +50,16 @@ a deliberate sequence. This task owns design and scoping, not the implementation
 3. `createFileAtomic` provides race-free `O_EXCL` creation but can leave a partial new file if the
    process dies after opening the destination. Decide whether lint/repair is the intentional recovery
    contract or whether complete-content exclusive creation needs a separate portable primitive.
+   The [October 16 lint-relocation review](../audits/6gmdtwr8ycdm-2026-10-16-lint-id-relocation-safety-implementation-claude.md#surviving-hypothesis-ledger)
+   also identifies an unproven in-process boundary: after write/chmod/sync/close
+   failure, cleanup removes the destination by name and ignores removal errors.
+   Investigate a deterministic I/O-fault plus raw-replacement fixture: cleanup
+   must not remove another writer's replacement, and any retained partial file
+   needs truthful recovery evidence. This is source-inspection evidence, not a
+   reproduced data-loss incident. The historical sweep's “only process death”
+   qualification below assumes cleanup succeeds without raw path replacement.
+   Reconcile this shared-helper question here, not by expanding the bounded
+   three-member maintenance-persistence Thread or silently changing create policy.
 4. Decide when a reusable secondary-adapter conformance suite becomes valuable. It should verify
    behavioral identity/atomicity contracts without requiring every adapter to implement filesystem
    locks; avoid building it before a second real adapter makes the shared contract concrete.
