@@ -28,6 +28,9 @@ var firstH1Re = regexp.MustCompile(`(?m)^# .*$`)
 // guarded current tree, and CAS every document immediately before replacing it. This
 // prevents two concurrent renames from both committing and preserves cooperating writes
 // to inbound-link documents. A dry run performs the same planning without a reservation.
+// Before removing a distinct source, both source and materialized destination must
+// still match. Raw editors retain a final check-to-unlink window; this is not a
+// crash-atomic move. See docs/architecture/persistence.md#ordinary-create-and-task-rename.
 func (s *FS) RenameTask(slug, newTitle string, dryRun bool) (result core.TaskRenameMutationResult, err error) {
 	result.DryRun = dryRun
 	if err := s.authorizeMutation(); err != nil {
@@ -151,9 +154,13 @@ func (s *FS) RenameTask(slug, newTitle string, dryRun bool) (result core.TaskRen
 				return result, fmt.Errorf("before removing old task %s: %w", source.id, err)
 			}
 		}
-		// A raw editor does not honor the repository guard. Recheck the old source
-		// bytes once more before deleting that path; after the destination exists,
-		// a conflict intentionally leaves both copies for explicit inspection.
+		// Source CAS alone cannot justify deleting our last intact copy: a raw
+		// editor may have changed or removed the destination after creation. Verify
+		// the exact materialized bytes, then recheck the old source before unlink.
+		// A failure retains source and historical progress for explicit inspection.
+		if err := verifyTaskRenameDestination(plan.newPath, hashContent(plan.renamedContent)); err != nil {
+			return result, err
+		}
 		if err := verifyTaskRenamePath(source.path, source.version); err != nil {
 			return result, err
 		}
@@ -298,26 +305,47 @@ func (s *FS) ensureTaskRenameTargetAvailable(source taskRenameSource, newSlug st
 	if newPath == source.path {
 		return nil
 	}
-	if _, err := os.Stat(newPath); err == nil {
+	// Any occupied directory entry conflicts, including a dangling symlink.
+	// Match exclusive creation before committing cascade edits or previewing them.
+	if _, err := os.Lstat(newPath); err == nil {
 		return fmt.Errorf("%w: target filename already exists: %s", domain.ErrConflict, newName)
 	} else if !os.IsNotExist(err) {
-		return fmt.Errorf("stat target %s: %w", newPath, err)
+		return fmt.Errorf("inspect target %s: %w", newPath, err)
 	}
 	return nil
 }
 
+// Verification reports evidence, not retry advice. Only core knows whether a
+// failure followed a convergent cascade prefix or a destination commit.
 func verifyTaskRenamePath(path, ifVersion string) error {
 	content, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fmt.Errorf("task rename document %s changed on disk; retry: %w", path, domain.ErrConflict)
+			return fmt.Errorf("task rename document %s changed on disk: %w", path, domain.ErrConflict)
 		}
 		return fmt.Errorf("re-read task rename document %s: %w", path, err)
 	}
 	if hashContent(content) != ifVersion {
-		return fmt.Errorf("task rename document %s changed on disk; retry: %w", path, domain.ErrConflict)
+		return fmt.Errorf("task rename document %s changed on disk: %w", path, domain.ErrConflict)
 	}
 	return nil
+}
+
+// A byte-identical symlink is not a surviving planning record: ordinary scans
+// exclude it. Do not follow one and then remove the last regular source file.
+// Lstat and byte checks bound raw-writer races, not guarantee inode continuity.
+func verifyTaskRenameDestination(path, ifVersion string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("task rename destination %s disappeared: %w", path, domain.ErrConflict)
+		}
+		return fmt.Errorf("inspect task rename destination %s: %w", path, err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%w: task rename destination %s is no longer a regular file", domain.ErrConflict, path)
+	}
+	return verifyTaskRenamePath(path, ifVersion)
 }
 
 var testHookBeforeTaskRenameLock func()

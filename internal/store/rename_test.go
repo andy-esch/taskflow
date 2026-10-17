@@ -477,12 +477,22 @@ func TestRenameTask_ExclusiveDestinationCreatePreservesDanglingSymlink(t *testin
 		t.Fatal(err)
 	}
 	target := filepath.Join(root, "tasks", "6fjangd7kva1-new-title.md")
-	if err := os.Symlink(filepath.Join(root, "missing-target"), target); err != nil {
-		t.Fatal(err)
+	// Arrive after planning: this tests O_EXCL, not the preflight entry check.
+	original := testHookBeforeTaskRenameDestinationCreate
+	t.Cleanup(func() { testHookBeforeTaskRenameDestinationCreate = original })
+	calls := 0
+	testHookBeforeTaskRenameDestinationCreate = func(path string) {
+		calls++
+		if path != target {
+			t.Fatalf("unexpected destination: %s", path)
+		}
+		if err := os.Symlink(filepath.Join(root, "missing-target"), path); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	result, err := testutil.Must(NewFS(root, core.UnrestrictedMutations())).RenameTask("old", "New title", false)
-	if !errors.Is(err, domain.ErrConflict) || result.Committed || result.DestinationWritten {
+	if !errors.Is(err, domain.ErrConflict) || result.Committed || result.DestinationWritten || calls != 1 {
 		t.Fatalf("dangling target symlink = %+v, %v; want an uncommitted conflict", result, err)
 	}
 	info, err := os.Lstat(target)
