@@ -23,10 +23,13 @@ or a reopening of Finish selected identity safety.
 ## Sequencing
 
 [Lint ID relocation](../tasks/6gmbfxy1d561-preserve-source-evidence-and-partial-outcomes-during-lint-id-relocation.md)
-is complete. The confirmed task-rename destination-loss probe is the strongest
-next follow-up, then ordinary lint's raw source CAS and guard finalization. This
-is delivery guidance, not a dependency chain: the remaining tasks are independently
-actionable and no graph edges are invented.
+and [task-rename destination safety](../tasks/6gmdsxcevgkr-verify-the-task-rename-destination-before-removing-its-source.md)
+are complete. Next is [ordinary lint's raw source CAS and guard finalization](../tasks/6gmdsxccqqnm-guard-in-place-lint-repairs-and-retain-guard-finalization-failures.md).
+This is delivery guidance, not a dependency chain: the tasks are independently
+actionable and no graph edges are invented. Broader creation-preflight and
+lint-relocation symlink hypotheses are explicitly recorded in the separate
+[entity-integrity design task](../tasks/6g7wsr8yvt1a-define-the-next-shared-entity-integrity-foundations.md),
+not silently added to this Thread's three-member finish line.
 
 ## Evidence boundaries
 

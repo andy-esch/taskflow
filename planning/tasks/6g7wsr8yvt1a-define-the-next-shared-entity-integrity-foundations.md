@@ -60,6 +60,18 @@ a deliberate sequence. This task owns design and scoping, not the implementation
    qualification below assumes cleanup succeeds without raw path replacement.
    Reconcile this shared-helper question here, not by expanding the bounded
    three-member maintenance-persistence Thread or silently changing create policy.
+   The [October 17 rename review](../audits/6gmke6f7nnw0-2026-10-17-task-rename-destination-safety-implementation-antigravity.md)
+   reproduced a related directory-entry mismatch: `Stat` accepts an occupied
+   dangling-symlink destination as absent. Rename now rejects it before cascade
+   writes and preview. Survey the remaining `Stat` preflights in `createEntityFile`,
+   `materializeThreadCreation`, `materializeTaskLifecycleCreation`, and
+   `repairInvalidID`; distinguish misleading previews and avoidable compound
+   prefixes from clobbering (exclusive creation still protects the final write).
+   Also challenge `verifyFixPath`: unlike rename's destination check it follows
+   byte-identical symlinks before source removal, although scans exclude symlinks.
+   These adjacent paths are source-inspection hypotheses, not owner-reproduced
+   incidents or fixes covered by the rename task. Require hostile fixtures before
+   claiming shared guarantees or designing a common helper.
 4. Decide when a reusable secondary-adapter conformance suite becomes valuable. It should verify
    behavioral identity/atomicity contracts without requiring every adapter to implement filesystem
    locks; avoid building it before a second real adapter makes the shared contract concrete.
