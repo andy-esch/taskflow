@@ -22,19 +22,24 @@ func filesystemDetails(err error) *wire.FilesystemErrorJSON {
 	var (
 		pathErr *fs.PathError
 		linkErr *os.LinkError
+		cause   error
 	)
 	details := &wire.FilesystemErrorJSON{}
 	switch {
 	case errors.As(err, &pathErr):
 		details.Operation, details.Path = pathErr.Op, pathErr.Path
+		cause = pathErr.Err
 	case errors.As(err, &linkErr):
 		// A rename carries two paths; New is where the write was headed, which is the
 		// one a caller acts on.
 		details.Operation, details.Path = linkErr.Op, linkErr.New
+		cause = linkErr.Err
 	default:
 		return nil
 	}
-	details.Class, details.Retryable = classifyFilesystemError(err)
+	// Classify the same error that supplied the operation/path. A joined output
+	// or cleanup error must not donate its errno to a different failed operation.
+	details.Class, details.Retryable = classifyFilesystemError(cause)
 	return details
 }
 
