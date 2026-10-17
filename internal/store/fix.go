@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -23,8 +24,11 @@ import (
 // text-normalized only. Status/bucket drift is lint-flagged, not relocated; the
 // only move is a safe, unreferenced ID spelling correction. Failed relocation
 // retains completed rows plus a core.FrontmatterRepairFailure with local progress.
-// When dryRun is true nothing is written.
-func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
+// In-place writes check regular-file type and original bytes before replacement.
+// Guard-release errors retain the completed prefix and any primary error.
+// When dryRun is true nothing is written. See
+// docs/architecture/persistence.md#ordinary-frontmatter-id-repair.
+func (s *FS) FixFrontmatter(dryRun bool) (results []domain.FixResult, err error) {
 	if err := s.authorizeMutation(); err != nil {
 		return nil, err
 	}
@@ -36,13 +40,21 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 	// silently clobbered. Reads happen inside the lock too, so each file's read→fix→write is
 	// atomic against the tool's other writers. A dry run reads only, so it needs no lock.
 	if !dryRun {
-		unlock, err := s.writeLock()
-		if err != nil {
-			return nil, err
+		unlock, lockErr := s.checkedWriteLock()
+		if lockErr != nil {
+			return nil, lockErr
 		}
-		defer unlock()
+		defer func() {
+			if releaseErr := unlock(); releaseErr != nil {
+				err = errors.Join(err, fmt.Errorf("release repository frontmatter repair guard: %w", releaseErr))
+			}
+		}()
+		// Invocation checks precede a potentially blocking guard acquisition.
+		// Authorization may have changed while another writer held the guard.
+		if policyErr := s.authorizeMutation(); policyErr != nil {
+			return nil, policyErr
+		}
 	}
-	var results []domain.FixResult
 	fixDir := func(dir string, backfill bool) error {
 		entries, err := os.ReadDir(dir)
 		if err != nil {
@@ -116,6 +128,12 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 				continue
 			}
 			if !dryRun {
+				if testHookBeforeFixInPlaceWrite != nil {
+					testHookBeforeFixInPlaceWrite(path)
+				}
+				if err := verifyFixInPlacePath(path, hashContent(content)); err != nil {
+					return err
+				}
 				if err := writeFileAtomic(path, fixed, 0o644); err != nil {
 					return err
 				}
@@ -169,6 +187,27 @@ func (s *FS) FixFrontmatter(dryRun bool) ([]domain.FixResult, error) {
 
 var testHookBeforeFixIDDestinationCreate func(source, destination string)
 var testHookBeforeFixIDSourceRemove func(source, destination string) error
+
+// A raw editor is outside the repository guard. Schedule drift at the final
+// in-place boundary rather than relying on timing to reproduce lost updates.
+var testHookBeforeFixInPlaceWrite func(path string)
+
+// Checks the captured source without typed decoding: repairing malformed YAML
+// must remain possible. A byte-identical symlink is not a scanned record. Raw
+// writers still retain the final check-to-replace window, as with other CAS paths.
+func verifyFixInPlacePath(path, version string) error {
+	info, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("%w: frontmatter repair file %s disappeared", domain.ErrConflict, path)
+		}
+		return fmt.Errorf("inspect frontmatter repair source %s: %w", path, err)
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("%w: frontmatter repair source %s is no longer a regular file", domain.ErrConflict, path)
+	}
+	return verifyFixPath(path, version)
+}
 
 // repairInvalidID canonicalises a misspelled entity id in BOTH the filename and the `id:`
 // field, returning a proposed new path without writing. i/l/o have a canonical Crockford decode

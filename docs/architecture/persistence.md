@@ -110,6 +110,13 @@ Preview claims no reservation. See
 
 ## Ordinary frontmatter ID repair
 
+[Ordinary lint repairs](../../internal/store/fix.go) reauthorize after acquiring
+the repository guard and check the captured source bytes and regular-file type
+before in-place replacement, without requiring malformed YAML to decode. Preview
+writes nothing and reserves nothing. Checked guard release retains both primary
+and finalization errors, including on a no-op; earlier completed repairs stay in
+the returned prefix. Raw writers retain the final check-to-replace window.
+
 [Lint spelling repair](../../internal/store/fix_relocation.go) rechecks source bytes
 and existing identity/reference authorization before exclusive destination creation,
 preserving source permissions. It checks both copies before source removal. Raw
