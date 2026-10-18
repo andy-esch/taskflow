@@ -1,0 +1,255 @@
+<div id="tfa-checkpoint">
+  <div class="mock-caption">Interaction sketch · simulated data · no files are changed</div>
+  <div class="viz-carousel" aria-label="Task creation interaction choices">
+    <section data-variant="Direct staged form — recommended" aria-label="Direct staged form">
+      <div class="terminal" data-mode="direct">
+        <header><span class="brand">taskflow</span><span class="scope">taskflow / main</span></header>
+        <nav aria-label="Sketch screens"><button type="button" data-screen="tasks" aria-pressed="true">tasks</button><button type="button" data-screen="atlas" aria-pressed="false">atlas</button><span class="hint">ctrl+p actions</span></nav>
+        <div class="notice" aria-live="polite"></div>
+        <main class="canvas">
+          <section class="tasks-screen">
+            <div class="backdrop" aria-hidden="true"><div>● Define TUI authoring interactions</div><div>○ Create tasks from the TUI</div><div>○ Register existing entry points</div></div>
+            <section class="dialog create-dialog" aria-label="New task" data-dialog="create">
+              <h2>New task <span class="accent">+</span></h2><div class="context">Save to <strong>taskflow / main</strong></div>
+              <form class="task-form">
+                <div class="field"><label><span>Title <span class="required">required</span></span><input name="title" value="Add Atlas entry-point actions" autocomplete="off" required></label><button type="button" class="field-select" hidden></button></div>
+                <div class="field"><label><span>Epic <span class="required">required</span></span><select name="epic"><option>18 · TUI planning browser</option><option>20 · CLI UX and ergonomics</option></select></label><button type="button" class="field-select" hidden></button></div>
+                <div class="field"><label><span>Tags <span class="required">required</span></span><input name="tags" value="tui, authoring" autocomplete="off" required></label><button type="button" class="field-select" hidden></button></div>
+                <div class="field"><label><span>Description <span class="optional">optional</span></span><input name="description" value="Register or forget an existing entry from Atlas." autocomplete="off" maxlength="200"></label><button type="button" class="field-select" hidden></button></div>
+                <details><summary>More options · using defaults</summary><div class="defaults">Priority medium · effort Unknown · tier 3 · autonomy 3</div></details>
+                <div class="staging">Nothing saved until Create · ready-to-start</div>
+                <div class="form-error" role="alert"></div>
+                <div class="buttons"><button type="button" data-action="cancel-create">Cancel</button><button type="button" data-action="submit-create" class="primary">Create task</button></div>
+                <div class="keyhint">Tab fields · Enter next / select · Esc cancel</div>
+              </form>
+            </section>
+            <section class="dialog success-dialog" data-dialog="success" aria-label="Creation result" hidden><h2>✓ Task created</h2><div class="result-title"></div><div class="context">taskflow / main · ready-to-start</div><div class="staging">Default scaffold ready for body prose.</div><div class="buttons"><button type="button" data-action="editor">Open in editor</button><button type="button" data-action="new-task" class="primary">New task</button></div></section>
+            <section class="dialog discard-dialog" data-dialog="discard" aria-label="Discard unsaved input" hidden><h2>Discard unsaved input?</h2><div class="context">This task has not been created.</div><div class="buttons"><button type="button" data-action="discard">Discard</button><button type="button" data-action="keep" class="primary">Keep editing</button></div></section>
+          </section>
+          <section class="atlas-screen" hidden>
+            <div class="atlas-heading">Spaces <span class="optional">j/k space · h/l entry</span></div>
+            <div class="space-card"><div class="space-title">taskflow <span class="optional">2 entry points · same planning space</span></div><button type="button" class="entry" data-entry="main" aria-pressed="true"><span>● main <span class="active-label">active</span></span><span class="path">~/git/taskflow</span></button><button type="button" class="entry" data-entry="tui-authoring" aria-pressed="false"><span>○ tui-authoring</span><span class="path">~/git/taskflow-authoring</span></button></div>
+            <div class="atlas-actions"><button type="button" data-action="register" class="primary">Register existing…</button><button type="button" data-action="forget">Forget selected…</button></div>
+            <div class="registry-note">Registration points to an existing checkout.<br>No initialization. No file deletion.</div>
+            <section class="dialog" data-dialog="register" aria-label="Register existing entry point" hidden><h2>Register existing entry point</h2><div class="context">Adds to your machine-local registry.</div><form class="register-form"><label><span>Existing checkout path</span><input name="path" value="~/git/touring-bike" required autocomplete="off"></label><label><span>Label <span class="optional">optional</span></span><input name="label" placeholder="default from checkout name" autocomplete="off"></label><div class="staging">An existing planning configuration is required.<br>Registering does not open or switch workspaces.</div><div class="buttons"><button type="button" data-action="cancel-register">Cancel</button><button type="button" data-action="submit-register" class="primary">Register entry</button></div></form></section>
+            <section class="dialog" data-dialog="forget" aria-label="Forget registration confirmation" hidden><h2>Forget registration?</h2><div class="forget-name"></div><div class="forget-path path"></div><div class="context">Planning space: taskflow</div><div class="active-warning"></div><div class="staging">Only this registration is removed.<br>Planning files, checkouts and other entries stay intact.</div><div class="buttons"><button type="button" data-action="confirm-forget" class="destructive">Forget registration</button><button type="button" data-action="cancel-forget" class="primary">Cancel</button></div></section>
+          </section>
+        </main>
+        <footer><button type="button" data-action="new-task">c new task</button><button type="button" data-action="palette">ctrl+p actions</button><span class="hint">? help</span></footer>
+        <section class="palette-dialog dialog" data-dialog="palette" aria-label="Contextual command palette" hidden><h2>Actions <span class="optional">ctrl+p</span></h2><label><span class="optional">Action or entity</span><input class="palette-query" placeholder="type to search…" autocomplete="off"></label><div class="palette-rows"></div><button type="button" data-action="close-palette">Esc close</button></section>
+      </div>
+    </section>
+    <section data-variant="Field-list form — like existing edits" aria-label="Field-list form" hidden></section>
+  </div>
+</div>
+<style>
+  #tfa-checkpoint { color-scheme: light dark; }
+  #tfa-checkpoint .mock-caption { color: light-dark(#55515e,#b9b4c5); font: 12px/1.5 system-ui,sans-serif; padding: 0 0 10px; }
+  #tfa-checkpoint .terminal { --tf-bg: light-dark(#faf8fc,#201e30); --tf-fg: light-dark(#242033,#e8e3ef); --tf-muted: light-dark(#625a70,#b3a9c3); --tf-border: light-dark(#aaa0b7,#635774); --tf-accent: light-dark(#942b87,#ef77df); --tf-panel: light-dark(#f5f0f8,#282338); --tf-select: light-dark(#ead9ef,#45304d); --tf-good: light-dark(#24663c,#80dca2); --tf-bad: light-dark(#9e3039,#ffabb3); position: relative; background: var(--tf-bg); color: var(--tf-fg); border: 1px solid var(--tf-border); font: 14px/1.5 ui-monospace,SFMono-Regular,Consolas,monospace; min-height: 690px; max-width: 920px; margin: 0 auto; }
+  #tfa-checkpoint .terminal header, #tfa-checkpoint nav, #tfa-checkpoint footer { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; padding: 10px 16px; }
+  #tfa-checkpoint .terminal header { border-bottom: 1px solid var(--tf-border); justify-content: space-between; }
+  #tfa-checkpoint .brand, #tfa-checkpoint .accent { color: var(--tf-accent); font-weight: 500; }
+  #tfa-checkpoint .scope, #tfa-checkpoint .hint, #tfa-checkpoint .optional, #tfa-checkpoint .context, #tfa-checkpoint .keyhint, #tfa-checkpoint .path { color: var(--tf-muted); }
+  #tfa-checkpoint .hint { margin-left: auto; }
+  #tfa-checkpoint .terminal button { font: inherit; color: inherit; background: transparent; border: 1px solid var(--tf-border); border-radius: 3px; padding: 6px 10px; }
+  #tfa-checkpoint .terminal button.primary, #tfa-checkpoint .terminal button[aria-pressed=true] { background: var(--tf-select); border-color: var(--tf-accent); }
+  #tfa-checkpoint .terminal button.destructive { color: var(--tf-bad); }
+  #tfa-checkpoint .terminal button:disabled { opacity: .6; }
+  #tfa-checkpoint .canvas { position: relative; min-height: 545px; padding: 12px 16px; }
+  #tfa-checkpoint .backdrop { position: absolute; top: 5px; opacity: .22; pointer-events: none; overflow-wrap: anywhere; }
+  #tfa-checkpoint .backdrop div { margin: 12px 0; }
+  #tfa-checkpoint .dialog { position: relative; z-index: 1; max-width: 590px; margin: 8px auto; padding: 16px; background: var(--tf-panel); border: 1px solid var(--tf-accent); border-radius: 6px; }
+  #tfa-checkpoint h2 { font: inherit; font-weight: 500; margin: 0 0 6px; }
+  #tfa-checkpoint .context { margin-bottom: 14px; overflow-wrap: anywhere; }
+  #tfa-checkpoint label { display: grid; gap: 5px; margin: 12px 0; }
+  #tfa-checkpoint label > span { display: flex; gap: 12px; justify-content: space-between; flex-wrap: wrap; }
+  #tfa-checkpoint .required, #tfa-checkpoint .optional, #tfa-checkpoint .keyhint { font-size: 12px; }
+  #tfa-checkpoint input, #tfa-checkpoint select { font: inherit; min-width: 0; width: 100%; box-sizing: border-box; padding: 7px 8px; background: var(--tf-bg); color: var(--tf-fg); border: 1px solid var(--tf-border); border-radius: 2px; }
+  #tfa-checkpoint .buttons { display: flex; gap: 10px; flex-wrap: wrap; justify-content: flex-end; margin-top: 16px; }
+  #tfa-checkpoint details { margin: 14px 0; }
+  #tfa-checkpoint summary { color: var(--tf-muted); }
+  #tfa-checkpoint .defaults { margin-top: 6px; }
+  #tfa-checkpoint .staging { font-size: 12px; margin-top: 15px; color: var(--tf-muted); }
+  #tfa-checkpoint .keyhint { margin-top: 12px; }
+  #tfa-checkpoint .form-error, #tfa-checkpoint .active-warning { color: var(--tf-bad); margin-top: 12px; }
+  #tfa-checkpoint .notice { padding: 0 16px; color: var(--tf-good); overflow-wrap: anywhere; }
+  #tfa-checkpoint .notice:empty, #tfa-checkpoint .form-error:empty, #tfa-checkpoint .active-warning:empty { display: none; }
+  #tfa-checkpoint .result-title { color: var(--tf-good); margin: 20px 0 8px; overflow-wrap: anywhere; }
+  #tfa-checkpoint footer { border-top: 1px solid var(--tf-border); }
+  #tfa-checkpoint .space-card { border: 1px solid var(--tf-border); padding: 12px; margin: 16px 0; }
+  #tfa-checkpoint .space-title, #tfa-checkpoint .atlas-heading { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  #tfa-checkpoint .entry { display: grid; text-align: left; width: 100%; margin-top: 10px; gap: 3px; overflow-wrap: anywhere; }
+  #tfa-checkpoint .active-label { color: var(--tf-good); margin-left: 12px; }
+  #tfa-checkpoint .atlas-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  #tfa-checkpoint .registry-note { margin: 18px 0; color: var(--tf-muted); font-size: 12px; }
+  #tfa-checkpoint .palette-dialog { position: absolute; top: 85px; left: 12px; right: 12px; z-index: 4; }
+  #tfa-checkpoint .palette-rows { display: grid; gap: 8px; margin-bottom: 12px; }
+  #tfa-checkpoint .palette-rows button { text-align: left; }
+  #tfa-checkpoint .field-select { width: 100%; text-align: left; margin: 7px 0; overflow-wrap: anywhere; }
+  #tfa-checkpoint [hidden] { display: none !important; }
+  #tfa-checkpoint .terminal.compact { max-width: 380px; }
+  @media(max-width:540px) { #tfa-checkpoint .dialog { padding: 12px; } #tfa-checkpoint .canvas { padding: 8px; min-height: 590px; } #tfa-checkpoint .terminal header, #tfa-checkpoint nav, #tfa-checkpoint footer { gap: 8px; padding: 10px; } #tfa-checkpoint input, #tfa-checkpoint select { font-size: 16px; } #tfa-checkpoint .hint { margin-left: 0; } }
+  @media(pointer:coarse) { #tfa-checkpoint .terminal button, #tfa-checkpoint input, #tfa-checkpoint select { min-height: 44px; } }
+</style>
+<script>
+(() => {
+  const root = document.getElementById('tfa-checkpoint');
+  const variants = root.querySelectorAll('[data-variant]');
+  const copy = variants[0].querySelector('.terminal').cloneNode(true);
+  copy.dataset.mode = 'list';
+  variants[1].appendChild(copy);
+  const allStates = [];
+  const remembered = window.openai?.widgetState?.privateContent;
+  function saveState() {
+    const ui = allStates.map(s => ({ screen: s.screen, entry: s.entry }));
+    if (window.openai?.setWidgetState) window.openai.setWidgetState({ modelContent: { prototype: 'tui-authoring-checkpoint' }, privateContent: { ui } }).catch(() => {});
+  }
+  root.querySelectorAll('.terminal').forEach((terminal, index) => {
+    const one = sel => terminal.querySelector(sel);
+    const state = { screen: 'tasks', entry: 'main', dirty: false, pending: false, entries: new Set(['main','tui-authoring']) };
+    allStates.push(state);
+    const form = one('.task-form');
+    function notice(text) { one('.notice').textContent = text; }
+    function closeDialogs() { terminal.querySelectorAll('[data-dialog]').forEach(el => { el.hidden = true; }); }
+    function showDialog(name) { closeDialogs(); const target = one('[data-dialog="'+name+'"]'); if(target) target.hidden = false; }
+    function showScreen(screen, persist = true) {
+      state.screen = screen;
+      closeDialogs();
+      one('.tasks-screen').hidden = screen !== 'tasks';
+      one('.atlas-screen').hidden = screen !== 'atlas';
+      terminal.querySelectorAll('[data-screen]').forEach(el => { el.setAttribute('aria-pressed', String(el.dataset.screen === screen)); });
+      one('footer [data-action="new-task"]').textContent = screen === 'tasks' ? 'c new task' : 'c register existing';
+      if (screen === 'tasks') showDialog('create');
+      if (persist) saveState();
+    }
+    function cancelCreate() { if(state.dirty) showDialog('discard'); else { closeDialogs(); notice('No task created. Use c new task to reopen.'); } }
+    function selectEntry(name, persist = true) {
+      state.entry = name;
+      terminal.querySelectorAll('[data-entry]').forEach(el => el.setAttribute('aria-pressed', String(el.dataset.entry === name)));
+      one('[data-action="forget"]').disabled = !state.entries.has(name);
+      if(persist) saveState();
+    }
+    function register() { showDialog('register'); }
+    function forget() {
+      if(!state.entries.has(state.entry)) return;
+      const entry = terminal.querySelector('[data-entry="'+state.entry+'"]');
+      one('.forget-name').textContent = state.entry;
+      one('.forget-path').textContent = entry.querySelector('.path').textContent;
+      one('.active-warning').textContent = state.entry === 'main' ? 'Active entry. This open checkout will stay usable, but unregistered.' : '';
+      showDialog('forget');
+    }
+    const actions = {
+      'new-task': () => { notice(''); state.screen === 'atlas' ? register() : showDialog('create'); },
+      'submit-create': () => form.dispatchEvent(new Event('submit', { cancelable: true, bubbles: true })),
+      'submit-register': () => one('.register-form').dispatchEvent(new Event('submit', { cancelable: true, bubbles: true })),
+      'cancel-create': cancelCreate,
+      'keep': () => showDialog('create'),
+      'discard': () => { form.reset(); state.dirty = false; closeDialogs(); notice('Unsaved input discarded. No task created.'); updateFieldRows(); },
+      'register': register,
+      'cancel-register': () => { closeDialogs(); notice('Registration cancelled. No entry added.'); },
+      'forget': forget,
+      'cancel-forget': () => { closeDialogs(); },
+      'confirm-forget': () => {
+        const removed = state.entry;
+        state.entries.delete(removed);
+        terminal.querySelector('[data-entry="'+removed+'"]').hidden = true;
+        one('.space-title .optional').textContent = state.entries.size + ' entry point(s) · same planning space';
+        if(!state.entries.size) one('.space-card').hidden = true;
+        state.entry = Array.from(state.entries)[0] || '';
+        selectEntry(state.entry);
+        closeDialogs();
+        notice(removed === 'main' ? 'Registration forgotten. Current checkout remains open · not registered. Files unchanged.' : 'Registration forgotten. Files and other entry points unchanged.');
+      },
+      'editor': () => notice('Sketch: explicit handoff to $EDITOR for the new task. No editor launched.'),
+      'close-palette': () => { one('[data-dialog="palette"]').hidden = true; },
+      'palette': () => {
+        one('[data-dialog="palette"]').hidden = false;
+        one('.palette-query').value = '';
+        paletteRows('');
+      }
+    };
+    function paletteRows(query) {
+      const rows = one('.palette-rows'); rows.replaceChildren();
+      const options = state.screen === 'atlas' ? [['Register existing entry point…','register'],['Forget registration '+state.entry+'…','forget']] : [['New task in taskflow / main…','new-task'],['New task for selected epic…','new-task']];
+      options.filter(([label]) => label.toLowerCase().includes(query.toLowerCase())).forEach(([label,action]) => {
+        const b = document.createElement('button'); b.type = 'button'; b.textContent = label;
+        b.addEventListener('click', () => { one('[data-dialog="palette"]').hidden = true; actions[action](); }); rows.appendChild(b);
+      });
+    }
+    terminal.querySelectorAll('[data-action]').forEach(b => b.addEventListener('click', () => { if(!state.pending) actions[b.dataset.action]?.(); }));
+    terminal.querySelectorAll('[data-screen]').forEach(b => b.addEventListener('click', () => {
+      if(state.pending || b.dataset.screen === state.screen) return;
+      if(!one('[data-dialog="create"]').hidden && state.dirty) { showDialog('discard'); notice('Finish or discard this draft before switching screens.'); return; }
+      showScreen(b.dataset.screen);
+    }));
+    terminal.querySelectorAll('[data-entry]').forEach(b => b.addEventListener('click', () => selectEntry(b.dataset.entry)));
+    one('.palette-query').addEventListener('input', e => paletteRows(e.target.value));
+    form.addEventListener('input', () => { state.dirty = true; one('.form-error').textContent = ''; });
+    form.addEventListener('change', () => { state.dirty = true; updateFieldRows(); });
+    form.addEventListener('submit', e => {
+      e.preventDefault(); if(state.pending) return;
+      if(!form.elements.namedItem('title').value.trim()) { one('.form-error').textContent = 'Title is required. Your input has been kept.'; return; }
+      const tags = form.elements.namedItem('tags').value.trim();
+      if(!tags) { one('.form-error').textContent = 'Tags are required. Your input has been kept.'; return; }
+      const button = form.querySelector('[data-action="submit-create"]'); state.pending = true; button.disabled = true; button.textContent = 'Saving in taskflow / main…';
+      setTimeout(() => {
+        state.pending = false; button.disabled = false; button.textContent = 'Create task'; state.dirty = false;
+        one('.result-title').textContent = form.elements.namedItem('title').value;
+        showDialog('success'); notice('✓ Simulated create · focus remains on the new task.'); saveState();
+      },400);
+    });
+    one('.register-form').addEventListener('submit', e => {
+      e.preventDefault();
+      const rf = e.target; const label = rf.elements.namedItem('label').value.trim() || 'touring-bike';
+      closeDialogs(); notice('Simulated registration: '+label+'. Active workspace unchanged. Enter would explicitly open it.');
+    });
+    function updateFieldRows() {
+      if(terminal.dataset.mode !== 'list') return;
+      form.querySelectorAll('.field').forEach(row => {
+        const input = row.querySelector('input,select'); const label = row.querySelector('label'); const b = row.querySelector('.field-select');
+        b.textContent = label.querySelector('span').firstChild.textContent.trim()+': '+input.value;
+        b.hidden = false; label.hidden = true;
+      });
+    }
+    if(terminal.dataset.mode === 'list') {
+      one('.keyhint').textContent = '↑↓ fields · Enter edit / accept · Create row submits';
+      form.querySelectorAll('.field').forEach(row => {
+        const b = row.querySelector('.field-select'); const label = row.querySelector('label'); const input = row.querySelector('input,select');
+        b.addEventListener('click', () => { updateFieldRows(); b.hidden = true; label.hidden = false; input.focus(); });
+        input.addEventListener('keydown', e => { if(e.key === 'Enter') { e.preventDefault(); e.stopPropagation(); updateFieldRows(); b.focus(); } });
+      });
+      updateFieldRows();
+    }
+    terminal.addEventListener('keydown', e => {
+      if(e.key === 'Escape') {
+        e.preventDefault(); if(state.pending) return;
+        if(!one('[data-dialog="palette"]').hidden) actions['close-palette']();
+        else if(state.screen === 'tasks') cancelCreate();
+        else closeDialogs();
+      }
+      if(e.ctrlKey && e.key === 'p') { e.preventDefault(); if(!state.pending) actions.palette(); }
+      if(e.key === 'Enter' && e.target.tagName === 'INPUT' && form.contains(e.target)) {
+        e.preventDefault(); const inputs = Array.from(form.querySelectorAll('input,select,button[data-action="submit-create"]')); const next = inputs[inputs.indexOf(e.target)+1]; next?.focus();
+      }
+    });
+    const saved = remembered?.ui?.[index];
+    if(saved?.entry && state.entries.has(saved.entry)) selectEntry(saved.entry,false);
+    showScreen(saved?.screen === 'atlas' ? 'atlas' : 'tasks',false);
+    state.restoreUI = ui => {
+      if(state.dirty || state.pending) return;
+      if(ui?.entry && state.entries.has(ui.entry)) selectEntry(ui.entry,false);
+      if(ui?.screen === 'tasks' || ui?.screen === 'atlas') showScreen(ui.screen,false);
+    };
+    if(globalThis.Tweak) {
+      const options = { width: 'Roomy' };
+      const tweak = new Tweak({ container: terminal, onChange: () => terminal.classList.toggle('compact',options.width === 'Narrow') });
+      tweak.addSelect(options,'width',{label:'Terminal width',options:['Roomy','Narrow']});
+    }
+  });
+  window.addEventListener('openai:set_globals', event => {
+    const ui = event.detail?.globals?.widgetState?.privateContent?.ui;
+    if(!Array.isArray(ui)) return;
+    allStates.forEach((state,index) => state.restoreUI(ui[index]));
+  });
+})();
+</script>

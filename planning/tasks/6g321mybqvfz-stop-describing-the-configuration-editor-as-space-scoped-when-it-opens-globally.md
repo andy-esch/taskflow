@@ -57,6 +57,7 @@ person who built it, which is about as strong a discoverability signal as exists
 
 ## Related
 
+- [Authoring Thread](../threads/6gmshnmnew7p-enable-routine-planning-and-workspace-management-in-the-tui.md): reuse this existing editor rather than build another preferences screen. This clarification can proceed independently of new authoring forms.
 - Epic [20-cli-ux-and-ergonomics](../epics/20-cli-ux-and-ergonomics.md)
 - Surfaces: `internal/configui/editor.go`, `internal/tui/help.go`, `internal/cli/config.go`
 
