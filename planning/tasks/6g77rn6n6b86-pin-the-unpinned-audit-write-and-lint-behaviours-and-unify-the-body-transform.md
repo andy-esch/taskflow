@@ -3,14 +3,16 @@ schema: 1
 id: 6g77rn6n6b86
 status: next-up
 epic: 21-code-quality-architecture-hardening
-description: Five merged behaviours survive deletion with the suite green; two doc comments were captured by inserted declarations, one already in a generated artifact.
+description: Pin five mutation-surviving audit write/lint behaviours with focused tests, then unify the TransformAuditBody/TransformTaskBody twins behind one typed helper.
 effort: 4-6 hours
 tier: 3
 priority: medium
 autonomy_level: 3
 tags: [audit, store, tests, hygiene]
 created: "2026-09-05"
-updated_at: "2026-10-06"
+updated_at: "2026-10-18"
+audit_sources: [2026-10-18-weekly-task-sweep]
+audited: "2026-10-18"
 ---
 
 # Pin the unpinned audit write and lint behaviours, and unify the body-transform twins
@@ -95,3 +97,51 @@ AC 7 is met here rather than left as stale work. New tests also cover empty/unpa
 rendering and evidence upgrades in IntroducedNearMissHeaders, but the remaining
 mutation-killing behavior pins and shared body-transform extraction are not claimed
 complete. Keep those independent review units scoped here.
+
+## Sweep refresh (2026-10-18)
+
+2026-10-18: automated weekly sweep — the behaviour pins are all still open and
+still correctly described, but the extraction surface named in AC 8 has moved
+underneath the task since the 2026-10-06 note.
+
+**Verified open — the pins have not landed.**
+
+- AC 1: `internal/store/audit_edit_test.go` has twelve `EditAudit`/`AppendAuditBody`
+  tests and none of them exercises an introduced near-miss header. The near-miss
+  write coverage that exists is on the *append* and *transform* paths
+  (`TestAppendAuditBody_RefusesIntroducedNearMissHeader`,
+  `TestTransformAuditBody_RepairPathIsNotBlockedByTheWriteGuard`,
+  `internal/store/nearmiss_write_test.go:34,115`). The direct `EditAudit` guard
+  test this criterion asks for is still absent, so the mutation it targets still
+  survives.
+- AC 8: the twins are still two separate implementations —
+  `TransformAuditBody` (`internal/store/body.go:192`) and `TransformTaskBody`
+  (`internal/store/body.go:252`). The generic `writeBody[T]`
+  (`internal/store/body.go:25`) already shares the tail of the sequence; what
+  remains duplicated is the preamble (authorize → planner reject → resolve →
+  read → split → transform → normalize → no-op short-circuit).
+
+**Drift found — the resolver axis gained a typed mutation target.** The task
+frames the risky substitutions as "each entity's noun, resolver, parser, and
+compare-and-swap recheck". Since `a05faad` (*fix(tasks): pin body and field writes
+to source identities*) and `db7ad6b` (*fix(entities): bind non-task writes to
+selected source identities*), both twins additionally take a typed mutation
+target — `core.AuditMutationTarget` and `core.TaskMutationTarget` — resolve
+through `resolveAuditMutationTarget` / `resolveTaskMutationTarget`, and thread
+`target.ID` into their `verifyUnchanged` recheck (`internal/store/body.go:195-245`
+and `:255-300`; new files `internal/store/entity_target.go`,
+`internal/core/entity_target.go`). That is a fifth crossable axis, and it is the
+one most likely to be crossed silently: swapping the target type still compiles
+against a generic helper's type parameter, and the identity it carries is exactly
+what the CAS recheck trusts.
+
+**Recommendation (not actioned):** when AC 9's shared table-driven contract is
+written, add a case that proves the helper cannot be invoked with one entity's
+mutation target and the other's resolver/parser — an impostor-ID case in the
+shape of the existing `internal/store/entity_target_test.go`. This is a
+suggestion for the implementer; the sweep did not add a criterion for it.
+
+**Dependency state (2026-10-18).** `gate: clear`, `eligible: true`,
+`role: queued`, no blockers. The four "adjacent ownership" tasks named under
+Related are coordination pointers, not `depends_on` edges, which matches the
+prose.
