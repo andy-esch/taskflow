@@ -10,8 +10,9 @@ priority: high
 autonomy_level: 2
 tags: [tui, ux, navigation, information-architecture, research, design]
 created: "2026-09-10"
-updated_at: "2026-10-10"
+updated_at: "2026-10-18"
 depends_on: [6g86c7y6hn41]
+audited: "2026-10-18"
 ---
 # Reassess TUI navigation and information architecture at current scale
 
@@ -102,3 +103,27 @@ Evaluate how consequential durable warnings remain discoverable without applying
 old selection state, overwriting newer feedback, or suggesting an already-committed
 write should be retried. This is design follow-up, not a reproduced wrong-target
 write or a change to cancellation policy.
+
+## Sweep refresh (2026-10-18)
+
+2026-10-18: automated weekly sweep — re-verified every citation; no drift. The
+task's premise and all of its evidence still hold against current `internal/tui/`.
+
+**Verified accurate (2026-10-18).**
+
+- The `?` overlay is still titled `Keys` and still rendered from a single
+  key-reference heading (`internal/tui/help.go:307`), with `internal/tui/model_test.go:1338`
+  asserting that title. The "cannot know whether Thread summary, dependency ranks,
+  the full graph, or one-hop focus is active" observation is unchanged.
+- The stale-result behaviour described under "Lifecycle feedback evidence" is exactly
+  what the code does: `internal/tui/model.go:448-460` compares `kind`, `selectedRef()`,
+  and `loadGen`, then reloads without applying the old result's flash/editor state,
+  dropping any committed cleanup warning it carried. The audit this section cites
+  (`planning/audits/6gm337aba0bh-...`) exists and is unchanged.
+- All four cross-referenced task/thread links under "Related" resolve.
+
+**Dependency state (2026-10-18).** `gate: clear`, `eligible: true`, `role: queued`.
+The single `depends_on` edge (`6g86c7y6hn41`, the one-hop focus subgraph mode) is
+`completed` with 6/6 criteria met, so nothing gates this task any more. Three
+tier-2/high TUI tasks now wait on it — `add-a-reusable-back-action-for-tui-entity-navigation`
+names it directly in `depends_on`. This is the head of the TUI navigation queue.

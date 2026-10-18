@@ -11,8 +11,9 @@ autonomy_level: 3
 tags: [schema, frontmatter, validation, compatibility]
 created: "2026-09-06"
 depends_on: [6fkkz41cax80]
-updated_at: "2026-09-07"
-audit_sources: [2026-09-07-arch-data-model-and-storage]
+updated_at: "2026-10-18"
+audit_sources: [2026-09-07-arch-data-model-and-storage, 2026-10-18-weekly-task-sweep]
+audited: "2026-10-18"
 ---
 
 # Enforce reserved document schema versions across entity writers
@@ -75,3 +76,53 @@ adding a Thread-only check that leaves every sibling entity with different upgra
 - Compatibility guide [Threads compatibility and preview graduation](../../docs/THREADS_COMPATIBILITY.md)
 
 Reinforced by audit 2026-09-07-arch-data-model-and-storage: M2. Corpus inventory as of 2026-09-07 — 93 documents carry no `schema:` key (86/334 tasks, 5/15 epics, 2/69 audits; research and Threads are complete). `lint --fix` does not backfill it, so absence must be decided (backfill now, or declare absence == 1 permanently) before the first real bump.
+
+## Sweep refresh (2026-10-18)
+
+2026-10-18: automated weekly sweep — the design is unchanged and unstarted, but
+the corpus inventory at the foot of this task has moved and a new document kind
+has appeared that the rollout decision now has to cover.
+
+**Corpus inventory refreshed (2026-10-18).** The original count was taken on
+2026-09-07. Re-counting `grep -L '^schema:'` across `planning/`:
+
+| Kind | Missing `schema:` 2026-09-07 | Missing `schema:` 2026-10-18 |
+| --- | --- | --- |
+| tasks | 86 / 334 | 86 / 426 |
+| epics | 5 / 15 | 5 / 15 |
+| audits | 2 / 69 | 2 / 193 |
+| research | 0 / — | 0 / 33 |
+| threads | 0 / — | 0 / 10 |
+| **ADRs** | not counted | **7 / 8** |
+
+The three original absolute counts are *identical* six weeks later while the
+denominators grew by 92 tasks and 124 audits. That is the useful signal: every
+document written by the tool since the marker shipped carries `schema:`, so the
+93 (now 94, excluding ADRs) schema-less documents are a closed, pre-marker
+backlog that is not growing. Backfilling is a bounded one-time migration, not a
+moving target — which makes "backfill now" materially cheaper than the
+2026-09-07 framing suggested.
+
+**New information — ADRs are a document kind this task does not yet cover.**
+`planning/adrs/` holds 8 documents and 7 carry no `schema:` key. They are not yet
+a registered entity: `tskflwctl schema` lists doc kinds as
+`task, epic, audit, research, thread`, so ADRs are neither parsed nor linted as
+entities today. But ADRs are an explicit deliverable of
+epic 28-first-class-entities-new-planning-nouns (currently 63%, "routines,
+projects, ADRs"). This task's Scope line says "tasks, epics, audits, research,
+Threads, and future registered entity kinds" — ADRs are exactly that case, and
+they will arrive *already carrying* a schema-less legacy corpus. Whichever way
+the policy decides absence, the ADR noun should not be registered before the
+decision lands, or it inherits the same ambiguity on day one.
+
+**Verified accurate (2026-10-18).** `lint --fix` still does not backfill
+`schema:` — its help text scopes repairs to "ordinary frontmatter and missing
+ids" with graph-owned fields skipped, and nothing in `internal/store/fix.go`
+touches the schema key. The policy dependency and both cross-links resolve.
+
+**Dependency state (2026-10-18).** `gate: blocked`, `eligible: false`,
+`role: candidate`. The single blocker is `6fkkz41cax80`
+(`adr-close-frontmatter-schema-policy-questions`, `next-up`, reason
+`not-started`), which matches this task's Scope line exactly — no prose/graph
+disagreement. That blocker is itself `gate: clear` and eligible, so this task is
+one task away from startable.

@@ -11,7 +11,8 @@ autonomy_level: 3
 tags: [store, concurrency, architecture, ux]
 created: "2026-09-04"
 audit_sources: [planning/audits/6g6qvrj15x97-2026-09-04-concurrency-and-atomicity.md, planning/audits/6gc7jd9aq1q9-2026-09-21-arch-failure-and-recovery.md]
-updated_at: "2026-09-22"
+updated_at: "2026-10-18"
+audited: "2026-10-18"
 ---
 # Design bounded and observable repository lock acquisition
 
@@ -52,3 +53,35 @@ Make repository-lock contention bounded and diagnosable without coupling the fil
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
 - Audit [2026-09-04 concurrency and atomicity](../audits/6g6qvrj15x97-2026-09-04-concurrency-and-atomicity.md)
 - Audit [2026-09-21 architecture: failure and recovery](../audits/6gc7jd9aq1q9-2026-09-21-arch-failure-and-recovery.md), finding M3
+
+## Sweep refresh (2026-10-18)
+
+2026-10-18: automated weekly sweep — re-verified every citation; no drift. The
+lock contract is untouched since this task was filed, so the design problem is
+unchanged and nothing here has partially shipped.
+
+**Verified accurate (2026-10-18).**
+
+- `repositoryGuard.write` still exists as the same-process half of the guard
+  (`internal/store/lock.go:16-20`), reached through `repositoryGuardFor` /
+  `processRepositoryLock` (`internal/store/lock.go:51-65`).
+- The platform half is still an unbounded `syscall.Flock(fd, LOCK_EX)` with no
+  deadline, cancellation, or progress signal (`internal/store/lock_unix.go:21-29`).
+  Both AC 1 and AC 3 remain fully open.
+- `internal/store` still takes no `io.Writer` and emits no presentation text on
+  the lock path, so AC 2's "do not couple the store to terminal output" constraint
+  is still a constraint rather than a regression to repair.
+- `config doctor` (`internal/cli/doctor.go`) reports no network/FUSE/mount
+  evidence of any kind, so AC 5 and AC 6 are untouched.
+- Both cited audits exist: `6g6qvrj15x97-2026-09-04-concurrency-and-atomicity.md`
+  and `6gc7jd9aq1q9-2026-09-21-arch-failure-and-recovery.md`.
+
+**Churn note.** `internal/store` is one of the hottest directories in the repo
+(last touched 2026-10-17), but none of that churn reached the lock path: since
+this task was created on 2026-09-04 the only commit touching `lock.go` or
+`lock_unix.go` is `06546ca`. The recent work landed in `fix.go`, `rename.go`,
+`cas.go`, and `flatname.go`. Directory-level churn overstates the drift here.
+
+**Dependency state (2026-10-18).** `gate: clear`, `eligible: true`,
+`role: candidate`, no blockers. Consistent with the body, which claims no
+prerequisites.
