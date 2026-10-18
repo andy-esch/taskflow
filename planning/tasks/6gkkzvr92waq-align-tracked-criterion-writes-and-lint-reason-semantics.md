@@ -41,6 +41,9 @@ SetCriteriaTracked formats an ID prefix into the raw reason. SetCriteriaState va
 
 ## Related
 
+- Also belongs to the [TUI authoring Thread](../threads/6gmshnmnew7p-enable-routine-planning-and-workspace-management-in-the-tui.md)
+  as a prerequisite of criterion actions. Its policy question remains open; this
+  does not gate task creation or Atlas management.
 - [Correctness detour](6gkg89ay3b5b-fix-task-identity-guards-and-deterministic-field-updates.md): sequence after its canonical identity guard rather than repeat the slug/raw-ref bug.
 - [Criterion vocabulary decisions](6g31g9f8x4cv-let-an-acceptance-criterion-say-more-than-done-or-not-done.md).
 - [Correctness audit](../audits/6gk9j6ff3ke9-2026-10-13-correctness-and-errors.md): owner-discovered during follow-up probes, not an original external-review finding.

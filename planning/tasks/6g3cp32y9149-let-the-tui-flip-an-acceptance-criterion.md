@@ -3,56 +3,57 @@ schema: 1
 id: 6g3cp32y9149
 status: ready-to-start
 epic: 20-cli-ux-and-ergonomics
-description: The TUI renders the acceptance roll-up but cannot change a criterion — every flip drops to the CLI
-effort: Unknown
-tier: 3
+description: Edit selected criterion states and core-required reason or handoff inputs from task detail, with explicit authoring scope and stale-child protection.
+effort: 1-2 days
+tier: 2
 priority: medium
 autonomy_level: 3
 tags: [tui, domain, ux]
 created: "2026-08-24"
-updated_at: "2026-10-04"
+updated_at: "2026-10-18"
 audited: "2026-10-04"
+depends_on: [6gkkzvr92waq, 6gmshzw7we0m]
 ---
+# Let the TUI flip an acceptance criterion
+
 ## Objective
 
-The TUI can now *show* a task's acceptance criteria — the detail header carries a roll-up
-with the finding glyph vocabulary — but it cannot change one. `grep -rn "SetCriterionState"
-internal/tui/` returns nothing. Every flip, deferral, or reword means quitting to the CLI,
-which is the one thing the browser exists to avoid.
+Make the criterion roll-up actionable: select a task criterion, inspect its text
+and current disposition, then change state without leaving task detail.
 
-That asymmetry is new. Before the criterion vocabulary shipped, a criterion was a checkbox
-in body prose and reading it in the rendered markdown was the whole story. Now it carries a
-state and a reason, the header advertises them, and the surface that advertises a decision
-is the natural place to make one.
+## Scope and design checkpoint
 
-## What exists to build on
+State changes are the baseline. Before implementation, settle whether simple
+add/reword/remove authoring belongs in this slice; if not, explicitly track that
+work. The owner approved routine TUI authoring generally, not this finer boundary.
+On 2026-10-18 the owner explicitly left this decision for later. Revisit it at
+this task's kickoff; it does not hold the shared creation checkpoint open.
+The existing [tracked write/lint policy alignment](6gkkzvr92waq-align-tracked-criterion-writes-and-lint-reason-semantics.md)
+is a separate prerequisite. Reuse its owner-approved policy rather than choosing
+different reason requirements in the form.
 
-- `core.Service.SetCriterionState` and `EditCriteria` are the write paths, both atomic and
-  frontmatter-preserving; the TUI reads through `core.Service` as `tea.Cmd`s already.
-- `domain.TallyCriteria` and `theme.CriterionState` give the counts and the marks.
-- `criterionRollup` in `internal/tui/detail.go` renders the header line.
-- The entity-action machinery (`internal/tui/entity.go`) already runs lifecycle transitions
-  through the service and reports failures as an error flash — the completion gate's refusal
-  surfaces that way today.
+Use the core criterion policy and its required reason or destination inputs rather
+than copying a state/reason matrix into the TUI. Long prose remains in $EDITOR.
+Coordinate with the [authoring interaction contract](6gmshzw7we0m-define-the-tui-authoring-and-workspace-action-contract.md)
+for selection, state choice and input placement.
 
-## Open questions
+## Implementation constraints
 
-1. **Where does the interaction live?** A criterion is body content, and the detail pane
-   renders markdown rather than a list of selectable rows. Options: a dedicated criteria
-   sub-view, an inline overlay from the header roll-up, or a command-palette action taking
-   an index. The third is cheapest and least like the rest of the TUI.
-2. **How is a reason typed?** `deferred`, `wontfix`, `tracked`, and `n/a` all REQUIRE one, so
-   a state change is not a single keypress — it needs a text input, which the config editor
-   already has a pattern for.
-3. **Does `--add`/`--remove`/`--replace` belong here at all?** Flipping a state is a
-   decision made while reading; adding or rewording a criterion is authoring, which `task
-   edit` and the CLI arguably serve better. Scoping this to STATE changes only would keep it
-   small and is probably the right first cut.
+`SetCriterionState` and `EditCriteria` are existing core write paths, not proof that
+a selected-child mutation is already safe. Bind the displayed task and criterion
+intent across body edits and reordered criteria; a stale list index or fresh
+reference lookup must not target a different item. Add a bounded core seam if
+needed, and perform I/O only in tea.Cmd.
+
+Use the existing criterion marks and refresh the roll-up after writes. Preserve
+input on refusal and present committed/partial recovery truthfully. Do not change
+criterion policy merely to simplify the form.
 
 ## Acceptance criteria
 
-- [ ] A decision is recorded on question 3 before any code — whether this covers state
-      changes only, or criterion authoring as well.
+- [ ] Record the owner's decision on state-only v1 versus simple
+  add/reword/remove authoring before implementation; explicitly track excluded
+  authoring scope rather than silently dropping it.
 - [ ] A criterion's state can be changed from the task detail view without leaving the TUI,
       including the states that require a reason.
 - [ ] The write goes through `core.Service`, as a `tea.Cmd` — no store access and no I/O in
@@ -63,39 +64,20 @@ is the natural place to make one.
 - [ ] The help legend covers whatever keys this adds.
 - [ ] Suite + lint green; no new glyph or colour vocabulary — `theme.CriterionState` already
       owns the marks.
+- [ ] Bind the selected task and displayed criterion intent across body edits,
+  reorder, reload and workspace changes; do not apply a stale criterion index or
+  restart reference lookup against a different source.
 
 ## Out of scope
 
-- Editing criteria in the atlas or any cross-space view. A criterion belongs to one task in
-  one workspace.
-- A general body editor. `task edit` opens `$EDITOR` on the whole file and that remains the
-  answer for prose.
+A general Markdown editor, cross-space batch changes, or a new criterion policy.
+Simple criterion authoring remains an explicit design decision, not a silent
+promise or exclusion.
 
 ## Related
 
-Follows the criterion vocabulary (`6g31g9f8x4cv`) and the `task ac` write surface. M4 of
-[2026-07-24-ai-agent-cli-ergonomics](../audits/6fsa47r4f7es-2026-07-24-ai-agent-cli-ergonomics.md)
-covers the CLI half of structure-aware writes; this is the browser half, which that finding
-does not discuss.
-
-## Sweep verification (2026-10-04)
-
-Every reference in *What exists to build on* re-verified; all accurate, including
-the negative claim:
-
-- `grep -rn "SetCriterionState" internal/tui/` still returns **zero** hits — the
-  asymmetry the Objective describes is intact
-- `core.Service.SetCriterionState` — `internal/core/service_task.go:408`
-- `core.Service.EditCriteria` — `internal/core/service_task.go:461`
-- `domain.TallyCriteria` — `internal/domain/body.go:498`
-- `theme.CriterionState` — `internal/theme/theme.go:146`
-- `criterionRollup` — `internal/tui/detail.go:823`, called from `detail.go:806`
-- the entity-action machinery — `internal/tui/entity.go` present
-
-No drift found: nothing this task assumes has moved, and no part of it has shipped.
-Open questions 1-3 are left untouched and undecided — question 3 gates the first
-criterion by the task's own design, and deciding it is a human call.
-
-2026-10-04: automated weekly sweep — all seven cited symbols re-verified accurate
-(including zero `SetCriterionState` hits in the TUI); no drift, task remains
-accurately scoped and unstarted.
+- [Authoring Thread](../threads/6gmshnmnew7p-enable-routine-planning-and-workspace-management-in-the-tui.md).
+- [Core criterion operations](../../internal/core/service_task.go).
+- [Criterion parsing and tally](../../internal/domain/body.go).
+- [TUI detail and roll-up](../../internal/tui/detail.go).
+- [TUI interaction and refresh contracts](../../docs/architecture/tui.md).

@@ -44,3 +44,7 @@ must not change the new workspace's health or re-arm listeners/debounce work the
 [Concurrency audit L1](../audits/6gm8g0f66k80-2026-10-16-concurrency-and-atomicity.md).
 Join Refine Thread and TUI navigation as an independent correctness follow-up;
 there is no implementation dependency on graph-repair retry selection.
+
+Also reused by the [TUI authoring Thread](../threads/6gmshnmnew7p-enable-routine-planning-and-workspace-management-in-the-tui.md).
+Its final cross-workspace walkthrough depends on this fix; individual creation
+forms do not need to wait for an unrelated whole-navigation redesign.
