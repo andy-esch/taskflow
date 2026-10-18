@@ -14,9 +14,28 @@ type PlanningRepairResult struct {
 	Fixes       []domain.FixResult
 	LintResults []LintResult
 	Problems    []LoadProblem
+	// Committed records at least one completed repair/cleanup or a written
+	// relocation destination. Proposals and skipped rows never count. This is
+	// historical operation evidence, not proof of current content or existence.
+	Committed bool
 	// Relocation reports progress inside a failed frontmatter move separately
 	// from completed/proposed fixes. It is local adapter evidence, not authority.
 	Relocation *FrontmatterRepairRelocation
+}
+
+// RecoveryError preserves cause classification and adds ordinary committed-prefix
+// guidance, including failures while presenting a successful repair result.
+// It neither duplicates an existing recovery error nor replaces relocation's
+// more specific reconciliation advice. See docs/architecture/persistence.md.
+func (r PlanningRepairResult) RecoveryError(cause error) error {
+	if cause == nil || !r.Committed || r.Relocation != nil {
+		return cause
+	}
+	var existing *PlanningRepairFailure
+	if errors.As(cause, &existing) {
+		return cause
+	}
+	return &PlanningRepairFailure{Cause: cause}
 }
 
 // RepairPlanning performs ordinary frontmatter repairs, then finding-header
@@ -24,8 +43,19 @@ type PlanningRepairResult struct {
 // matters: frontmatter repair may rename a source before body repair resolves it.
 // The mutation adapter remains responsible for authorization and durable-prefix
 // reporting; a service never retries this multi-file operation wholesale.
-func (s *Service) RepairPlanning(dryRun bool) (PlanningRepairResult, error) {
-	var result PlanningRepairResult
+func (s *Service) RepairPlanning(dryRun bool) (result PlanningRepairResult, err error) {
+	defer func() {
+		if !dryRun {
+			result.Committed = result.Relocation != nil && result.Relocation.DestinationWritten
+			for _, fixed := range result.Fixes {
+				if !fixed.Skipped {
+					result.Committed = true
+					break
+				}
+			}
+		}
+		err = result.RecoveryError(err)
+	}()
 	if s.frontmatterRepairs == nil {
 		return result, fmt.Errorf("%w: frontmatter repair is unavailable from this service", domain.ErrValidation)
 	}
@@ -37,7 +67,6 @@ func (s *Service) RepairPlanning(dryRun bool) (PlanningRepairResult, error) {
 	if !dryRun && s.lintReads == nil {
 		return result, fmt.Errorf("%w: post-repair lint is unavailable from this service", domain.ErrValidation)
 	}
-	var err error
 	result.Fixes, err = s.frontmatterRepairs.FixFrontmatter(dryRun)
 	if err != nil {
 		var failure *FrontmatterRepairFailure

@@ -73,7 +73,7 @@ func TestRepairPlanningRetainsActualBodyRepairPrefix(t *testing.T) {
 			}
 			receipt, err := MustNewService(fake).RepairPlanning(dryRun)
 			want := []string{fmt.Sprintf("frontmatter/%t", dryRun), "audit snapshot", "body/opaque-first", "body/opaque-second"}
-			if !errors.Is(err, sentinel) || len(receipt.Fixes) != 2 || len(receipt.Fixes[1].Changes) != 1 || !slices.Equal(fake.events, want) {
+			if !errors.Is(err, sentinel) || receipt.Committed == dryRun || len(receipt.Fixes) != 2 || len(receipt.Fixes[1].Changes) != 1 || !slices.Equal(fake.events, want) {
 				t.Fatalf("repair=%+v err=%v events=%v want=%v", receipt, err, fake.events, want)
 			}
 			if receipt.Fixes[1].Path != "" || fake.bodies["second"] != body {
@@ -96,7 +96,7 @@ func TestRepairPlanningRetainsPartialRelocationBesideCompletedPrefix(t *testing.
 	}}
 	fake := &maintenanceStore{fixes: []domain.FixResult{{Path: "/planning/tasks/earlier.md", Changes: []string{"tags normalized"}}}, fixErr: failure}
 	result, err := MustNewService(fake).RepairPlanning(false)
-	if !errors.Is(err, domain.ErrConflict) || len(result.Fixes) != 1 || result.Relocation == nil || *result.Relocation != failure.Relocation {
+	if !errors.Is(err, domain.ErrConflict) || !result.Committed || len(result.Fixes) != 1 || result.Relocation == nil || *result.Relocation != failure.Relocation {
 		t.Fatalf("result=%+v err=%v", result, err)
 	}
 	if !slices.Equal(fake.events, []string{"frontmatter/false"}) {
@@ -105,6 +105,70 @@ func TestRepairPlanningRetainsPartialRelocationBesideCompletedPrefix(t *testing.
 	failure.Relocation.DestinationPath = "changed adapter receipt"
 	if result.Relocation.DestinationPath != "/planning/tasks/corrected.md" {
 		t.Fatal("application retained mutable adapter outcome")
+	}
+}
+
+func TestRepairPlanningClassifiesDurableProgressWithoutReplay(t *testing.T) {
+	for _, scenario := range []string{"completed repair", "cleanup", "skipped", "no-op", "preview", "partial relocation"} {
+		t.Run(scenario, func(t *testing.T) {
+			primary, release := domain.ErrConflict, errors.New("finalization failed")
+			fake := &maintenanceStore{
+				fixes:  []domain.FixResult{{Changes: []string{"ordinary field repaired"}}},
+				fixErr: errors.Join(primary, release),
+			}
+			wantCommitted, dryRun := true, false
+			switch scenario {
+			case "cleanup":
+				fake.fixes[0].Changes = []string{"removed stale temp orphan"}
+			case "skipped":
+				fake.fixes[0].Skipped = true
+				wantCommitted = false
+			case "no-op":
+				fake.fixes = nil
+				wantCommitted = false
+			case "preview":
+				dryRun, wantCommitted = true, false
+			case "partial relocation":
+				fake.fixes = nil
+				fake.fixErr = &FrontmatterRepairFailure{Cause: fake.fixErr, Relocation: FrontmatterRepairRelocation{DestinationWritten: true}}
+			}
+			result, err := MustNewService(fake).RepairPlanning(dryRun)
+			if !errors.Is(err, primary) || !errors.Is(err, release) || result.Committed != wantCommitted || !slices.Equal(fake.events, []string{fmt.Sprintf("frontmatter/%t", dryRun)}) {
+				t.Fatalf("wrong progress, discarded causes or batch replay: result=%+v err=%v events=%v", result, err, fake.events)
+			}
+			var ordinary *PlanningRepairFailure
+			if errors.As(err, &ordinary) != (wantCommitted && scenario != "partial relocation") {
+				t.Fatalf("confused ordinary prefix with proposal/skip/relocation: %v", err)
+			}
+			if ordinary != nil && !strings.Contains(ordinary.Error(), "do not blindly replay the whole repair batch") {
+				t.Fatalf("durable prefix lacks safe recovery: %v", err)
+			}
+			if result.Relocation != nil && len(result.Fixes) > 0 {
+				t.Fatal("partial move became a completed repair row")
+			}
+		})
+	}
+}
+
+func TestPlanningRepairRecoveryErrorPreservesCauseAndSpecificAdvice(t *testing.T) {
+	cause, output := domain.ErrConflict, errors.New("output failed")
+	result := PlanningRepairResult{Committed: true}
+	wrapped := result.RecoveryError(cause)
+	var ordinary *PlanningRepairFailure
+	if !errors.Is(wrapped, cause) || !errors.As(wrapped, &ordinary) || result.RecoveryError(nil) != nil {
+		t.Fatalf("committed recovery lost cause or created a spurious error: %v", wrapped)
+	}
+	joined := errors.Join(wrapped, output)
+	if again := result.RecoveryError(joined); again != joined || !errors.Is(again, output) || strings.Count(again.Error(), "do not blindly replay") != 1 {
+		t.Fatalf("recovery duplicated advice or lost joined cause: %v", again)
+	}
+	if got := (PlanningRepairResult{}).RecoveryError(cause); got != cause {
+		t.Fatalf("uncommitted result gained committed advice: %v", got)
+	}
+	relocation := &FrontmatterRepairFailure{Cause: cause, Relocation: FrontmatterRepairRelocation{DestinationWritten: true}}
+	result.Relocation = &relocation.Relocation
+	if got := result.RecoveryError(relocation); got != relocation {
+		t.Fatalf("ordinary recovery replaced relocation advice: %v", got)
 	}
 }
 

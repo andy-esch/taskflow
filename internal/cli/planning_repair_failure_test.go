@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"reflect"
 	"strings"
@@ -140,5 +141,175 @@ func TestCLILintFixKeepsCommittedReceiptWhenTransientStdoutErrorIsJoined(t *test
 	}
 	if failure.Error.Code != "conflict" || failure.Error.Filesystem == nil || failure.Error.Filesystem.Operation != "write" || failure.Error.Filesystem.Retryable {
 		t.Fatalf("joined stdout failure encouraged replay or changed domain classification: %+v", failure.Error)
+	}
+}
+
+func TestCLILintFixRetainsOrdinaryRepairRecoveryWithoutBlindReplay(t *testing.T) {
+	for _, scenario := range []string{"repair failure", "post-lint failure", "stdout failure", "joined stdout failure", "dry-run", "skipped", "no-progress"} {
+		t.Run(scenario, func(t *testing.T) {
+			transient := &os.PathError{Op: "read", Path: "/planning/tasks/later.md", Err: syscall.EBUSY}
+			outputErr := &os.PathError{Op: "write", Path: "/dev/stdout", Err: syscall.EAGAIN}
+			fake := &relocationPlanningStub{
+				cliPlanningStub: cliPlanningStub{witness: core.NewSourceSetID(), fixErr: transient},
+				fixes:           []domain.FixResult{{Path: "/planning/tasks/earlier.md", Changes: []string{"tags normalized"}}},
+			}
+			committed := true
+			switch scenario {
+			case "post-lint failure":
+				fake.fixErr, fake.lintErr = nil, transient
+			case "stdout failure":
+				fake.fixErr = nil
+			case "dry-run":
+				committed = false
+			case "skipped":
+				fake.fixes[0].Skipped = true
+				committed = false
+			case "no-progress":
+				fake.fixes = nil
+				committed = false
+			}
+			var stdout, stderr bytes.Buffer
+			var output io.Writer = &stdout
+			if strings.Contains(scenario, "stdout") {
+				output = failedRepairOutput{err: outputErr}
+			}
+			cmd, app := newTestRootCmdWithApp(strings.NewReader(""), output, &stderr)
+			app.Svc = core.MustNewService(fake)
+			cmd.PersistentPreRunE = func(command *cobra.Command, _ []string) error { return app.bindCommandSafety(command) }
+			args := []string{"lint", "--fix", "--json"}
+			if scenario == "dry-run" {
+				args = append(args, "--dry-run")
+			}
+			cmd.SetArgs(args)
+			err := cmd.Execute()
+			if err == nil || fake.fixCalls != 1 {
+				t.Fatalf("error lost or batch replayed: %v calls=%d", err, fake.fixCalls)
+			}
+			if scenario != "stdout failure" && !errors.Is(err, transient) {
+				t.Fatalf("primary filesystem cause lost: %v", err)
+			}
+			if strings.Contains(scenario, "stdout") && !errors.Is(err, outputErr) {
+				t.Fatalf("stdout cause lost: %v", err)
+			}
+			WriteError(&stderr, err, true)
+			var failure wire.ErrorEnvelope
+			if jsonErr := json.Unmarshal(stderr.Bytes(), &failure); jsonErr != nil {
+				t.Fatal(jsonErr)
+			}
+			if (failure.Error.PlanningRepair != nil) != committed || failure.Error.Filesystem == nil || failure.Error.Filesystem.Retryable == committed {
+				t.Fatalf("commit=%t: recovery lost or false retry safety: %s", committed, stderr.String())
+			}
+			if committed {
+				receipt := failure.Error.PlanningRepair
+				if receipt.Relocation != nil || receipt.DryRun || len(receipt.Fixed) != 1 || receipt.Fixed[0].Path != fake.fixes[0].Path || receipt.Fixed[0].Skipped {
+					t.Fatalf("ordinary repair became a partial move or lost prefix: %+v", receipt)
+				}
+			}
+		})
+	}
+}
+
+type residualPlanningStub struct {
+	relocationPlanningStub
+	problems []core.LoadProblem
+	tasks    []core.LoadedRecord[core.TaskWithBody]
+}
+
+func (f *residualPlanningStub) ReadLintTasks() ([]core.LoadedRecord[core.TaskWithBody], []core.LoadProblem, error) {
+	f.lintCalls++
+	return f.tasks, f.problems, nil
+}
+
+func TestCLILintFixWriterFailureKeepsResidualValidationAndRecovery(t *testing.T) {
+	for _, scenario := range []string{"clean", "unreadable", "remaining"} {
+		t.Run(scenario, func(t *testing.T) {
+			residual := scenario != "clean"
+			fake := &residualPlanningStub{relocationPlanningStub: relocationPlanningStub{
+				cliPlanningStub: cliPlanningStub{witness: core.NewSourceSetID()},
+				fixes:           []domain.FixResult{{Path: "/planning/earlier.md", Changes: []string{"tags normalized"}}},
+			}}
+			switch scenario {
+			case "unreadable":
+				fake.problems = []core.LoadProblem{{EntityKind: core.EntityTask, EntityID: "000000000002", LocalPath: "/planning/broken.md", Message: "unterminated frontmatter"}}
+			case "remaining":
+				fake.tasks = []core.LoadedRecord[core.TaskWithBody]{{
+					Source: core.RecordSource{ID: "000000000002"},
+					Value:  core.TaskWithBody{Task: domain.Task{ID: "000000000002", Slug: "needs-metadata", Status: domain.StatusNextUp}},
+				}}
+			}
+			outputErr := &os.PathError{Op: "write", Path: "/dev/stdout", Err: syscall.EAGAIN}
+			var stderr bytes.Buffer
+			cmd, app := newTestRootCmdWithApp(strings.NewReader(""), failedRepairOutput{err: outputErr}, &stderr)
+			app.Svc = core.MustNewService(fake)
+			cmd.PersistentPreRunE = func(command *cobra.Command, _ []string) error { return app.bindCommandSafety(command) }
+			cmd.SetArgs([]string{"lint", "--fix", "--json"})
+			err := cmd.Execute()
+			wantExit, wantCode, wantUnreadable := 1, "error", 0
+			if residual {
+				wantExit, wantCode = 11, "validation"
+				if scenario == "unreadable" {
+					wantUnreadable = 1
+				}
+			}
+			var committed *core.PlanningRepairFailure
+			if !errors.Is(err, outputErr) || errors.Is(err, domain.ErrValidation) != residual || !errors.As(err, &committed) || ExitCode(err) != wantExit || fake.fixCalls != 1 {
+				t.Fatalf("writer failure lost validation, recovery or original cause: %v exit=%d calls=%d", err, ExitCode(err), fake.fixCalls)
+			}
+			WriteError(&stderr, err, true)
+			var failure wire.ErrorEnvelope
+			if jsonErr := json.Unmarshal(stderr.Bytes(), &failure); jsonErr != nil {
+				t.Fatal(jsonErr)
+			}
+			receipt := failure.Error.PlanningRepair
+			if failure.Error.Code != wantCode || !strings.Contains(failure.Error.Message, "do not blindly replay") || receipt == nil || len(receipt.Fixed) != 1 || len(receipt.Unreadable) != wantUnreadable || receipt.Relocation != nil || failure.Error.Filesystem == nil || failure.Error.Filesystem.Retryable {
+				t.Fatalf("inconsistent recovery envelope: %s", stderr.String())
+			}
+			if (len(receipt.Remaining) > 0) != (scenario == "remaining") {
+				t.Fatalf("lost residual lint issues: %+v", receipt)
+			}
+		})
+	}
+}
+
+func TestCLILintFixJoinedErrorsKeepFilesystemEvidenceCoherent(t *testing.T) {
+	for _, scenario := range []string{"skipped", "preview", "committed no-space", "committed permission"} {
+		t.Run(scenario, func(t *testing.T) {
+			committed := strings.HasPrefix(scenario, "committed")
+			primary := &os.PathError{Op: "lstat", Path: "/planning/later.md", Err: syscall.ENOTDIR}
+			secondary := &os.PathError{Op: "write", Path: "/dev/stdout", Err: syscall.EAGAIN}
+			if committed {
+				primary.Op, primary.Err = "read", syscall.EBUSY
+				secondary.Err = syscall.ENOSPC
+				if scenario == "committed permission" {
+					secondary.Err = syscall.EACCES
+				}
+			}
+			fake := &relocationPlanningStub{
+				cliPlanningStub: cliPlanningStub{witness: core.NewSourceSetID(), fixErr: primary},
+				fixes:           []domain.FixResult{{Path: "/planning/earlier.md", Changes: []string{"tags normalized"}, Skipped: scenario == "skipped"}},
+			}
+			var stderr bytes.Buffer
+			cmd, app := newTestRootCmdWithApp(strings.NewReader(""), failedRepairOutput{err: secondary}, &stderr)
+			app.Svc = core.MustNewService(fake)
+			cmd.PersistentPreRunE = func(command *cobra.Command, _ []string) error { return app.bindCommandSafety(command) }
+			args := []string{"lint", "--fix", "--json"}
+			if scenario == "preview" {
+				args = append(args, "--dry-run")
+			}
+			cmd.SetArgs(args)
+			err := cmd.Execute()
+			if !errors.Is(err, primary) || !errors.Is(err, secondary) || fake.fixCalls != 1 || ExitCode(err) != 1 {
+				t.Fatalf("joined causes lost or operation replayed: %v calls=%d", err, fake.fixCalls)
+			}
+			WriteError(&stderr, err, true)
+			var failure wire.ErrorEnvelope
+			if jsonErr := json.Unmarshal(stderr.Bytes(), &failure); jsonErr != nil {
+				t.Fatal(jsonErr)
+			}
+			got := failure.Error.Filesystem
+			if got == nil || got.Path != primary.Path || got.Operation != primary.Op || got.Class != "io" || got.Retryable || (failure.Error.PlanningRepair != nil) != committed {
+				t.Fatalf("joined failures produced contradictory recovery: %s", stderr.String())
+			}
+		})
 	}
 }

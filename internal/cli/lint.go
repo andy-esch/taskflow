@@ -23,6 +23,9 @@ func newLintCmd(app *App) *cobra.Command {
 			"--fix repairs ordinary frontmatter and missing ids. It never normalizes or changes\n" +
 			"graph-owned task fields (depends_on, blocked_by, dependencies, or blocks); a\n" +
 			"would-be graph repair is skipped and reported for deliberate remediation.\n" +
+			"In-place repairs refuse source drift. A later repair, guard-release or output\n" +
+			"failure retains completed repairs; inspect that receipt and run plain lint\n" +
+			"before continuing, rather than blindly replaying the whole batch.\n" +
 			"ID spelling moves preserve source permissions and refuse destination collisions or\n" +
 			"source drift. If creation succeeds but removal fails, the partial move is not\n" +
 			"counted as fixed. Compare and merge both copies without overwriting either, then\n" +
@@ -79,8 +82,16 @@ func runLint(app *App, links bool) error {
 	return nil
 }
 
-func runLintFix(app *App, dryRun bool) error {
+func runLintFix(app *App, dryRun bool) (err error) {
 	repaired, err := app.Svc.RepairPlanning(dryRun)
+	// Keep durable evidence even if output or post-repair reporting fails. A
+	// transient writer error cannot make a committed batch safe to replay.
+	defer func() {
+		if err != nil && (repaired.Committed || repaired.Relocation != nil) {
+			err = repaired.RecoveryError(err)
+			err = &planningRepairCommandFailure{cause: err, result: repaired, dryRun: dryRun, workspace: app.workspace()}
+		}
+	}()
 	results := repaired.Fixes
 	if err != nil {
 		// A later repair or post-lint failure can follow durable edits: report that
@@ -93,9 +104,6 @@ func runLintFix(app *App, dryRun bool) error {
 			} else {
 				render.PlanningRepairHuman(app.Out, app.Style, repaired, dryRun)
 			}
-		}
-		if repaired.Relocation != nil {
-			return &planningRepairCommandFailure{cause: err, result: repaired, dryRun: dryRun, workspace: app.workspace()}
 		}
 		return err
 	}
@@ -113,21 +121,22 @@ func runLintFix(app *App, dryRun bool) error {
 	// otherwise exit 0 in silence, leaving the tree broken while claiming success.
 	// Re-lint and surface BOTH the leftover results and problems, with plain lint's exit.
 	results2, problems := repaired.LintResults, repaired.Problems
+	// Establish residual validation before output: a writer failure must retain
+	// that semantic outcome and its exit classification, not replace it.
+	blocking := core.BlockingLintResultCount(results2)
+	var validationErr error
+	if blocking+len(problems) > 0 {
+		validationErr = fmt.Errorf("%w: %d item(s) still with issues, %d unreadable record(s)",
+			domain.ErrValidation, blocking, len(problems))
+	}
 	if app.JSON {
 		// One envelope carrying what was fixed plus what couldn't be (leftover lint
 		// findings + unreadable records) — a --json consumer must never parse the prose
 		// error to learn that.
-		if err := render.FixJSON(app.Out, results, problems, results2, dryRun, app.workspace()); err != nil {
-			return err
-		}
+		return errors.Join(validationErr, render.FixJSON(app.Out, results, problems, results2, dryRun, app.workspace()))
 	} else {
 		render.FixHuman(app.Out, app.Style, results, results2, dryRun)
 		render.LintProblemsHuman(app.ErrOut, app.Style, problems)
 	}
-	blocking := core.BlockingLintResultCount(results2)
-	if blocking+len(problems) > 0 {
-		return fmt.Errorf("%w: %d item(s) still with issues, %d unreadable record(s)",
-			domain.ErrValidation, blocking, len(problems))
-	}
-	return nil
+	return validationErr
 }

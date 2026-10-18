@@ -28,3 +28,17 @@ func (e *FrontmatterRepairFailure) Error() string {
 }
 
 func (e *FrontmatterRepairFailure) Unwrap() error { return e.Cause }
+
+// PlanningRepairFailure marks a failed maintenance workflow after completed
+// repairs or cleanup. RepairPlanning returns its historical prefix separately;
+// the original cause remains classifiable and the whole batch is never retried.
+// See docs/architecture/persistence.md#ordinary-frontmatter-id-repair.
+type PlanningRepairFailure struct {
+	Cause error
+}
+
+func (e *PlanningRepairFailure) Error() string {
+	return fmt.Sprintf("%v; earlier planning repairs committed; inspect the reported repairs and run lint before deciding how to continue; do not blindly replay the whole repair batch", e.Cause)
+}
+
+func (e *PlanningRepairFailure) Unwrap() error { return e.Cause }

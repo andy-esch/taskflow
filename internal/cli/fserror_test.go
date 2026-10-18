@@ -170,3 +170,25 @@ func TestFilesystemDetails_ClassifiesTheRecoveryRelevantCases(t *testing.T) {
 		}
 	}
 }
+
+func TestFilesystemDetailsKeepsJoinedFailureFieldsCoherent(t *testing.T) {
+	for _, tc := range []struct {
+		name, class        string
+		primary, secondary error
+		operation, path    string
+		retryable          bool
+	}{
+		{"path io then transient", "io", &fs.PathError{Op: "lstat", Path: "/planning/broken", Err: syscall.ENOTDIR}, &fs.PathError{Op: "write", Path: "/dev/stdout", Err: syscall.EAGAIN}, "lstat", "/planning/broken", false},
+		{"transient then no-space", "io", &fs.PathError{Op: "read", Path: "/planning/task.md", Err: syscall.EBUSY}, &fs.PathError{Op: "write", Path: "/dev/stdout", Err: syscall.ENOSPC}, "read", "/planning/task.md", true},
+		{"transient then permission", "io", &fs.PathError{Op: "read", Path: "/planning/task.md", Err: syscall.EBUSY}, &fs.PathError{Op: "write", Path: "/dev/stdout", Err: fs.ErrPermission}, "read", "/planning/task.md", true},
+		{"link io then transient", "io", &os.LinkError{Op: "rename", Old: "/from", New: "/to", Err: syscall.EIO}, &os.LinkError{Op: "rename", Old: "/other", New: "/elsewhere", Err: syscall.EBUSY}, "rename", "/to", false},
+		{"link transient then permission", "io", &os.LinkError{Op: "rename", Old: "/from", New: "/to", Err: syscall.EBUSY}, &os.LinkError{Op: "rename", Old: "/other", New: "/elsewhere", Err: fs.ErrPermission}, "rename", "/to", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got := filesystemDetails(errors.Join(tc.primary, tc.secondary))
+			if got == nil || got.Class != tc.class || got.Operation != tc.operation || got.Path != tc.path || got.Retryable != tc.retryable {
+				t.Fatalf("joined causes spliced distinct failures: %+v; want %s %s %s retryable=%t", got, tc.class, tc.operation, tc.path, tc.retryable)
+			}
+		})
+	}
+}

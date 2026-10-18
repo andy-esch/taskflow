@@ -35,6 +35,50 @@ func TestPlanningRepairEnvelopeSeparatesPartialRelocationFromFixedRows(t *testin
 	}
 }
 
+func TestPlanningRepairOrdinaryProgressRetainsExistingWireShape(t *testing.T) {
+	result := core.PlanningRepairResult{
+		Committed: true,
+		Fixes: []domain.FixResult{
+			{Path: "earlier.md", Changes: []string{"tags normalized"}},
+			{Path: "blocked.md", Changes: []string{"graph-owned repair refused"}, Skipped: true},
+		},
+	}
+	receipt := ToPlanningRepairEnvelope(result, false, WorkspaceJSON{})
+	payload := ErrorEnvelope{SchemaVersion: SchemaVersion, Error: ErrorItem{Code: "error", Message: "partial repair"}}
+	payload.Error.PlanningRepair = &receipt
+	data, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if bytes.Contains(data, []byte(`"committed"`)) || bytes.Contains(data, []byte(`"relocation"`)) || len(receipt.Fixed) != 2 || !receipt.Fixed[1].Skipped || receipt.DryRun {
+		t.Fatalf("internal progress became a new wire field or changed row semantics: %s", data)
+	}
+	schemaBytes, err := JSONSchema()
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc, err := jsonschema.UnmarshalJSON(bytes.NewReader(schemaBytes))
+	if err != nil {
+		t.Fatal(err)
+	}
+	schemaID := doc.(map[string]any)["$id"].(string)
+	compiler := jsonschema.NewCompiler()
+	if err := compiler.AddResource(schemaID, doc); err != nil {
+		t.Fatal(err)
+	}
+	schema, err := compiler.Compile(schemaID + "#/$defs/ErrorEnvelope")
+	if err != nil {
+		t.Fatal(err)
+	}
+	instance, err := jsonschema.UnmarshalJSON(bytes.NewReader(data))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := schema.Validate(instance); err != nil {
+		t.Fatalf("populated ordinary-repair error violates schema: %v", err)
+	}
+}
+
 // The DTO copies historical action flags; it does not infer current existence
 // or authorize producer states. False flags must remain explicit, not omitted.
 func TestPlanningRepairRelocationSchemaRequiresExplicitEvidence(t *testing.T) {
