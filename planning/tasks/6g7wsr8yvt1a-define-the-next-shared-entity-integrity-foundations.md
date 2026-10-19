@@ -10,9 +10,9 @@ priority: medium
 autonomy_level: 2
 tags: [architecture, integrity, store, design]
 created: "2026-09-07"
-updated_at: "2026-10-04"
+updated_at: "2026-10-19"
 audited: "2026-09-20"
-audit_sources: [2026-09-20-weekly-task-sweep, planning/audits/6gc7jd9aq1q9-2026-09-21-arch-failure-and-recovery.md]
+audit_sources: [2026-09-20-weekly-task-sweep, planning/audits/6gc7jd9aq1q9-2026-09-21-arch-failure-and-recovery.md, planning/audits/6gn83987gt45-2026-10-19-arch-failure-and-recovery.md]
 ---
 # Define the next shared entity-integrity foundations
 
@@ -203,3 +203,5 @@ own implementation, so the linked unification task's premise holds.
   predicate and retry rule, then either include task rename or document a deliberate carveout. No
   implementation child was created before this design task's required human review.
 - 2026-09-20: automated weekly sweep — all six foundation links and all four newly observed questions re-verified against current code; Q3 narrowed to process-death recovery only; noted the completed shared-create-guard related link.
+
+Reinforced by audit 2026-10-19-arch-failure-and-recovery: M1. Q5's CLI-error-contract clause now has its per-branch inventory — three of eight WriteError recovery branches suppress the transient filesystem retry hint after durable work (exit.go:158-163, :176-181, :190-197); the dependency, graph-repair, lifecycle, thread-apply and thread-mutation branches do not, although all five receipts already carry Committed or an applied-prefix slice.
