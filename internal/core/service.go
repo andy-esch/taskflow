@@ -16,6 +16,7 @@ import (
 // primary adapters (the cli and the tui).
 type Service struct {
 	store                 Store
+	selectedTaskCreations SelectedEpicTaskCreationStore
 	taskPaths             TaskPathSource
 	taskPathsExplicit     bool
 	epicPaths             EpicPathSource
@@ -365,6 +366,9 @@ func NewService(store Store, opts ...Option) (*Service, error) {
 		if mutations, ok := store.(TaskLifecycleMutationStore); ok && !isNilCapability(mutations) {
 			s.lifecycleMutations = mutations
 		}
+		if creations, ok := store.(SelectedEpicTaskCreationStore); ok && !isNilCapability(creations) {
+			s.selectedTaskCreations = creations
+		}
 		if threads, ok := store.(ThreadStore); ok && !isNilCapability(threads) {
 			s.threads = threads
 		}
@@ -417,6 +421,7 @@ func (s *Service) validateSourceSets() error {
 		{"task graph mutations", s.graphMutations},
 		{"task graph repairs", s.graphRepairs},
 		{"task lifecycle mutations", s.lifecycleMutations},
+		{"selected-epic task creation", s.selectedTaskCreations},
 		{"Thread reads", s.threads},
 		{"Thread paths", s.threadPaths},
 		{"Thread creation", s.threadCreations},

@@ -66,6 +66,23 @@ See [portable entity tests](../../internal/core/entity_target_test.go),
 [real-store retry tests](../../internal/store/entity_target_test.go) and
 [TUI non-task actions](../../internal/tui/selected_entity_action_test.go).
 
+[Selected-epic task creation](../../internal/core/selected_task_creation.go) uses
+an optional sibling capability, not an ID passed back through ordinary epic
+reference matching. The selected full source ID becomes the task's epic reference;
+the adapter requires a unique readable parent in the same guarded create operation.
+The application shares ordinary defaults, validation and scaffolds, makes one
+attempt, and preserves its exact creation receipt/error. Selected create-and-start
+is not supported; it cannot borrow graph authorization from another capability.
+No local path or aggregate Store is required by the new port. Source-set witnesses
+still bind composition, while the primary adapter retains the originating Service.
+See [portable tests](../../internal/core/selected_task_creation_test.go) and
+[guarded-store tests](../../internal/store/selected_task_creation_test.go).
+
+This does not add enduring foreign keys or same-ID delete/recreate detection. Epic
+identity is still its whole source stem, so a renamed stem removes that selection;
+ordinary content edits at the same identity need not invalidate it. Ordinary CLI
+reference-based creation keeps its existing matching and lifecycle behavior.
+
 Dependency add/remove bind both endpoints inside the guarded planner, then recompute
 the requested change against each fresh graph. Thread creation, membership and
 lifecycle likewise retain successful selection even when validation conflicts before

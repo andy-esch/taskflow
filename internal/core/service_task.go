@@ -901,10 +901,10 @@ func splitList(s string) []string {
 }
 
 // NewTaskParams are the inputs for creating a task. Tier/Autonomy default to 3,
-// Priority to "medium", Effort to "Unknown" when zero (set by the CLI flags).
+// Priority to "medium", Effort to "Unknown" when zero (defaulted in core).
 type NewTaskParams struct {
 	Title       string
-	Epic        string
+	Epic        string // ordinary reference; selected creation requires blank or its exact target ID
 	Description string
 	Effort      string
 	Priority    string
@@ -922,10 +922,7 @@ type NewTaskParams struct {
 // must exist; tier/autonomy/priority/description are validated. On any invalid
 // input it returns ErrValidation and nothing is written.
 func (s *Service) NewTask(p NewTaskParams) (TaskCreationReceipt, error) {
-	if p.Next && p.Start {
-		return TaskCreationReceipt{}, fmt.Errorf("%w: next and start are mutually exclusive", domain.ErrValidation)
-	}
-	if err := templateBodyConflict(p.Body, p.Template); err != nil {
+	if err := validateTaskCreationMode(p); err != nil {
 		return TaskCreationReceipt{}, err
 	}
 	epicRead, err := s.store.ReadEpics()
@@ -938,6 +935,32 @@ func (s *Service) NewTask(p NewTaskParams) (TaskCreationReceipt, error) {
 	// Store and link the epic's canonical stem (resolved on the NN key), so a bare NN or
 	// a stale slug the caller passed becomes the epic's current, readable `<NN>-<slug>`.
 	p.Epic = canonicalEpic(epicRead.Records, p.Epic)
+	prepared, err := s.prepareTaskCreation(p)
+	if err != nil {
+		return TaskCreationReceipt{}, err
+	}
+	if p.Start {
+		receipt, err := s.runTaskLifecycleMutation(p.DryRun, func(*TaskGraph) (TaskLifecyclePlan, error) {
+			return TaskLifecyclePlan{
+				To:     domain.StatusInProgress,
+				Create: &TaskLifecycleCreation{Task: prepared.Task, Body: prepared.Body},
+			}, nil
+		})
+		return TaskCreationReceipt{Task: receipt.Task, Local: receipt.Local, DryRun: receipt.DryRun, Committed: receipt.Committed}, err
+	}
+	return s.store.CreateTask(prepared.Task, prepared.Body, p.DryRun)
+}
+
+func validateTaskCreationMode(p NewTaskParams) error {
+	if p.Next && p.Start {
+		return fmt.Errorf("%w: next and start are mutually exclusive", domain.ErrValidation)
+	}
+	return templateBodyConflict(p.Body, p.Template)
+}
+
+// prepareTaskCreation is shared by fresh-reference and selected-epic entry
+// points after each has bound its epic. It does not select or persist a record.
+func (s *Service) prepareTaskCreation(p NewTaskParams) (TaskWithBody, error) {
 	// Defaults for zero-valued fields live here so EVERY caller — not just the CLI
 	// flags — produces a valid, lint-clean task; the CLI flag defaults stay as
 	// help-text hints. (A second adapter calling NewTask without replicating them
@@ -955,16 +978,16 @@ func (s *Service) NewTask(p NewTaskParams) (TaskCreationReceipt, error) {
 		p.Effort = "Unknown"
 	}
 	if err := domain.ValidatePriority(p.Priority); err != nil {
-		return TaskCreationReceipt{}, err
+		return TaskWithBody{}, err
 	}
 	if err := domain.ValidateTier(p.Tier); err != nil {
-		return TaskCreationReceipt{}, err
+		return TaskWithBody{}, err
 	}
 	if err := domain.ValidateAutonomy(p.Autonomy); err != nil {
-		return TaskCreationReceipt{}, err
+		return TaskWithBody{}, err
 	}
 	if err := domain.ValidateDescription(p.Description); err != nil {
-		return TaskCreationReceipt{}, err
+		return TaskWithBody{}, err
 	}
 	// Any title is accepted: Slugify derives a filesystem-safe id (it word-breaks
 	// path separators, control chars, and the unicode punctuation it can't keep)
@@ -972,7 +995,7 @@ func (s *Service) NewTask(p NewTaskParams) (TaskCreationReceipt, error) {
 	// error below is the only hard guard — a title that slugifies to nothing.
 	slug := domain.Slugify(p.Title)
 	if slug == "" {
-		return TaskCreationReceipt{}, fmt.Errorf("%w: title produced an empty slug: %q", domain.ErrValidation, p.Title)
+		return TaskWithBody{}, fmt.Errorf("%w: title produced an empty slug: %q", domain.ErrValidation, p.Title)
 	}
 	status := domain.StatusReadyToStart
 	if p.Next {
@@ -995,26 +1018,17 @@ func (s *Service) NewTask(p NewTaskParams) (TaskCreationReceipt, error) {
 	// tags, and a next-up/in-progress one needs a description. The same rule the
 	// SetFields write path applies, defined once in the domain (decided 2026-06-12).
 	if err := domain.ActiveTaskFieldErr(t); err != nil {
-		return TaskCreationReceipt{}, err
+		return TaskWithBody{}, err
 	}
 	body := p.Body
 	if body == "" {
 		tmpl, err := s.templateBody("task", p.Template)
 		if err != nil {
-			return TaskCreationReceipt{}, err
+			return TaskWithBody{}, err
 		}
 		body = renderTemplate(tmpl, map[string]string{"title": p.Title, "epic": p.Epic})
 	}
-	if p.Start {
-		receipt, err := s.runTaskLifecycleMutation(p.DryRun, func(*TaskGraph) (TaskLifecyclePlan, error) {
-			return TaskLifecyclePlan{
-				To:     domain.StatusInProgress,
-				Create: &TaskLifecycleCreation{Task: t, Body: body},
-			}, nil
-		})
-		return TaskCreationReceipt{Task: receipt.Task, Local: receipt.Local, DryRun: receipt.DryRun, Committed: receipt.Committed}, err
-	}
-	return s.store.CreateTask(t, body, p.DryRun)
+	return TaskWithBody{Task: t, Body: body}, nil
 }
 
 // RenameTask re-titles a task (new slug from newTitle, id kept) and cascades its inbound

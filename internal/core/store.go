@@ -38,6 +38,7 @@ type ResearchMutationTarget struct{ ID string }
 
 // EpicMutationTarget identifies an epic by its complete adapter-established ID.
 // The local adapter uses the whole filename stem, not just the sequence prefix.
+// It also identifies the selected parent in [Service.NewTaskForSelectedEpic].
 type EpicMutationTarget struct{ ID string }
 
 // TaskStore is the task mutation and selected-read port. Repository-wide task
@@ -56,6 +57,9 @@ type TaskStore interface {
 	// the would-be result but stops short of disk. Lifecycle changes are deliberately
 	// absent: TaskLifecycleMutationStore is the only status-write capability.
 	SetFields(target TaskMutationTarget, updates map[string]any, dryRun bool) (domain.Task, error)
+	// CreateTask is ordinary creation after reference-based application selection.
+	// Already-selected parents require the optional [SelectedEpicTaskCreationStore],
+	// which revalidates their identity together with the create.
 	CreateTask(t domain.Task, body string, dryRun bool) (TaskCreationReceipt, error)
 	// EditTask hands the current file content to edit (which runs the caller's
 	// editor) and accepts the result only if it still parses as a task —
