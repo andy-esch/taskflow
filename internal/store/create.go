@@ -177,6 +177,40 @@ func validEntityID(entityID string) error {
 // ADR-0003 §4). It refuses to clobber an existing file; the slug, id, and status
 // are taken from t.
 func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (core.TaskCreationReceipt, error) {
+	return s.createTask(t, body, dryRun, nil)
+}
+
+// CreateTaskForSelectedEpic validates a selected parent's exact source ownership
+// and readable bytes while the ordinary create guard is held. Cooperating
+// writers cannot replace that parent between validation and task creation.
+// Raw writers retain a final check-to-create window; this does not establish
+// foreign keys or distinguish delete/recreate at the identical epic identity.
+func (s *FS) CreateTaskForSelectedEpic(target core.EpicMutationTarget, t domain.Task, body string, dryRun bool) (core.TaskCreationReceipt, error) {
+	if target.ID == "" || t.Epic != target.ID {
+		return core.TaskCreationReceipt{}, fmt.Errorf("%w: task must name its selected epic identity", domain.ErrValidation)
+	}
+	return s.createTask(t, body, dryRun, func() error {
+		// The invocation policy may change while checkedWriteLock waits. Check
+		// it again inside the guard, before observing the selected parent.
+		if err := s.authorizeMutation(); err != nil {
+			return err
+		}
+		path, err := s.resolveEpicMutationPath(target.ID)
+		if err != nil {
+			return fmt.Errorf("selected epic %q: %w", target.ID, err)
+		}
+		content, err := os.ReadFile(path)
+		if err != nil {
+			return fmt.Errorf("read selected epic %q: %w", target.ID, err)
+		}
+		if _, err := parseEpic(content, path); err != nil {
+			return fmt.Errorf("selected epic %q: %w", target.ID, err)
+		}
+		return nil
+	})
+}
+
+func (s *FS) createTask(t domain.Task, body string, dryRun bool, validateParent func() error) (core.TaskCreationReceipt, error) {
 	if err := s.rejectRepositoryPlannerCall(); err != nil {
 		return core.TaskCreationReceipt{}, err
 	}
@@ -209,6 +243,11 @@ func (s *FS) CreateTask(t domain.Task, body string, dryRun bool) (core.TaskCreat
 		return core.TaskCreationReceipt{}, err
 	}
 	creation, committed, err := s.createEntityFile(dryRun, func() (entityFileCreation, error) {
+		if validateParent != nil {
+			if err := validateParent(); err != nil {
+				return entityFileCreation{}, err
+			}
+		}
 		if err := ensureCandidateIDUnique("task", t.ID, s.taskCandidates); err != nil {
 			return entityFileCreation{}, err
 		}

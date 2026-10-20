@@ -24,6 +24,10 @@ type authorizationMutation struct {
 func authorizationMutations(now time.Time, ref string, callback func()) []authorizationMutation {
 	target := core.TaskMutationTarget{ID: testutil.TaskID(ref)}
 	return []authorizationMutation{
+		{"CreateTaskForSelectedEpic", func(s *FS, dryRun bool) error {
+			_, err := s.CreateTaskForSelectedEpic(core.EpicMutationTarget{ID: ref}, domain.Task{ID: "6fjangd7kvh0", Slug: "probe", Epic: ref, Status: domain.StatusReadyToStart}, "", dryRun)
+			return err
+		}},
 		{"CreateTask", func(s *FS, dryRun bool) error {
 			_, err := s.CreateTask(domain.Task{ID: "6fjangd7kvh0", Slug: "probe", Status: domain.StatusReadyToStart, Created: "2026-09-22"}, "", dryRun)
 			return err
