@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6ggqwdz14nzx
-bucket: open
+bucket: closed
 area: arch-data-model-and-storage
 date: "2026-10-05"
 updated_at: "2026-10-05"

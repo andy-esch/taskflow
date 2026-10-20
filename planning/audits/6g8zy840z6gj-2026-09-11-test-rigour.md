@@ -4,7 +4,7 @@ id: 6g8zy840z6gj
 bucket: open
 area: test-rigour
 date: "2026-09-11"
-updated_at: "2026-09-22"
+updated_at: "2026-10-20"
 ---
 
 # Code Quality Audit: test-rigour — 2026-09-11
@@ -163,6 +163,20 @@ set branch — extend it to the unset branch in the same commit.
 (`domain/entity.go`) so create, set, unset, and lint all read one table is epic 26's
 territory, not this fix.
 
+**Resolution:** Re-verified still open on 2026-10-20 and reproduced end-to-end
+    on a freshly built binary in a throwaway planning repo under the scratchpad
+    (never this tree): epic new 'Probe Epic' --description 'a required
+    description', then epic set 01-probe-epic --unset description, returned '/
+    updated 01-probe-epic', and the very next lint failed with '01-probe-epic /
+    description: missing'. prepareEpicFieldUpdates
+    (internal/core/service_epic.go:348-355) still gates the unset branch only on
+    the epic registry and on the status/updated_at names, with no rejection of
+    unsetting a contract-required field. The epic unset path still has zero
+    tests. No active task owns it. At XS effort with urgency soon and a
+    reproduced write-path-creates-lint-invalid-state violation of the stated
+    architecture non-negotiable, this is the single most actionable item in the
+    whole open-audit backlog.
+
 #### M2. `TaskLifecycleOverride` closed vocabulary has no exhaustiveness or negative test  · **Status:** tracked by 6gcqz5aqt2sg
 
 **File:** `internal/core/task_lifecycle.go:229` | **Component:** core (task lifecycle)
@@ -244,6 +258,13 @@ malformed state this prevents is one the read side already knows about —
 `ValidateTaskLifecyclePlan(graph, TaskLifecyclePlan{TaskID: id, To: domain.StatusInProgress, RevisitAt: "2026-10-01"}, "")`
 → `errors.Is(err, domain.ErrValidation)`.
 
+**Resolution:** Re-verified still open on 2026-10-20: the guard is unchanged at
+    internal/core/task_lifecycle.go:232-235, and task_lifecycle_test.go still
+    contains no RevisitAt reference at all, so no test constructs a non-deferred
+    target carrying a revisit date. The only test that puts a value in a plan's
+    RevisitAt (internal/store/lifecyclemutation_test.go:38) still hardcodes To:
+    domain.StatusDeferred.
+
 #### L2. `TestService_NewEpic`'s failure table proves less than it claims  · **Status:** open
 
 **File:** `internal/core/usecases_test.go:362` | **Component:** core tests
@@ -265,7 +286,13 @@ lets a guard removal go green.
 case a valid `Status: "active"` so each trips the predicate its comment names, and add
 an explicit `{Status: "planning"}` case for the status guard.
 
-#### L3. Dependency planner guards the dependent against an unreadable record, not the prerequisites  · **Status:** open
+**Resolution:** Re-verified still open on 2026-10-20: TestService_NewEpic
+    (internal/core/usecases_test.go) still asserts only 'err == nil' per case
+    and its third case is still commented '// empty slug' while carrying no
+    Status, so it continues to pass on the ValidateEpicStatus predicate rather
+    than the empty-slug guard it names.
+
+#### L3. Dependency planner guards the dependent against an unreadable record, not the prerequisites  · **Status:** fixed
 
 **File:** `internal/core/dependency_operations.go:191` | **Component:** core (dependency planner)
 **Effort:** XS · **Urgency:** eventually
@@ -294,6 +321,23 @@ make.
 dependent check with a comment naming `ValidateTaskGraphMutationSource` as the real
 gate, or add the symmetric prerequisite check. Do **not** add a test for an
 unreachable branch; the honest fix is in the source, not the suite.
+
+**Resolution:** Fixed by commit 498de98 (2026-10-16, 'fix(graph): retain
+    selected endpoints across fresh retry plans'), which split
+    planSelectedDependencyEdges out of planDependencyEdges and gave it the
+    symmetric guard this finding asked for: every prerequisite is now checked
+    with graph.Task(prerequisiteID) and refused as 'selected prerequisite <id>:
+    ErrNotFound' (internal/core/dependency_operations.go:258-262), alongside the
+    dependent's own check at :254. Re-verified 2026-10-20 by reading the current
+    planner. One residual difference is deliberately NOT carried forward as this
+    finding: the outer planDependencyEdges still classifies an unreadable
+    dependent as ErrValidation (:230) while the inner planner classifies both
+    endpoints as ErrNotFound, so the two sides now both guard but still map to
+    different exit codes (11 vs 10) on a branch that
+    ValidateTaskGraphMutationSource still makes unreachable. That is a narrower
+    sentinel-consistency observation than the missing-guard asymmetry reported
+    here, and belongs to a future correctness-and-errors run rather than to this
+    finding.
 
 ## What audited clean
 

@@ -4,7 +4,7 @@ id: 6fsa47r4f7es
 bucket: open
 area: ai-agent-cli-ergonomics
 date: "2026-07-24"
-updated_at: "2026-09-19"
+updated_at: "2026-10-20"
 ---
 # Audit: AI-agent CLI ergonomics — 2026-07-24
 
@@ -165,13 +165,20 @@ per workspace. If persistent receipts are judged too heavy for a local-first CLI
 provide a narrower `--append-if-absent-hash` contract and document its limitations.
 
 **Resolution:** Re-verified still open on 2026-09-02 against v0.18.0: task
-append exposes no operation key, if-absent hash, or any replay identity, so a
-lost acknowledgement after a committed append still duplicates durable content.
-The finding's reasoning holds unchanged — OCC covers the process boundary, not
-an agent transport whose ack can be lost after success. Design-heavy (M): needs
-a decision on whether a local-first CLI should persist dedupe records at all,
-versus the narrower --append-if-absent-hash the finding offers as an
-alternative.
+    append exposes no operation key, if-absent hash, or any replay identity, so
+    a lost acknowledgement after a committed append still duplicates durable
+    content. The finding's reasoning holds unchanged — OCC covers the process
+    boundary, not an agent transport whose ack can be lost after success.
+    Design-heavy (M): needs a decision on whether a local-first CLI should
+    persist dedupe records at all, versus the narrower --append-if-absent-hash
+    the finding offers as an alternative. Re-verified still open on 2026-10-20
+    (backpressure triage run): the current command surface exposes no operation
+    key, no --append-if-absent-hash, and no replay identity on task append or
+    audit append, so the lost-acknowledgement window is unchanged. No open task
+    owns this work - the cross-reference over all 73 active tasks and a direct
+    grep of planning/tasks/ for 'replay identit', 'operation key', and 'idempot'
+    returned no active owner, so the finding's own candidate row is still the
+    only route into the backlog.
 
 ### Medium
 
@@ -220,12 +227,18 @@ optionally expose a short change summary or unified diff without serializing unr
 body content.
 
 **Resolution:** Re-verified still open on 2026-09-02 and measured: a --dry-run
-append of the 10-character body 'probe-only' returned 4271 bytes, 3276 of them
-the echoed body. Deliberately NOT fixed alongside M7, though both are S: making
-receipts compact by default changes the shape of an established --json contract,
-so it needs a schema version decision and an --include-body escape hatch agreed
-first. Additive enrichment (M7) was safe to land unilaterally; a breaking
-default is not.
+    append of the 10-character body 'probe-only' returned 4271 bytes, 3276 of
+    them the echoed body. Deliberately NOT fixed alongside M7, though both are
+    S: making receipts compact by default changes the shape of an established
+    --json contract, so it needs a schema version decision and an --include-body
+    escape hatch agreed first. Additive enrichment (M7) was safe to land
+    unilaterally; a breaking default is not. Re-verified still open on
+    2026-10-20 and re-measured on a freshly built binary: task append --json
+    --dry-run still returns a top-level 'body' field carrying the whole
+    resulting document (891 bytes total on a minimal scaffold task, 233 of them
+    the echoed body), and `task append --help` still exposes no --include-body
+    or any other echo control. The schema-version decision this finding waits on
+    has not been taken. No active task owns it.
 
 #### M3. `schema` describes entities but not the executable command surface  · **Status:** tracked by 6g63hhk3eddf
 
@@ -326,13 +339,19 @@ This also gives sandboxed agent environments one stable, least-privilege mutatio
 entry point instead of a growing set of approval prefixes.
 
 **Resolution:** Re-verified still open on 2026-09-02: there is no apply command
-and no change-set format, so a multi-command closeout interrupted halfway still
-leaves state valid file-by-file but semantically incomplete. Largest item in
-this audit (L) and the only one whose own recommendation hedges on fit — it
-explicitly says cross-file atomicity may be wrong for a git-agnostic local-files
-tool and proposes restartability instead. Worth an explicit keep-or-drop
-decision before any implementation, rather than carrying indefinitely as an open
-finding.
+    and no change-set format, so a multi-command closeout interrupted halfway
+    still leaves state valid file-by-file but semantically incomplete. Largest
+    item in this audit (L) and the only one whose own recommendation hedges on
+    fit — it explicitly says cross-file atomicity may be wrong for a
+    git-agnostic local-files tool and proposes restartability instead. Worth an
+    explicit keep-or-drop decision before any implementation, rather than
+    carrying indefinitely as an open finding. Re-verified still open on
+    2026-10-20: the root command list carries no apply verb and there is still
+    no change-set format, so an interrupted multi-command closeout leaves the
+    same semantically-incomplete state. No active task owns it. The keep-or-drop
+    decision this finding's own resolution asked for on 2026-09-02 has now been
+    outstanding for two further months across four triage opportunities - worth
+    deciding rather than re-verifying a fifth time.
 
 #### M7. JSON errors classify domain failures but flatten OS recovery information  · **Status:** fixed
 
@@ -409,11 +428,15 @@ keep the underlying commands. This should be a compact read model, not a new sto
 summary that can drift.
 
 **Resolution:** Re-verified still open on 2026-09-02: no task brief and no task
-info --include, so resuming work is still task info plus task ac plus one or
-more task show --section calls, followed by prose interpretation. Its dependency
-has since strengthened rather than shifted: task ac now reports a criterion's
-state and tracked destination as structured fields, so an unchecked-AC section
-of a brief would be a projection rather than prose parsing.
+    info --include, so resuming work is still task info plus task ac plus one or
+    more task show --section calls, followed by prose interpretation. Its
+    dependency has since strengthened rather than shifted: task ac now reports a
+    criterion's state and tracked destination as structured fields, so an
+    unchecked-AC section of a brief would be a projection rather than prose
+    parsing. Re-verified still open on 2026-10-20: no task brief verb and no
+    task info --include flag, so cross-session resumption still costs task info
+    plus task ac plus one or more task show --section calls. No active task owns
+    it.
 
 ## Candidate tasks
 
