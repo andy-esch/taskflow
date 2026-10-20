@@ -96,6 +96,8 @@ var (
 	_ core.Layout              = (*FS)(nil)
 )
 
+var _ core.SelectedEpicTaskCreationStore = (*FS)(nil)
+
 // NewFS binds a planning root to an explicit mutation policy without I/O or
 // invoking its authorizer. Missing policies are refused, not treated as writable.
 func NewFS(root string, policy core.MutationPolicy, opts ...FSOption) (*FS, error) {

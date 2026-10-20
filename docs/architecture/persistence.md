@@ -82,6 +82,14 @@ identity scans/sequence allocation through no-clobber create. Dry-run performs c
 but reserves nothing. Task/Thread creation shares a cross-kind ID namespace; do not
 infer a universal cross-entity namespace from that rule.
 
+Selected-epic creation reuses that guard and create primitive. It reauthorizes
+after waiting, resolves the full selected epic identity exactly and parses that
+parent before writing the task. Cooperating writers cannot replace it between
+the guarded parent check and create. Preview checks a point-in-time parent and
+reserves nothing; raw writers retain the final check-to-create window, and a
+later parent removal is not prohibited. See
+[selected-parent regressions](../../internal/store/selected_task_creation_test.go).
+
 Kind-specific receipts retain planned/committed local paths outside domain values.
 A post-commit guard-release failure returns the committed receipt and error; callers
 inspect the created record rather than remint/retry. Research creation cannot treat

@@ -18,6 +18,7 @@ type sourceSetProbe struct {
 	TaskGraphMutationStore
 	TaskGraphRepairStore
 	TaskLifecycleMutationStore
+	SelectedEpicTaskCreationStore
 	ThreadStore
 	ThreadPathSource
 	TaskPathSource
@@ -40,6 +41,7 @@ func (p *sourceSetProbe) ReadAuditSnapshot(string) (AuditSnapshot, error) {
 
 type noSourceSetGraph struct{ TaskGraphSource }
 type noSourceSetMutation struct{ TaskGraphMutationStore }
+type noSourceSetSelectedCreation struct{ SelectedEpicTaskCreationStore }
 type noSourceSetCompletion struct{ CompletionSource }
 type noSourceSetFixer struct{ Fixer }
 type noSourceSetLinter struct{ Linter }
@@ -70,6 +72,7 @@ func TestNewServiceRejectsEveryMismatchedSplitCapability(t *testing.T) {
 		{"graph mutation", WithTaskGraphMutationStore(foreign)},
 		{"graph repair", WithTaskGraphRepairStore(foreign)},
 		{"lifecycle mutation", WithTaskLifecycleMutationStore(foreign)},
+		{"selected-epic creation", WithSelectedEpicTaskCreationStore(foreign)},
 		{"Thread read", WithThreadStore(foreign)},
 		{"Thread path", WithThreadPathSource(foreign)},
 		{"task path", WithTaskPathSource(foreign)},
@@ -101,6 +104,8 @@ func TestNewServiceRejectsMissingOrEmptySourceSetIdentity(t *testing.T) {
 	}{
 		{"missing provider", WithTaskGraphSource(&noSourceSetGraph{}), "does not publish"},
 		{"guarded mutation without provider", WithTaskGraphMutationStore(&noSourceSetMutation{}), "does not publish"},
+		{"selected creation without provider", WithSelectedEpicTaskCreationStore(&noSourceSetSelectedCreation{}), "does not publish"},
+		{"selected creation without witness", WithSelectedEpicTaskCreationStore(&sourceSetProbe{}), "empty source-set"},
 		{"completion without provider", WithCompletionSource(&noSourceSetCompletion{}), "does not publish"},
 		{"frontmatter repair without provider", WithFrontmatterRepairer(&noSourceSetFixer{}), "does not publish"},
 		{"link checks without provider", WithBodyLinkSource(&noSourceSetLinter{}), "does not publish"},
