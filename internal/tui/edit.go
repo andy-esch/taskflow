@@ -58,10 +58,10 @@ func editableFields(t domain.Task) []editField {
 	d := fieldDescs("task")
 	fields := []editField{
 		{key: "description", label: "description", desc: d["description"], kind: fieldLongText, current: t.Description},
-		{key: "priority", label: "priority", desc: d["priority"], kind: fieldEnum, options: []string{"high", "medium", "low"}, current: t.Priority},
+		{key: "priority", label: "priority", desc: d["priority"], kind: fieldEnum, options: editEnumOptions("priority"), current: t.Priority},
 		{key: "tags", label: "tags", desc: d["tags"], kind: fieldText, current: strings.Join(t.Tags, ", ")},
 		{key: "effort", label: "effort", desc: d["effort"], kind: fieldText, current: t.Effort},
-		{key: "tier", label: "tier", desc: d["tier"], kind: fieldEnum, options: []string{"1", "2", "3", "4", "5"}, current: tierStr(t.Tier)},
+		{key: "tier", label: "tier", desc: d["tier"], kind: fieldEnum, options: editEnumOptions("tier"), current: tierStr(t.Tier)},
 	}
 	// revisit_at is meaningful only while deferred (the snooze date is cleared on
 	// leaving deferred), so surface it for editing ONLY there — this is the in-place
@@ -88,8 +88,21 @@ func editableEpicFields(e domain.Epic) []editField {
 	d := fieldDescs("epic")
 	return []editField{
 		{key: "description", label: "description", desc: d["description"], kind: fieldLongText, current: e.Description},
-		{key: "priority", label: "priority", desc: d["priority"], kind: fieldEnum, options: []string{"high", "medium", "low"}, current: e.Priority},
+		{key: "priority", label: "priority", desc: d["priority"], kind: fieldEnum, options: editEnumOptions("priority"), current: e.Priority},
 		{key: "tags", label: "tags", desc: d["tags"], kind: fieldText, current: strings.Join(e.Tags, ", ")},
+	}
+}
+
+// editEnumOptions supplies the shared bounded selectors for existing-record
+// edits and staged creation. These are UI choices; core still validates writes.
+func editEnumOptions(field string) []string {
+	switch field {
+	case "priority":
+		return []string{"high", "medium", "low"}
+	case "tier", "autonomy_level":
+		return []string{"1", "2", "3", "4", "5"}
+	default:
+		return nil
 	}
 }
 
