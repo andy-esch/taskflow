@@ -20,6 +20,7 @@ type paletteKind int
 const (
 	palJump    paletteKind = iota // jump to an entity (ek, ref)
 	palCommand                    // run a `:` command word (word)
+	palAction                     // named contextual action; carries selected identity when required
 )
 
 // paletteItem is one row in the palette index. title is shown; filter is what the

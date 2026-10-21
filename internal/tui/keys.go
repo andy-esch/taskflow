@@ -30,6 +30,7 @@ type keyMap struct {
 	FilterMode  key.Binding // F → toggle list filter: fuzzy ⇄ substring
 	Action      key.Binding // m → lifecycle move menu (mirrors the CLI `move`/start/complete/…)
 	Edit        key.Binding // e → inline field editor (tasks)
+	Create      key.Binding // c → staged task creation on Tasks (other kinds follow separately)
 	OpenEditor  key.Binding // E → open the selection's whole file in $EDITOR (any entity)
 	RawToggle   key.Binding // R → raw ⇄ pretty markdown in the detail body
 	Follow      key.Binding // f → follow the selection's structured entity reference
@@ -74,6 +75,7 @@ var keys = keyMap{
 	FilterMode: key.NewBinding(key.WithKeys("F"), key.WithHelp("F", "filter mode: fuzzy ⇄ substring (default fuzzy)")),
 	Action:     key.NewBinding(key.WithKeys("m"), key.WithHelp("m", "move — lifecycle (start/complete/defer/…); audits: close/reopen/defer; epics: activate/retire/deprecate")),
 	Edit:       key.NewBinding(key.WithKeys("e"), key.WithHelp("e", "edit fields in place — tasks: desc/priority/tags/effort/tier (+revisit when deferred) · epics: desc/priority/tags")),
+	Create:     key.NewBinding(key.WithKeys("c"), key.WithHelp("c", "new task on Tasks (list or detail); epic context: ctrl+p → New task in this epic")),
 	OpenEditor: key.NewBinding(key.WithKeys("E"), key.WithHelp("E", "open the whole file in $EDITOR (any entity; re-read on save)")),
 	RawToggle:  key.NewBinding(key.WithKeys("R"), key.WithHelp("R", "raw ⇄ pretty markdown")),
 	Follow:     key.NewBinding(key.WithKeys("f"), key.WithHelp("f", "follow reference (task → epic · epic/Thread → task)")),

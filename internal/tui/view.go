@@ -360,6 +360,11 @@ func keyCombo(a, b key.Binding, sep, label string) string {
 // controls are advertised only when the loaded detail can actually use them.
 func (m Model) detailFooterBody() string {
 	hints := make([]string, 0, 8)
+	if m.cur().kind == entityTasks {
+		hints = append(hints, keyHint(keys.Create, "new task"))
+	} else if m.cur().kind == entityEpics {
+		hints = append(hints, keyHint(keys.Palette, "new task in epic"))
+	}
 	if !m.detail.directionalSelectionAvailable() {
 		hints = append(hints,
 			keyHint(keys.Find, "find"),
@@ -410,6 +415,15 @@ func (m Model) withWatchHealth(hints string) string {
 }
 
 func (m Model) footer() string {
+	if m.createTask.active {
+		hint := "New task · Tab/Shift+Tab fields · Enter advance/action · Esc cancel · Ctrl+C force quit"
+		if m.createTask.saving {
+			hint = "Saving in the origin space · no repeat submission · not cancellable"
+		} else if m.createTask.locked {
+			hint = "Creation recovery · y copy draft + receipt · Esc close"
+		}
+		return m.st.dim(truncate(hint, m.width))
+	}
 	if m.cmd.active {
 		// Surface the matching commands inline so `:` is self-documenting: the full
 		// vocabulary on an empty prompt, narrowing to the prefix as you type.
@@ -476,6 +490,11 @@ func (m Model) footer() string {
 		keyHint(keys.Command, "cmd"),
 		keyHint(keys.Atlas, "atlas"),
 		"/ filter", // the list's own filter (no keyMap binding)
+	}
+	if m.cur().kind == entityTasks {
+		listHints = append([]string{keyHint(keys.Create, "new task")}, listHints...)
+	} else if m.cur().kind == entityEpics {
+		listHints = append([]string{keyHint(keys.Palette, "new task in epic")}, listHints...)
 	}
 	if len(m.cur().transitions) > 0 {
 		listHints = append(listHints, keyHint(keys.Action, "move"))

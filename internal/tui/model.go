@@ -99,6 +99,8 @@ type Model struct {
 	follow                  followMenu              // the `f` reference picker (S6, epics/Threads → their tasks)
 	direction               detailDirectionMenu     // an ambiguous semantic h/l move inside a structured detail
 	edit                    editMenu                // the `e` inline field editor (task set with a GUI)
+	createTask              taskCreateForm          // staged task authoring; no writes until explicit Create
+	createTaskGen           uint64                  // never reused across forms or workspace activations
 	navStack                []navLoc                // where each `f` jump came from; ctrl+o pops (S6)
 	pendingDetailNavigation detailNavigationRestore // presentation/selection to restore after an async ctrl+o return
 	flash                   string                  // transient post-action feedback line (cleared on the next key)
@@ -283,6 +285,9 @@ func (m Model) cur() *entityTab { return m.tabs[m.active] }
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if scoped, ok := msg.(sessionMsg); ok && m.sessionScope {
 		if scoped.gen != m.sessionGen {
+			if result, ok := scoped.msg.(taskCreatedMsg); ok {
+				return m.handleTaskCreated(result) // retain origin receipt, never navigate the new space
+			}
 			if opened, ok := scoped.msg.(workspaceOpenedMsg); ok {
 				return m, closeWatcher(opened.watcher)
 			}
@@ -315,6 +320,29 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
+
+	case tea.PasteMsg:
+		for _, o := range m.modals {
+			if o.active(&m) {
+				if owner, ok := o.(pasteModal); ok {
+					return m, owner.handlePaste(&m, msg)
+				}
+				return m, nil
+			}
+		}
+
+	case taskCreateEpicsMsg:
+		m.applyTaskCreateEpics(msg)
+		return m, nil
+
+	case taskCreatedMsg:
+		return m.handleTaskCreated(msg)
+
+	case taskCreateWidgetMsg:
+		if m.createTask.active && msg.gen == m.createTask.gen && msg.inputGen == m.createTask.inputGen {
+			return m, m.createTask.updateInput(msg.msg)
+		}
+		return m, nil
 
 	case configEditorMsg:
 		if !m.configOpen {
@@ -864,6 +892,12 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, tea.Quit
 	case key.Matches(msg, keys.Help):
 		m.showHelp = true
+		return m, nil
+	case key.Matches(msg, keys.Create):
+		if m.cur().kind == entityTasks {
+			return m, m.openTaskCreate(entityRef{})
+		}
+		m.flash, m.flashErr = "creation is not available on this page yet", true
 		return m, nil
 	case key.Matches(msg, keys.Atlas):
 		return m, m.enterAtlas(false)

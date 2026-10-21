@@ -53,7 +53,9 @@ See [portable target tests](../../internal/core/task_target_test.go) and
 Already-selected interfaces use explicit Service entry points, skipping reference
 matching while sharing ordinary CLI validation/retry rules. An ID alone is not
 cross-space authority: the [TUI](tui.md#shell-and-entity-extension-seams) captures the
-originating Service and closes unsubmitted forms on workspace activation.
+originating Service and invalidates unsubmitted intents on workspace activation.
+Staged creation retains a non-submittable recovery copy rather than rebinding or
+discarding typed input; see [TUI authoring](tui.md#staged-task-creation).
 See [portable application tests](../../internal/core/selected_task_action_test.go)
 and [TUI action tests](../../internal/tui/selected_task_action_test.go), including
 [open-form activation regressions](../../internal/tui/selected_task_session_test.go).
