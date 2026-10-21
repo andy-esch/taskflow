@@ -24,11 +24,18 @@ type modal interface {
 	view(m *Model, w, h int) string
 }
 
+// Terminal paste is immediate input, unlike a generation-scoped clipboard
+// command result. Only the first active modal may receive it; unsupported modals
+// consume it rather than leaking text to an underlying form or list.
+type pasteModal interface {
+	handlePaste(m *Model, msg tea.PasteMsg) tea.Cmd
+}
+
 // defaultModals is the overlay registry in precedence order — help, Config/About,
-// action menu, follow picker, inline field editor, then the command palette. The first active
-// modal owns the key and the floated box. Adding one is a struct + an entry here (M14).
+// staged creation, action/follow/direction pickers, inline editor, then palette.
+// The first active modal owns input and the floated box.
 func defaultModals() []modal {
-	return []modal{helpModal{}, configModal{}, actionModal{}, followModal{}, detailDirectionModal{}, editModal{}, paletteModal{}}
+	return []modal{helpModal{}, configModal{}, taskCreateModal{}, actionModal{}, followModal{}, detailDirectionModal{}, editModal{}, paletteModal{}}
 }
 
 // configModal embeds the same typed editor used by `config edit`.

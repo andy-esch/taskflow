@@ -42,6 +42,7 @@ var helpSections = []helpSection{
 		he(keys.StatusView), he(keys.StatusRev),
 		he(keys.Action),
 		he(keys.Edit),
+		he(keys.Create),
 		he(keys.OpenEditor),
 		he(keys.Follow),
 		he(keys.JumpBack),

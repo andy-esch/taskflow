@@ -186,9 +186,11 @@ func (m *Model) activateWorkspace(workspace core.Workspace, nextWatcher *watcher
 }
 
 // closeTransientUI invalidates unsubmitted intents when the Service changes.
-// Forms store row/list identity, not their opening Service; those values may
-// coincide in another checkout. Issued commands separately capture their Service.
+// Existing-record forms close because row/list identity can coincide in another
+// checkout. Staged task creation retains a non-submittable recovery copy bound to
+// its opening Service. Issued commands independently retain that origin too.
 func (m *Model) closeTransientUI() {
+	m.createTask.displace()
 	m.showHelp = false
 	m.helpScroll = 0
 	m.configOpen = false

@@ -60,6 +60,56 @@ and selected identity; the shell handles open/history. Runtime
 in this guide. Structured follow and back-stack behavior lives in
 [nav.go](../../internal/tui/nav.go).
 
+## Staged task creation
+
+[Task creation](../../internal/tui/task_create.go) is a page-local staged form,
+not the write-on-each-field editor. The named epic-context palette action carries
+the selected source ID; the Tasks form obtains one from its searchable catalog.
+Both call `Service.NewTaskForSelectedEpic` in a command capturing the origin
+Service and copied inputs. Core supplies defaults, validation and scaffolding;
+the form converts its selected numeric values/tag inputs and never attributes
+fields by error text. Priority, tier and autonomy reuse the inline editor's bounded
+choices and enum rendering; selecting a value stages it rather than persisting it.
+The explicit default choice leaves core defaulting intact.
+
+Live terminal paste follows the first active modal's optional paste handler,
+never an underlying list or hidden form. Creation accepts it only in visible,
+editable text/search fields; delayed clipboard results separately retain their
+form/field generation guards.
+
+Catalog generations reject late reloads without replacing selected intent.
+Explicit submission blocks duplicate actions and ordinary navigation. Known
+uncommitted refusals retain all input for deliberate retry; committed cleanup
+failures, unknown outcomes and incomplete success receipts instead retain a
+non-replayable recovery view. Local destinations are displayed as receipt evidence,
+never opened directly. Inspection uses existing selected-ID navigation/editor paths.
+
+Activation invalidates the draft's submission authority but preserves a read-only
+recovery copy. An already-issued origin result can update that copy even after a
+session switch; it cannot navigate, reload or write the incoming space. Successful
+current-space creation carries an exact pending selection through normal list and
+watcher reloads. [Regressions](../../internal/tui/task_create_test.go) cover portable
+capabilities, real persistence, session/result ordering, receipts, terminal fit and
+a complete keyboard flow through the running Bubble Tea program.
+
+### Extending creation to other kinds
+
+The task form is a first consumer, not a universal entity schema. Its explicit
+interaction mode prevents simultaneous picker/enum/discard states;
+[task commands](../../internal/tui/task_create_commands.go) separately own the
+selected-parent request, typed receipt and task-list landing. Enum choices/rendering
+already have two consumers: creation and the existing field editor.
+
+For the next entity, reuse/extract widget routing, focus/scrolling, staging and
+confirmation mechanics against both working consumers. Do not clone the whole
+task controller or grow task row IDs into a cross-kind field schema. Each kind
+keeps its actual `New*Params`, defaults, optional capabilities, selection intent,
+receipt/recovery and destination-view policy. Epic descriptions/status inputs,
+audit area/date, research date-based minting and Thread graph membership are not
+task-parent variations; persisted `FieldDoc.Required` is not a form definition.
+The [additional-creation task](../../planning/tasks/6gmshzwphadw-extend-tui-creation-to-epics-audits-research-and-threads.md)
+owns that extraction with regression evidence for genuinely different kinds.
+
 ## Threads and local graph focus
 
 [Thread loaders](../../internal/tui/thread_projection.go) use shared core projections,

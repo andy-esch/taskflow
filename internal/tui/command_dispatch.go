@@ -167,7 +167,7 @@ func (m Model) paletteIndex() []paletteItem {
 	for _, w := range m.paletteCommands() {
 		items = append(items, paletteItem{kind: palCommand, word: w, title: ":" + w, filter: w})
 	}
-	return items
+	return append(m.taskCreationActions(), items...)
 }
 
 // paletteCommands is the canonical command words for the palette: tab names, each
@@ -232,6 +232,17 @@ func (m *Model) handlePaletteKey(msg tea.KeyPressMsg) tea.Cmd {
 // `:` command word.
 func (m *Model) runPaletteItem(it paletteItem) tea.Cmd {
 	switch it.kind {
+	case palAction:
+		switch it.word {
+		case "new-task":
+			return m.openTaskCreate(entityRef{})
+		case "new-task-in-epic":
+			if it.ref.empty() || it.ref != m.selectedRef() {
+				m.flash, m.flashErr = "select the epic again before creating a task", true
+				return nil
+			}
+			return m.openTaskCreate(it.ref)
+		}
 	case palJump:
 		m.pushLoc()
 		return m.jumpTo(it.ek, it.ref)

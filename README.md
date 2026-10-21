@@ -568,6 +568,12 @@ synchronized execution phase. The spatial view uses `hjkl` for stable-identity n
 `z` to toggle a one-hop neighborhood around the selected task, and `Enter` to open it; ambiguous
 horizontal fan-in/fan-out opens a chooser instead of guessing. `f` remains the fast
 stable-identity picker for members and immediate external gates.
+
+On Tasks, `c` opens a staged creation form; from an epic, choose **New task in …**
+in Ctrl+P to preselect it. Tab through the inputs and explicitly choose Create—nothing
+is saved while typing. Errors retain the draft; success selects the new task, with
+`E` for longer prose when local editing is available. Other entity creation remains CLI-only for now.
+
 Membership order is not presented as dependency or dispatch order. It **live-reloads**
 via `fsnotify` — edits from
 your editor or a CLI `task move` in another terminal show up within ~200ms,
