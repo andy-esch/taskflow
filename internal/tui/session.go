@@ -187,10 +187,11 @@ func (m *Model) activateWorkspace(workspace core.Workspace, nextWatcher *watcher
 
 // closeTransientUI invalidates unsubmitted intents when the Service changes.
 // Existing-record forms close because row/list identity can coincide in another
-// checkout. Staged task creation retains a non-submittable recovery copy bound to
+// checkout. Staged creation retains a non-submittable recovery copy bound to
 // its opening Service. Issued commands independently retain that origin too.
 func (m *Model) closeTransientUI() {
 	m.createTask.displace()
+	m.createEpic.displace()
 	m.showHelp = false
 	m.helpScroll = 0
 	m.configOpen = false

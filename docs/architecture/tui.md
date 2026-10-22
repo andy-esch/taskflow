@@ -74,8 +74,11 @@ The explicit default choice leaves core defaulting intact.
 
 Live terminal paste follows the first active modal's optional paste handler,
 never an underlying list or hidden form. Creation accepts it only in visible,
-editable text/search fields; delayed clipboard results separately retain their
-form/field generation guards.
+editable text/search fields. All delayed widget results retain kind/form/field
+guards and require visible input ownership, including library-private native
+clipboard results; only focus-issued cursor blink ticks bypass visibility to keep
+their maintenance chain. The public terminal paste type alone is not an inventory
+of native editing messages.
 
 Catalog generations reject late reloads without replacing selected intent.
 Explicit submission blocks duplicate actions and ordinary navigation. Known
@@ -92,16 +95,47 @@ watcher reloads. [Regressions](../../internal/tui/task_create_test.go) cover por
 capabilities, real persistence, session/result ordering, receipts, terminal fit and
 a complete keyboard flow through the running Bubble Tea program.
 
+### Epic creation and shared staging
+
+[Epic creation](../../internal/tui/epic_create.go) uses page-local `c` and the
+named New epic palette action. It has no task-parent picker: title, required
+description, optional tags and explicit status/priority choices become
+`NewEpicParams`. Initial active/medium choices match the CLI; core does not default
+these inputs. Numbering, validation, scaffolding and persistence stay in core and
+its adapter. Typed epic receipts independently determine retry, recovery and exact
+epic landing; a task receipt is not an entity-neutral creation result.
+
+Both forms use [shared staging mechanics](../../internal/tui/staged_creation.go)
+and [bounded presentation](../../internal/tui/staged_creation_view.go): focus,
+enum staging, dirty confirmation, modal/input routing and scrolling. Widget arrays
+belong to each form; before edits, the shared input update detaches the widget's
+internal text buffer through its public API. Copying the array alone is not a
+deep copy of Bubbles internals, and cursor animation bookkeeping is not promised
+to be an immutable snapshot. [Shared input regressions](../../internal/tui/staged_creation_test.go)
+pin retained draft text across non-empty mid-string edits and the task parent query.
+Delayed input carries entity-kind, form and field
+generations; form submission retains its origin Service/session. Per-kind row
+definitions, defaults and receipt policy are not a universal entity schema.
+Recovery presentation pins destination, record identity and actions before bounded
+diagnostics; copying retains the full draft, receipt and error even at small sizes.
+[Epic regressions](../../internal/tui/epic_create_test.go) pin independent durable
+metadata, empty-list creation, portable receipts, cross-kind input isolation,
+session/result ordering and real-program keyboard/paste behavior alongside the
+task regressions.
+The [Darwin native-clipboard integration tests](../../internal/tui/staged_creation_clipboard_darwin_test.go)
+execute Ctrl+V with a stub `pbpaste`, including delayed delivery after a runtime
+resize; the generic input/ownership tests run on every platform.
+
 ### Extending creation to other kinds
 
-The task form is a first consumer, not a universal entity schema. Its explicit
+The forms are concrete consumers, not a universal entity schema. Their explicit
 interaction mode prevents simultaneous picker/enum/discard states;
 [task commands](../../internal/tui/task_create_commands.go) separately own the
 selected-parent request, typed receipt and task-list landing. Enum choices/rendering
 already have two consumers: creation and the existing field editor.
 
-For the next entity, reuse/extract widget routing, focus/scrolling, staging and
-confirmation mechanics against both working consumers. Do not clone the whole
+For the next entity, reuse the shared widget routing, focus/scrolling, staging and
+confirmation mechanics against the working consumers. Do not clone the whole
 task controller or grow task row IDs into a cross-kind field schema. Each kind
 keeps its actual `New*Params`, defaults, optional capabilities, selection intent,
 receipt/recovery and destination-view policy. Epic descriptions/status inputs,

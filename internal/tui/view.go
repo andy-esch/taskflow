@@ -363,7 +363,7 @@ func (m Model) detailFooterBody() string {
 	if m.cur().kind == entityTasks {
 		hints = append(hints, keyHint(keys.Create, "new task"))
 	} else if m.cur().kind == entityEpics {
-		hints = append(hints, keyHint(keys.Palette, "new task in epic"))
+		hints = append(hints, keyHint(keys.Create, "new epic"), keyHint(keys.Palette, "new task in epic"))
 	}
 	if !m.detail.directionalSelectionAvailable() {
 		hints = append(hints,
@@ -415,11 +415,15 @@ func (m Model) withWatchHealth(hints string) string {
 }
 
 func (m Model) footer() string {
-	if m.createTask.active {
-		hint := "New task · Tab/Shift+Tab fields · Enter advance/action · Esc cancel · Ctrl+C force quit"
-		if m.createTask.saving {
+	if f := m.activeCreation(); f != nil {
+		noun := "task"
+		if f.kind == entityEpics {
+			noun = "epic"
+		}
+		hint := "New " + noun + " · Tab/Shift+Tab fields · Enter advance/action · Esc cancel · Ctrl+C force quit"
+		if f.saving {
 			hint = "Saving in the origin space · no repeat submission · not cancellable"
-		} else if m.createTask.locked {
+		} else if f.locked {
 			hint = "Creation recovery · y copy draft + receipt · Esc close"
 		}
 		return m.st.dim(truncate(hint, m.width))
@@ -494,7 +498,7 @@ func (m Model) footer() string {
 	if m.cur().kind == entityTasks {
 		listHints = append([]string{keyHint(keys.Create, "new task")}, listHints...)
 	} else if m.cur().kind == entityEpics {
-		listHints = append([]string{keyHint(keys.Palette, "new task in epic")}, listHints...)
+		listHints = append([]string{keyHint(keys.Create, "new epic"), keyHint(keys.Palette, "new task in epic")}, listHints...)
 	}
 	if len(m.cur().transitions) > 0 {
 		listHints = append(listHints, keyHint(keys.Action, "move"))

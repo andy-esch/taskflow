@@ -35,7 +35,7 @@ type pasteModal interface {
 // staged creation, action/follow/direction pickers, inline editor, then palette.
 // The first active modal owns input and the floated box.
 func defaultModals() []modal {
-	return []modal{helpModal{}, configModal{}, taskCreateModal{}, actionModal{}, followModal{}, detailDirectionModal{}, editModal{}, paletteModal{}}
+	return []modal{helpModal{}, configModal{}, creationModal{}, actionModal{}, followModal{}, detailDirectionModal{}, editModal{}, paletteModal{}}
 }
 
 // configModal embeds the same typed editor used by `config edit`.

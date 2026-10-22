@@ -11,37 +11,17 @@ import (
 	"github.com/andy-esch/taskflow/internal/domain"
 )
 
-// Task-specific controller/command boundary: field and widget mechanics stay in
-// task_create.go; core invocation, selected-parent intent and typed receipts stay
-// here. Future entity forms must supply their own request/receipt policy rather
+// Task-specific controller/command boundary: task fields stay in task_create.go
+// over shared staged_creation mechanics; core invocation, selected-parent intent
+// and typed receipts stay here. Other forms supply their own request/receipt policy rather
 // than borrowing task fields, status assumptions or parent validation.
-
-func (m Model) taskCreationActions() []paletteItem {
-	if m.onDash || m.onAtlas {
-		return nil
-	}
-	switch m.cur().kind {
-	case entityTasks:
-		return []paletteItem{{kind: palAction, word: "new-task", title: "New task", filter: "new create task"}}
-	case entityEpics:
-		ref := m.selectedRef()
-		title := "New task in this epic — select an epic first"
-		if _, ok := m.selectedEpic(); ok {
-			title = "New task in " + ref.label
-		} else {
-			ref = entityRef{}
-		}
-		return []paletteItem{{kind: palAction, word: "new-task-in-epic", ref: ref, title: title, filter: "new create task in this epic " + ref.label}}
-	}
-	return nil
-}
 
 func (m *Model) openTaskCreate(epic entityRef) tea.Cmd {
 	if m.atlas.opening {
 		m.flash, m.flashErr = "wait for the pending workspace open before creating a task", true
 		return nil
 	}
-	if m.createTask.active || m.svc == nil || m.onAtlas || m.onDash {
+	if m.activeCreation() != nil || m.svc == nil || m.onAtlas || m.onDash {
 		return nil
 	}
 	if epic.empty() && m.cur().kind != entityTasks {
@@ -53,12 +33,8 @@ func (m *Model) openTaskCreate(epic entityRef) tea.Cmd {
 			return nil
 		}
 	}
-	m.createTaskGen++
-	destination := m.spaceName()
-	if m.workspace.Checkout != "" {
-		destination += " · " + m.workspace.Checkout
-	}
-	m.createTask = newTaskCreateForm(m.svc, m.createTaskGen, m.sessionGen, destination, epic)
+	m.creationGen++
+	m.createTask = newTaskCreateForm(m.svc, m.creationGen, m.sessionGen, m.creationDestination(), epic)
 	return tea.Batch(m.createTask.focus(taskCreateTitle), m.createTask.loadEpics())
 }
 
@@ -110,11 +86,7 @@ func (m *Model) submitTaskCreate() tea.Cmd {
 	}
 	p := core.NewTaskParams{Title: f.inputs[taskCreateTitle].Value(), Description: f.inputs[taskCreateDescription].Value(),
 		Priority: f.inputs[taskCreatePriority].Value(), Effort: f.inputs[taskCreateEffort].Value()}
-	for _, tag := range strings.Split(f.inputs[taskCreateTags].Value(), ",") {
-		if tag = strings.TrimSpace(tag); tag != "" {
-			p.Tags = append(p.Tags, tag)
-		}
-	}
+	p.Tags = creationTags(f.inputs[taskCreateTags].Value())
 	for _, field := range []struct {
 		row int
 		out *int
@@ -152,7 +124,7 @@ func (m Model) handleTaskCreated(msg taskCreatedMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	var finalization *core.CreateFinalizationError
-	uncertain := errors.As(msg.err, &finalization) || (msg.err != nil && !taskCreateKnownRefusal(msg.err))
+	uncertain := errors.As(msg.err, &finalization) || (msg.err != nil && !creationKnownRefusal(msg.err))
 	if msg.receipt.Committed || msg.receipt.Local.CommittedPath != "" || uncertain {
 		if msg.err == nil && msg.receipt.Committed && msg.receipt.Task.ID != "" && !msg.receipt.DryRun {
 			receipt := msg.receipt
@@ -177,27 +149,12 @@ func (m Model) handleTaskCreated(msg taskCreatedMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func taskCreateKnownRefusal(err error) bool {
-	return errors.Is(err, domain.ErrValidation) || errors.Is(err, domain.ErrNotFound) ||
-		errors.Is(err, domain.ErrAmbiguous) || errors.Is(err, domain.ErrConflict) || errors.Is(err, core.ErrReadOnlyPersistence)
-}
-
 func (m *Model) landCreatedTask(receipt core.TaskCreationReceipt) tea.Cmd {
 	i := indexOfKind(m.tabs, entityTasks)
-	m.exitDashboard(i)
-	m.zoom, m.immersiveZoom = false, false
-	m.setFocus(focusList)
-	m.recomputeLayout()
-	tab := m.tabs[i]
-	tab.list.ResetFilter()
-	if tab.statusView != "all" && tab.statusView != string(domain.StatusReadyToStart) {
-		tab.statusView = ""
+	view := m.tabs[i].statusView
+	if view != "all" && view != string(domain.StatusReadyToStart) {
+		view = ""
 	}
-	tab.restore = entityRef{key: receipt.Task.ID, label: receipt.Task.Slug}
-	tab.restoreWiden = true
-	m.flash, m.flashErr = "created "+receipt.Task.Slug, false
-	if m.svc.HasLocalPath(core.EntityTask) {
-		m.flash += " — E opens its scaffold in your editor"
-	}
-	return m.reloadAll()
+	return m.landCreatedEntity(entityTasks, entityRef{key: receipt.Task.ID, label: receipt.Task.Slug},
+		view, m.svc.HasLocalPath(core.EntityTask))
 }
