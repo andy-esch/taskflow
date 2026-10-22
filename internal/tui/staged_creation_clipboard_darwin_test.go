@@ -71,11 +71,17 @@ func TestCreationNativeClipboardOwnership(t *testing.T) {
 				if _, terminal := widget.msg.(tea.PasteMsg); terminal {
 					t.Fatal("fixture accidentally exercises terminal instead of native paste")
 				}
-				next, _ = m.Update(result)
-				m = next.(Model)
-				values := []string{m.createTask.inputs[taskCreateTitle].Value(), m.createTask.inputs[taskCreateTags].Value()}
+				if blocker == "visible" {
+					// The common harness must also deliver Bubbles' opaque native
+					// result, not only manufactured public terminal messages.
+					m = settleCreate(t, m, func() tea.Msg { return result })
+				} else {
+					next, _ = m.Update(result)
+					m = next.(Model)
+				}
+				values := []string{m.creation.task.inputs[taskCreateTitle].Value(), m.creation.task.inputs[taskCreateTags].Value()}
 				if kind == "epic" {
-					values = []string{m.createEpic.inputs[epicCreateTitle].Value(), m.createEpic.inputs[epicCreateDescription].Value()}
+					values = []string{m.creation.epic.inputs[epicCreateTitle].Value(), m.creation.epic.inputs[epicCreateDescription].Value()}
 				}
 				want := ""
 				if blocker == "visible" {
@@ -163,7 +169,7 @@ func TestCreationNativeClipboardAfterRuntimeResize(t *testing.T) {
 	wait("New epic")
 	tm.Send(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	final := tm.FinalModel(t, teatest.WithFinalTimeout(5*time.Second)).(creationClipboardRuntime).model
-	if final.width != 46 || final.height != 18 || final.createEpic.inputs[epicCreateTitle].Value() != "" ||
+	if final.width != 46 || final.height != 18 || final.creation.epic.inputs[epicCreateTitle].Value() != "" ||
 		!strings.Contains(ansi.Strip(final.View().Content), "New epic") {
 		t.Fatal("running program accepted native paste behind its resize notice")
 	}

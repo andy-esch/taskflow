@@ -190,8 +190,7 @@ func (m *Model) activateWorkspace(workspace core.Workspace, nextWatcher *watcher
 // checkout. Staged creation retains a non-submittable recovery copy bound to
 // its opening Service. Issued commands independently retain that origin too.
 func (m *Model) closeTransientUI() {
-	m.createTask.displace()
-	m.createEpic.displace()
+	m.creation.displace()
 	m.showHelp = false
 	m.helpScroll = 0
 	m.configOpen = false

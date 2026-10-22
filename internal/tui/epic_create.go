@@ -33,6 +33,7 @@ type epicCreateForm struct {
 }
 
 func (f *epicCreateForm) state() *creationState { return &f.creationState }
+func (epicCreateForm) noun() string             { return "epic" }
 
 type epicCreatedMsg struct {
 	gen, session uint64
@@ -111,9 +112,7 @@ func (m *Model) openEpicCreate() tea.Cmd {
 	if m.activeCreation() != nil || m.svc == nil || m.onAtlas || m.onDash || m.cur().kind != entityEpics {
 		return nil
 	}
-	m.creationGen++
-	m.createEpic = newEpicCreateForm(m.svc, m.creationGen, m.sessionGen, m.creationDestination())
-	return m.createEpic.controls().focus(epicCreateTitle)
+	return m.creation.openEpic(m.svc, m.sessionGen, m.creationDestination())
 }
 
 func (f *epicCreateForm) handleKey(m *Model, msg tea.KeyPressMsg) tea.Cmd {
@@ -155,7 +154,7 @@ func (f *epicCreateForm) handleKey(m *Model, msg tea.KeyPressMsg) tea.Cmd {
 }
 
 func (m *Model) submitEpicCreate() tea.Cmd {
-	f := &m.createEpic
+	f := &m.creation.epic
 	if !f.active || f.saving || f.locked {
 		return nil
 	}
@@ -174,22 +173,28 @@ func (m *Model) submitEpicCreate() tea.Cmd {
 	}
 }
 
-func (m Model) handleEpicCreated(msg epicCreatedMsg) (tea.Model, tea.Cmd) {
-	f := &m.createEpic
-	if !f.active || !f.saving || msg.gen != f.gen || msg.session != f.session {
-		return m, nil
-	}
+func (msg epicCreatedMsg) creationRoute() (entityKind, uint64, uint64) {
+	return entityEpics, msg.gen, msg.session
+}
+
+func (msg epicCreatedMsg) applyCreation(m *Model) tea.Cmd {
+	return m.handleEpicCreated(msg)
+}
+
+// Routed only by creationHost after matching kind, attempt and origin session.
+func (m *Model) handleEpicCreated(msg epicCreatedMsg) tea.Cmd {
+	f := &m.creation.epic
 	f.saving, f.receipt = false, msg.receipt
 	if f.displaced || f.origin != m.svc || f.session != m.sessionGen {
 		f.displace()
 		if msg.err != nil {
 			f.err += " Origin result: " + msg.err.Error()
 		}
-		return m, nil
+		return nil
 	}
 	if msg.err == nil && msg.receipt.Committed && msg.receipt.Epic.ID != "" && !msg.receipt.DryRun {
 		f.close()
-		return m, m.landCreatedEpic(msg.receipt)
+		return m.landCreatedEpic(msg.receipt)
 	}
 	var finalization *core.CreateFinalizationError
 	uncertain := errors.As(msg.err, &finalization) || (msg.err != nil && !creationKnownRefusal(msg.err))
@@ -199,10 +204,10 @@ func (m Model) handleEpicCreated(msg epicCreatedMsg) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			f.err += " " + msg.err.Error()
 		}
-		return m, m.reloadAll()
+		return m.reloadAll()
 	}
 	f.err = domain.Reason(msg.err)
-	return m, nil
+	return nil
 }
 
 func (m *Model) landCreatedEpic(receipt core.EpicCreationReceipt) tea.Cmd {
@@ -222,7 +227,7 @@ func (f epicCreateForm) recoveryText() string {
 }
 
 func (f epicCreateForm) view(s *styles, maxW, maxH int) string {
-	p := creationPresentation{noun: "epic", title: f.inputs[epicCreateTitle].Value(),
+	p := creationPresentation{noun: f.noun(), title: f.inputs[epicCreateTitle].Value(),
 		subtitle: "Nothing saved until Create · status and priority are explicit choices",
 		recordID: f.receipt.Epic.ID, path: f.receipt.Local.CommittedPath,
 		inspect: f.receipt.Committed && f.receipt.Epic.ID != "" && !f.receipt.DryRun}

@@ -97,6 +97,13 @@ a complete keyboard flow through the running Bubble Tea program.
 
 ### Epic creation and shared staging
 
+[The creation host](../../internal/tui/creation_host.go) owns one active kind,
+concrete value slots, monotonic attempt generations and displacement. Its borrowed
+draft interface is never stored across Model copies. Typed result messages implement
+the private creation-result seam; the host matches kind/attempt/origin session before
+dispatching to the per-kind receipt policy. The shell has one result route and one
+late-session exception for those outcomes, not for catalog or widget messages.
+
 [Epic creation](../../internal/tui/epic_create.go) uses page-local `c` and the
 named New epic palette action. It has no task-parent picker: title, required
 description, optional tags and explicit status/priority choices become
@@ -122,6 +129,14 @@ diagnostics; copying retains the full draft, receipt and error even at small siz
 metadata, empty-list creation, portable receipts, cross-kind input isolation,
 session/result ordering and real-program keyboard/paste behavior alongside the
 task regressions.
+The [shared contract matrix](../../internal/tui/creation_host_test.go) pins host
+lifetime, routing tokens and supported-size boundaries for both kinds. The shell's
+modal gutter is removed once; the same creation-size rule gates input and chooses
+resize rendering. The [bounded interaction harness](../../internal/tui/staged_creation_helpers_test.go)
+executes finite application and widget results through Model.Update, including
+opaque clipboard results; only known cursor maintenance is stopped. It reports a
+budget error rather than silently swallowing a command loop. Running-program tests
+remain necessary for actual asynchronous delivery ordering.
 The [Darwin native-clipboard integration tests](../../internal/tui/staged_creation_clipboard_darwin_test.go)
 execute Ctrl+V with a stub `pbpaste`, including delayed delivery after a runtime
 resize; the generic input/ownership tests run on every platform.
@@ -141,6 +156,10 @@ keeps its actual `New*Params`, defaults, optional capabilities, selection intent
 receipt/recovery and destination-view policy. Epic descriptions/status inputs,
 audit area/date, research date-based minting and Thread graph membership are not
 task-parent variations; persisted `FieldDoc.Required` is not a form definition.
+Add its concrete slot/opener/draft selection in the host and implement the typed
+creation-result route beside its controller; extend the shared mechanical matrix
+and its independent durable expectations. Do not add another root-model result
+case or displacement branch, or persist a pointer to a mutable form as host state.
 The [additional-creation task](../../planning/tasks/6gmshzwphadw-extend-tui-creation-to-epics-audits-research-and-threads.md)
 owns that extraction with regression evidence for genuinely different kinds.
 

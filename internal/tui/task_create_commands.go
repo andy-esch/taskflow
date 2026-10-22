@@ -33,9 +33,7 @@ func (m *Model) openTaskCreate(epic entityRef) tea.Cmd {
 			return nil
 		}
 	}
-	m.creationGen++
-	m.createTask = newTaskCreateForm(m.svc, m.creationGen, m.sessionGen, m.creationDestination(), epic)
-	return tea.Batch(m.createTask.focus(taskCreateTitle), m.createTask.loadEpics())
+	return m.creation.openTask(m.svc, m.sessionGen, m.creationDestination(), epic)
 }
 
 func (f *taskCreateForm) loadEpics() tea.Cmd {
@@ -49,7 +47,7 @@ func (f *taskCreateForm) loadEpics() tea.Cmd {
 }
 
 func (m *Model) applyTaskCreateEpics(msg taskCreateEpicsMsg) {
-	f := &m.createTask
+	f := &m.creation.task
 	if !f.active || f.displaced || msg.gen != f.gen || msg.catalog != f.catalogGen {
 		return
 	}
@@ -72,7 +70,7 @@ func (m *Model) applyTaskCreateEpics(msg taskCreateEpicsMsg) {
 }
 
 func (m *Model) submitTaskCreate() tea.Cmd {
-	f := &m.createTask
+	f := &m.creation.task
 	if !f.active || f.saving || f.locked {
 		return nil
 	}
@@ -110,18 +108,24 @@ func (m *Model) submitTaskCreate() tea.Cmd {
 	}
 }
 
-func (m Model) handleTaskCreated(msg taskCreatedMsg) (tea.Model, tea.Cmd) {
-	f := &m.createTask
-	if !f.active || !f.saving || msg.gen != f.gen || msg.session != f.session {
-		return m, nil
-	}
+func (msg taskCreatedMsg) creationRoute() (entityKind, uint64, uint64) {
+	return entityTasks, msg.gen, msg.session
+}
+
+func (msg taskCreatedMsg) applyCreation(m *Model) tea.Cmd {
+	return m.handleTaskCreated(msg)
+}
+
+// Routed only by creationHost after matching kind, attempt and origin session.
+func (m *Model) handleTaskCreated(msg taskCreatedMsg) tea.Cmd {
+	f := &m.creation.task
 	f.saving, f.receipt = false, msg.receipt
 	if f.displaced || f.origin != m.svc || f.session != m.sessionGen {
 		f.displace()
 		if msg.err != nil {
 			f.err += " Origin result: " + msg.err.Error()
 		}
-		return m, nil
+		return nil
 	}
 	var finalization *core.CreateFinalizationError
 	uncertain := errors.As(msg.err, &finalization) || (msg.err != nil && !creationKnownRefusal(msg.err))
@@ -129,24 +133,24 @@ func (m Model) handleTaskCreated(msg taskCreatedMsg) (tea.Model, tea.Cmd) {
 		if msg.err == nil && msg.receipt.Committed && msg.receipt.Task.ID != "" && !msg.receipt.DryRun {
 			receipt := msg.receipt
 			f.close()
-			return m, m.landCreatedTask(receipt)
+			return m.landCreatedTask(receipt)
 		}
 		f.locked = true
 		f.err = "Inspect the original attempt before doing anything else. Create is disabled; it will not be replayed."
 		if msg.err != nil {
 			f.err += " " + msg.err.Error()
 		}
-		return m, m.reloadAll()
+		return m.reloadAll()
 	}
 	if msg.err == nil {
 		// A non-preview success without commit evidence is not permission to mint
 		// again, even if a faulty/remote adapter returned an incomplete receipt.
 		f.locked = true
 		f.err = "Create returned no durable confirmation. Inspect the origin; do not create again."
-		return m, nil
+		return nil
 	}
 	f.err = domain.Reason(msg.err) // no field attribution guessed from error strings
-	return m, nil
+	return nil
 }
 
 func (m *Model) landCreatedTask(receipt core.TaskCreationReceipt) tea.Cmd {

@@ -50,6 +50,7 @@ type taskCreateForm struct {
 }
 
 func (f *taskCreateForm) state() *creationState { return &f.creationState }
+func (taskCreateForm) noun() string             { return "task" }
 
 type taskCreateEpicsMsg struct {
 	gen      uint64

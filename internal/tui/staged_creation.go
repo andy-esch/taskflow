@@ -140,6 +140,7 @@ type creationControls struct {
 // The shell hosts concrete UI drafts through this mechanical seam. Domain
 // requests, receipts and write policy remain in their per-kind controllers.
 type stagedCreation interface {
+	noun() string
 	state() *creationState
 	dirty() bool
 	close()
@@ -229,44 +230,12 @@ func (c creationControls) handleKey(msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	return false, nil
 }
 
-func (m Model) creationActions() []paletteItem {
-	if m.onDash || m.onAtlas {
-		return nil
-	}
-	switch m.cur().kind {
-	case entityTasks:
-		return []paletteItem{{kind: palAction, word: "new-task", title: "New task", filter: "new create task"}}
-	case entityEpics:
-		ref := m.selectedRef()
-		title := "New task in this epic — select an epic first"
-		if _, ok := m.selectedEpic(); ok {
-			title = "New task in " + ref.label
-		} else {
-			ref = entityRef{}
-		}
-		return []paletteItem{
-			{kind: palAction, word: "new-task-in-epic", ref: ref, title: title, filter: "new create task in this epic " + ref.label},
-			{kind: palAction, word: "new-epic", title: "New epic", filter: "new create epic"},
-		}
-	}
-	return nil
-}
-
 func (m *Model) creationDraft() stagedCreation {
-	if m.createTask.active {
-		return &m.createTask
-	}
-	if m.createEpic.active {
-		return &m.createEpic
-	}
-	return nil
+	return m.creation.draft()
 }
 
 func (m *Model) activeCreation() *creationState {
-	if draft := m.creationDraft(); draft != nil {
-		return draft.state()
-	}
-	return nil
+	return m.creation.active()
 }
 
 func (m *Model) creationDestination() string {

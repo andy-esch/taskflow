@@ -3,7 +3,7 @@ package tui
 import "fmt"
 
 func (f taskCreateForm) view(s *styles, maxW, maxH int) string {
-	p := creationPresentation{noun: "task", title: f.inputs[taskCreateTitle].Value(),
+	p := creationPresentation{noun: f.noun(), title: f.inputs[taskCreateTitle].Value(),
 		subtitle: "Nothing saved until Create · starts ready-to-start",
 		recordID: f.receipt.Task.ID, path: f.receipt.Local.CommittedPath,
 		inspect: f.receipt.Committed && f.receipt.Task.ID != "" && !f.receipt.DryRun}

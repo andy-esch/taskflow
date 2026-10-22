@@ -233,18 +233,7 @@ func (m *Model) handlePaletteKey(msg tea.KeyPressMsg) tea.Cmd {
 func (m *Model) runPaletteItem(it paletteItem) tea.Cmd {
 	switch it.kind {
 	case palAction:
-		switch it.word {
-		case "new-epic":
-			return m.openEpicCreate()
-		case "new-task":
-			return m.openTaskCreate(entityRef{})
-		case "new-task-in-epic":
-			if it.ref.empty() || it.ref != m.selectedRef() {
-				m.flash, m.flashErr = "select the epic again before creating a task", true
-				return nil
-			}
-			return m.openTaskCreate(it.ref)
-		}
+		return m.runCreationAction(it)
 	case palJump:
 		m.pushLoc()
 		return m.jumpTo(it.ek, it.ref)
