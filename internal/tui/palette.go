@@ -10,9 +10,9 @@ import (
 )
 
 // The command palette (ctrl+p): a floating fuzzy launcher over one flat index of
-// everything — every loaded task/epic/audit (jump to it) plus the `:` command
-// words (switch tab/view, run a lifecycle verb). You open it, type, and Enter
-// either jumps or dispatches. It's the discovery surface: instead of remembering
+// loaded entities (jump to one), `:` command words (switch tab/view, run a
+// lifecycle verb) and contextual actions such as creation. Type, then Enter
+// to jump or dispatch. It's the discovery surface: instead of remembering
 // keys or scanning the help, type what you want. `:` stays as the terse path.
 
 type paletteKind int
@@ -30,7 +30,7 @@ type paletteItem struct {
 	ek     entityKind // palJump: which tab to land on
 	ref    entityRef  // palJump: canonical key plus visible label
 	entity string     // palJump: human entity kind; shown only to disambiguate cross-kind labels
-	word   string     // palCommand: the `:` word to dispatch
+	word   string     // palCommand / palAction: command word or named action
 	title  string
 	filter string
 }
