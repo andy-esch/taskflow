@@ -22,79 +22,36 @@ import (
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
 
-func createKey(m Model, key string) (Model, tea.Cmd) {
-	msg := press(key)
-	switch key {
-	case "up":
-		msg = tea.KeyPressMsg{Code: tea.KeyUp}
-	case "down":
-		msg = tea.KeyPressMsg{Code: tea.KeyDown}
-	case "shift+tab":
-		msg = tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift}
-	case "ctrl+p":
-		msg = tea.KeyPressMsg{Code: 'p', Mod: tea.ModCtrl}
-	case "ctrl+r":
-		msg = tea.KeyPressMsg{Code: 'r', Mod: tea.ModCtrl}
-	}
-	next, cmd := m.Update(msg)
-	return next.(Model), cmd
-}
-
-// Settle application messages, not perpetual cursor-blink timers. All actual
-// reads/writes and their following reloads still execute through real tea.Cmds.
-func settleCreate(t *testing.T, m Model, cmd tea.Cmd) Model {
-	t.Helper()
-	if cmd == nil {
-		return m
-	}
-	msg := cmd()
-	if batch, ok := msg.(tea.BatchMsg); ok {
-		for _, child := range batch {
-			m = settleCreate(t, m, child)
-		}
-		return m
-	}
-	inner := msg
-	if scoped, ok := inner.(sessionMsg); ok {
-		inner = scoped.msg
-	}
-	if _, ok := inner.(creationWidgetMsg); ok {
-		return m
-	}
-	next, follow := m.Update(msg)
-	return settleCreate(t, next.(Model), follow)
-}
-
 func openCreate(t *testing.T, m Model) Model {
 	t.Helper()
 	m, cmd := createKey(m, "c")
 	m = settleCreate(t, m, cmd)
-	if !m.createTask.active || !m.createTask.catalogLoaded {
+	if !m.creation.task.active || !m.creation.task.catalogLoaded {
 		t.Fatal("task form/catalog did not open")
 	}
 	return m
 }
 
 func fillCreate(m *Model) {
-	m.createTask.inputs[taskCreateTitle].SetValue("Ship a task")
-	m.createTask.inputs[taskCreateTags].SetValue("tui, authoring")
-	m.createTask.inputs[taskCreateDescription].SetValue("A useful task")
+	m.creation.task.inputs[taskCreateTitle].SetValue("Ship a task")
+	m.creation.task.inputs[taskCreateTags].SetValue("tui, authoring")
+	m.creation.task.inputs[taskCreateDescription].SetValue("A useful task")
 	// Model a user choosing the actual adapter-established picker record.
-	ep := m.createTask.epics[0]
-	m.createTask.epic = entityRef{key: ep.Source.ID, label: ep.Epic.ID}
+	ep := m.creation.task.epics[0]
+	m.creation.task.epic = entityRef{key: ep.Source.ID, label: ep.Epic.ID}
 }
 
 func chooseCreateOption(t *testing.T, m Model, row int, value string) Model {
 	t.Helper()
-	m.createTask.focus(row)
+	m.creation.task.focus(row)
 	m, _ = createKey(m, "enter")
 	options := taskCreateEnumOptions(row)
 	want := slices.Index(options, value)
-	if want < 0 || m.createTask.mode != creationEnumMode {
+	if want < 0 || m.creation.task.mode != creationEnumMode {
 		t.Fatalf("no selector option %q on row %d", value, row)
 	}
 	for range len(options) {
-		if m.createTask.enumCursor == want {
+		if m.creation.task.enumCursor == want {
 			break
 		}
 		m, _ = createKey(m, "j")
@@ -112,10 +69,10 @@ func TestTaskCreateFromTasksAndEpicContext(t *testing.T) {
 				m = settleCreate(t, m, m.switchTab(indexOfKind(m.tabs, entityEpics)))
 				m.setFocus(focusDetail)
 				m, _ = createKey(m, "c")
-				if m.createTask.active {
+				if m.creation.task.active {
 					t.Fatal("epic-page c must not create a task")
 				}
-				if !m.createEpic.active {
+				if !m.creation.epic.active {
 					t.Fatal("epic-page c must create an epic")
 				}
 				m, _ = createKey(m, "esc") // cancel the clean epic draft before the contextual action
@@ -129,7 +86,7 @@ func TestTaskCreateFromTasksAndEpicContext(t *testing.T) {
 				}
 				m, cmd = createKey(m, "enter")
 				m = settleCreate(t, m, cmd)
-				if m.createTask.epic.key != "01-test" {
+				if m.creation.task.epic.key != "01-test" {
 					t.Fatal("epic was not preselected")
 				}
 			} else {
@@ -144,20 +101,20 @@ func assertCreateFromForm(t *testing.T, m Model, root string) {
 	t.Helper()
 	before := testutil.SnapshotTree(t, root)
 	fillCreate(&m)
-	m.createTask.more = true
+	m.creation.task.more = true
 	m = chooseCreateOption(t, m, taskCreatePriority, "high")
 	m = chooseCreateOption(t, m, taskCreateTier, "2")
 	m = chooseCreateOption(t, m, taskCreateAutonomy, "4")
-	m.createTask.inputs[taskCreateEffort].SetValue("one day")
+	m.creation.task.inputs[taskCreateEffort].SetValue("one day")
 	// Enter in title advances, never saves; draft manipulation is memory-only.
-	m.createTask.focus(taskCreateTitle)
+	m.creation.task.focus(taskCreateTitle)
 	m, _ = createKey(m, "enter")
-	if m.createTask.saving || !maps.Equal(before, testutil.SnapshotTree(t, root)) {
+	if m.creation.task.saving || !maps.Equal(before, testutil.SnapshotTree(t, root)) {
 		t.Fatal("editing/advancing wrote a partial record")
 	}
-	m.createTask.focus(taskCreateSubmit)
+	m.creation.task.focus(taskCreateSubmit)
 	m, write := createKey(m, "enter")
-	if !m.createTask.saving || !maps.Equal(before, testutil.SnapshotTree(t, root)) {
+	if !m.creation.task.saving || !maps.Equal(before, testutil.SnapshotTree(t, root)) {
 		t.Fatal("command construction performed I/O or did not mark submission pending")
 	}
 	var duplicate tea.Cmd
@@ -166,7 +123,7 @@ func assertCreateFromForm(t *testing.T, m Model, root string) {
 		t.Fatal("duplicate Create issued a second write")
 	}
 	m = settleCreate(t, m, write)
-	if m.createTask.active || m.cur().kind != entityTasks {
+	if m.creation.task.active || m.cur().kind != entityTasks {
 		t.Fatal("success did not return to Tasks")
 	}
 	selected, ok := m.selectedTask()
@@ -198,25 +155,25 @@ func TestTaskCreateKeyboardAndDirtyCancel(t *testing.T) {
 	for _, key := range []string{"q", "h", "j", "k", "n"} {
 		m, _ = createKey(m, key)
 	}
-	if m.createTask.inputs[taskCreateTitle].Value() != "qhjkn" || m.createTask.cursor != taskCreateTitle {
+	if m.creation.task.inputs[taskCreateTitle].Value() != "qhjkn" || m.creation.task.cursor != taskCreateTitle {
 		t.Fatal("text keys escaped into global navigation")
 	}
 	m, _ = createKey(m, "esc")
-	if m.createTask.mode != creationDiscardMode {
+	if m.creation.task.mode != creationDiscardMode {
 		t.Fatal("dirty cancel did not confirm")
 	}
 	m, _ = createKey(m, "enter")
-	if !m.createTask.active || m.createTask.mode == creationDiscardMode || m.createTask.inputs[taskCreateTitle].Value() != "qhjkn" {
+	if !m.creation.task.active || m.creation.task.mode == creationDiscardMode || m.creation.task.inputs[taskCreateTitle].Value() != "qhjkn" {
 		t.Fatal("Enter did not default to keeping input")
 	}
 	m, _ = createKey(m, "esc")
 	m, _ = createKey(m, "y")
-	if m.createTask.active || !maps.Equal(before, testutil.SnapshotTree(t, root)) {
+	if m.creation.task.active || !maps.Equal(before, testutil.SnapshotTree(t, root)) {
 		t.Fatal("discard persisted input")
 	}
 	m = openCreate(t, m)
 	m, _ = createKey(m, "esc")
-	if m.createTask.active {
+	if m.creation.task.active {
 		t.Fatal("clean form should close without confirmation")
 	}
 }
@@ -224,25 +181,25 @@ func TestTaskCreateKeyboardAndDirtyCancel(t *testing.T) {
 func TestTaskCreateValidationPreservesDraftAndRetriesExplicitly(t *testing.T) {
 	m := openCreate(t, loaded(t, 120, 40))
 	fillCreate(&m)
-	m.createTask.inputs[taskCreateTags].SetValue("")
-	m.createTask.focus(taskCreateSubmit)
+	m.creation.task.inputs[taskCreateTags].SetValue("")
+	m.creation.task.focus(taskCreateSubmit)
 	m, write := createKey(m, "enter")
 	m = settleCreate(t, m, write)
-	if !m.createTask.active || m.createTask.locked || m.createTask.err == "" || m.createTask.inputs[taskCreateTitle].Value() != "Ship a task" {
+	if !m.creation.task.active || m.creation.task.locked || m.creation.task.err == "" || m.creation.task.inputs[taskCreateTitle].Value() != "Ship a task" {
 		t.Fatal("validation refusal lost or locked the draft")
 	}
-	m.createTask.inputs[taskCreateTags].SetValue("tui")
-	m.createTask.inputs[taskCreateTier].SetValue("not a number")
+	m.creation.task.inputs[taskCreateTags].SetValue("tui")
+	m.creation.task.inputs[taskCreateTier].SetValue("not a number")
 	m, _ = createKey(m, "enter")
-	if m.createTask.saving || m.createTask.cursor != taskCreateTier || !m.createTask.more {
+	if m.creation.task.saving || m.creation.task.cursor != taskCreateTier || !m.creation.task.more {
 		t.Fatal("unparseable number was not attributed before dispatch")
 	}
-	m.createTask.inputs[taskCreateTier].SetValue("")
-	m.createTask.focus(taskCreateSubmit)
+	m.creation.task.inputs[taskCreateTier].SetValue("")
+	m.creation.task.focus(taskCreateSubmit)
 	m, write = createKey(m, "enter")
 	m = settleCreate(t, m, write)
 	task, ok := m.selectedTask()
-	if !ok || m.createTask.active || task.Priority != "medium" || task.Tier != 3 || task.Autonomy != 3 || task.Effort != "Unknown" {
+	if !ok || m.creation.task.active || task.Priority != "medium" || task.Tier != 3 || task.Autonomy != 3 || task.Effort != "Unknown" {
 		t.Fatalf("core defaults were not retained: %+v", task)
 	}
 }
@@ -251,23 +208,23 @@ func TestTaskCreatePickerRetainsExactSelectionOnParentDrift(t *testing.T) {
 	root := seedRepo(t)
 	m := openCreate(t, loadedAt(t, root, 120, 40))
 	fillCreate(&m)
-	m.createTask.focus(taskCreateEpic)
+	m.creation.task.focus(taskCreateEpic)
 	m, _ = createKey(m, "enter")
 	for _, char := range "test" {
 		m, _ = createKey(m, string(char))
 	}
 	m, _ = createKey(m, "enter")
-	if m.createTask.mode == creationPickerMode || m.createTask.epic.key != "01-test" {
+	if m.creation.task.mode == creationPickerMode || m.creation.task.epic.key != "01-test" {
 		t.Fatal("picker did not retain source identity")
 	}
-	m.createTask.focus(taskCreateSubmit)
+	m.creation.task.focus(taskCreateSubmit)
 	m, write := createKey(m, "enter")
 	if err := os.Rename(filepath.Join(root, "epics", "01-test.md"), filepath.Join(root, "epics", "01-renamed.md")); err != nil {
 		t.Fatal(err)
 	}
 	before := testutil.SnapshotTree(t, root)
 	m = settleCreate(t, m, write)
-	if !m.createTask.active || m.createTask.epic.key != "01-test" || m.createTask.inputs[taskCreateTitle].Value() != "Ship a task" || m.createTask.err == "" ||
+	if !m.creation.task.active || m.creation.task.epic.key != "01-test" || m.creation.task.inputs[taskCreateTitle].Value() != "Ship a task" || m.creation.task.err == "" ||
 		!maps.Equal(before, testutil.SnapshotTree(t, root)) {
 		t.Fatal("stale selection fell back to renamed parent or lost input")
 	}
@@ -335,7 +292,7 @@ func TestTaskCreateUsesPortableCapabilityAndOpaquePickerIdentity(t *testing.T) {
 			next, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: 32})
 			m = openCreate(t, next.(Model)) // creation also works on an empty task list
 			fillCreate(&m)
-			m.createTask.focus(taskCreateSubmit)
+			m.creation.task.focus(taskCreateSubmit)
 			m, write := createKey(m, "enter")
 			// Execute the real command, then inspect delivery without running the
 			// subsequent list/detail loads (not part of this narrow fake).
@@ -344,13 +301,13 @@ func TestTaskCreateUsesPortableCapabilityAndOpaquePickerIdentity(t *testing.T) {
 			m = next.(Model)
 			if available {
 				if port.calls != 1 || port.target.ID != "urn:epic:selected" || port.task.Epic != "urn:epic:selected" ||
-					port.task.Slug != "ship-a-task" || port.task.Status != domain.StatusReadyToStart || !strings.Contains(port.body, "# Ship a task") || m.createTask.active {
-					t.Fatalf("portable submit fell back/lost identity: port=%+v form=%+v", port, m.createTask)
+					port.task.Slug != "ship-a-task" || port.task.Status != domain.StatusReadyToStart || !strings.Contains(port.body, "# Ship a task") || m.creation.task.active {
+					t.Fatalf("portable submit fell back/lost identity: port=%+v form=%+v", port, m.creation.task)
 				}
 				if strings.Contains(m.flash, "editor") {
 					t.Fatal("pathless creation promised an unavailable local editor")
 				}
-			} else if !m.createTask.active || m.createTask.locked || !strings.Contains(m.createTask.err, "unavailable") {
+			} else if !m.creation.task.active || m.creation.task.locked || !strings.Contains(m.creation.task.err, "unavailable") {
 				t.Fatal("missing capability was not an explicit input-preserving refusal")
 			}
 		})
@@ -360,25 +317,25 @@ func TestTaskCreateUsesPortableCapabilityAndOpaquePickerIdentity(t *testing.T) {
 func TestTaskCreateCatalogQuarantinesInvalidIdentityAndRejectsStaleLoads(t *testing.T) {
 	m := openCreate(t, loaded(t, 120, 40))
 	fillCreate(&m)
-	f := &m.createTask
+	f := &m.creation.task
 	gen, catalog := f.gen, f.catalogGen
 	selected := f.epic
 	invalid := core.EpicSummary{Source: core.RecordSource{ID: "same"}, Epic: domain.Epic{ID: "Visible"}}
 	m.applyTaskCreateEpics(taskCreateEpicsMsg{gen: gen, catalog: catalog, epics: []core.EpicSummary{invalid, invalid}})
-	if m.createTask.catalogErr == "" || len(m.createTask.matches()) != 0 || m.createTask.epic != selected {
+	if m.creation.task.catalogErr == "" || len(m.creation.task.matches()) != 0 || m.creation.task.epic != selected {
 		t.Fatal("duplicate identity catalog remained selectable or changed selected intent")
 	}
-	first, second := m.createTask.loadEpics(), m.createTask.loadEpics()
+	first, second := m.creation.task.loadEpics(), m.creation.task.loadEpics()
 	newer := second().(taskCreateEpicsMsg)
 	m.applyTaskCreateEpics(newer)
 	m.applyTaskCreateEpics(taskCreateEpicsMsg{gen: gen, catalog: catalog, err: errors.New("stale catalog failure")})
-	if m.createTask.catalogErr != "" || !m.createTask.catalogLoaded || len(m.createTask.epics) == 0 {
+	if m.creation.task.catalogErr != "" || !m.creation.task.catalogLoaded || len(m.creation.task.epics) == 0 {
 		t.Fatal("old catalog result replaced a newer coherent load")
 	}
-	m.createTask.close()
+	m.creation.task.close()
 	m = openCreate(t, m)
 	m.applyTaskCreateEpics(first().(taskCreateEpicsMsg))
-	if m.createTask.gen == gen || m.createTask.catalogErr != "" || m.createTask.inputs[taskCreateTitle].Value() != "" {
+	if m.creation.task.gen == gen || m.creation.task.catalogErr != "" || m.creation.task.inputs[taskCreateTitle].Value() != "" {
 		t.Fatal("departed form's load affected a reopened form")
 	}
 }
@@ -389,7 +346,7 @@ func TestTaskCreateWatcherCannotSupersedeCreatedLanding(t *testing.T) {
 	// Creating from a status/filter that excludes a fresh task still lands on it.
 	m.cur().statusView = string(domain.StatusInProgress)
 	m.cur().list.SetFilterText("alpha")
-	m.createTask.focus(taskCreateSubmit)
+	m.creation.task.focus(taskCreateSubmit)
 	m, write := createKey(m, "enter")
 	result := write()
 	next, landing := m.Update(result)
@@ -440,7 +397,7 @@ func TestTaskCreateInRealProgram(t *testing.T) {
 	wait("created real-creation", "# Real creation")
 	tm.Send(press("q"))
 	final := tm.FinalModel(t, teatest.WithFinalTimeout(5*time.Second)).(Model)
-	if task, ok := final.selectedTask(); !ok || task.Slug != "real-creation" || task.Epic != "01-test" || final.createTask.active {
+	if task, ok := final.selectedTask(); !ok || task.Slug != "real-creation" || task.Epic != "01-test" || final.creation.task.active {
 		t.Fatal("runtime command/widget routing did not complete staged creation")
 	}
 }
@@ -498,30 +455,30 @@ func TestTaskCreateTerminalPasteOwnership(t *testing.T) {
 			before := testutil.SnapshotTree(t, root)
 			switch state {
 			case "picker":
-				m.createTask.focus(taskCreateEpic)
+				m.creation.task.focus(taskCreateEpic)
 				m, _ = createKey(m, "enter")
 			case "enum":
-				m.createTask.more = true
-				m.createTask.focus(taskCreatePriority)
+				m.creation.task.more = true
+				m.creation.task.focus(taskCreatePriority)
 				m, _ = createKey(m, "enter")
 			case "discard":
-				m.createTask.inputs[taskCreateTitle].SetValue("Keep this")
+				m.creation.task.inputs[taskCreateTitle].SetValue("Keep this")
 				m, _ = createKey(m, "esc")
 			case "saving":
 				fillCreate(&m)
-				m.createTask.focus(taskCreateSubmit)
+				m.creation.task.focus(taskCreateSubmit)
 				m, _ = createKey(m, "enter") // hold the actual write command
 			case "locked":
-				m.createTask.locked = true
+				m.creation.task.locked = true
 			case "displaced":
-				m.createTask.displace()
+				m.creation.task.displace()
 			case "tiny":
 				next, _ := m.Update(tea.WindowSizeMsg{Width: 30, Height: 10})
 				m = next.(Model)
 			case "help":
 				m.showHelp = true // higher-priority modal must consume, not leak input
 			}
-			title, query := m.createTask.inputs[taskCreateTitle].Value(), m.createTask.query.Value()
+			title, query := m.creation.task.inputs[taskCreateTitle].Value(), m.creation.task.query.Value()
 			next, cmd := m.Update(tea.PasteMsg{Content: "qhjkn 世界"})
 			m = settleCreate(t, next.(Model), cmd)
 			switch state {
@@ -530,8 +487,8 @@ func TestTaskCreateTerminalPasteOwnership(t *testing.T) {
 			case "picker":
 				query = "qhjkn 世界"
 			}
-			if m.createTask.inputs[taskCreateTitle].Value() != title || m.createTask.query.Value() != query ||
-				m.createTask.inputs[taskCreatePriority].Value() != "" || !m.createTask.active ||
+			if m.creation.task.inputs[taskCreateTitle].Value() != title || m.creation.task.query.Value() != query ||
+				m.creation.task.inputs[taskCreatePriority].Value() != "" || !m.creation.task.active ||
 				!maps.Equal(before, testutil.SnapshotTree(t, root)) {
 				t.Fatal("terminal paste escaped its visible editable owner or wrote a record")
 			}
@@ -546,21 +503,21 @@ func TestTaskCreateReadOnlyAndEmptyEpicCatalog(t *testing.T) {
 	m = openCreate(t, m)
 	fillCreate(&m)
 	before := testutil.SnapshotTree(t, root)
-	m.createTask.focus(taskCreateSubmit)
+	m.creation.task.focus(taskCreateSubmit)
 	m, cmd := createKey(m, "enter")
 	m = settleCreate(t, m, cmd)
-	if m.createTask.locked || !m.createTask.active || m.createTask.err == "" || !maps.Equal(before, testutil.SnapshotTree(t, root)) {
+	if m.creation.task.locked || !m.creation.task.active || m.creation.task.err == "" || !maps.Equal(before, testutil.SnapshotTree(t, root)) {
 		t.Fatal("read-only refusal did not preserve the unwritten draft")
 	}
 	root = testutil.NewRepo(t).Root
 	m = openCreate(t, loadedAt(t, root, 120, 40))
-	if !strings.Contains(m.createTask.catalogStatus(), "No readable epics") {
+	if !strings.Contains(m.creation.task.catalogStatus(), "No readable epics") {
 		t.Fatal("empty catalog hides the prerequisite")
 	}
-	m.createTask.inputs[taskCreateTitle].SetValue("Retained draft")
-	m.createTask.focus(taskCreateSubmit)
+	m.creation.task.inputs[taskCreateTitle].SetValue("Retained draft")
+	m.creation.task.focus(taskCreateSubmit)
 	m, _ = createKey(m, "enter")
-	if m.createTask.saving || m.createTask.cursor != taskCreateEpic || m.createTask.inputs[taskCreateTitle].Value() != "Retained draft" {
+	if m.creation.task.saving || m.creation.task.cursor != taskCreateEpic || m.creation.task.inputs[taskCreateTitle].Value() != "Retained draft" {
 		t.Fatal("empty epic submission lost draft or dispatched")
 	}
 	testutil.Write(t, filepath.Join(root, domain.EpicsDir, "01-new.md"), "---\nstatus: active\n---\n# New epic\n")
@@ -568,28 +525,28 @@ func TestTaskCreateReadOnlyAndEmptyEpicCatalog(t *testing.T) {
 	m, cmd = createKey(m, "ctrl+r")
 	m = settleCreate(t, m, cmd)
 	m, _ = createKey(m, "enter")
-	if m.createTask.epic.key != "01-new" || m.createTask.inputs[taskCreateTitle].Value() != "Retained draft" {
+	if m.creation.task.epic.key != "01-new" || m.creation.task.inputs[taskCreateTitle].Value() != "Retained draft" {
 		t.Fatal("explicit catalog reload could not recover the preserved draft")
 	}
 }
 
 func TestTaskCreateDelayedWidgetResultsCannotEditAnotherField(t *testing.T) {
 	m := openCreate(t, loaded(t, 120, 40))
-	late := m.createTask.widgetCmd(func() tea.Msg { return press("x") })
-	m.createTask.focus(taskCreateTags)
+	late := m.creation.task.widgetCmd(func() tea.Msg { return press("x") })
+	m.creation.task.focus(taskCreateTags)
 	next, _ := m.Update(late())
 	m = next.(Model)
-	if m.createTask.inputs[taskCreateTitle].Value() != "" || m.createTask.inputs[taskCreateTags].Value() != "" {
+	if m.creation.task.inputs[taskCreateTitle].Value() != "" || m.creation.task.inputs[taskCreateTags].Value() != "" {
 		t.Fatal("departed field's asynchronous result edited the newly focused field")
 	}
-	m.createTask.focus(taskCreateEpic)
+	m.creation.task.focus(taskCreateEpic)
 	m, _ = createKey(m, "enter")
-	late = m.createTask.widgetCmd(func() tea.Msg { return press("q") })
+	late = m.creation.task.widgetCmd(func() tea.Msg { return press("q") })
 	m, _ = createKey(m, "esc")
 	m, _ = createKey(m, "enter") // reopen the same picker with a new input generation
 	next, _ = m.Update(late())
 	m = next.(Model)
-	if m.createTask.query.Value() != "" {
+	if m.creation.task.query.Value() != "" {
 		t.Fatal("old picker input reached a new picker activation")
 	}
 }
@@ -608,10 +565,10 @@ func TestTaskCreateConstrainedOptionsStageCancelAndReset(t *testing.T) {
 			root := seedRepo(t)
 			m := openCreate(t, loadedAt(t, root, 120, 40))
 			before := testutil.SnapshotTree(t, root)
-			m.createTask.more = true
-			m.createTask.focus(tc.row)
+			m.creation.task.more = true
+			m.creation.task.focus(tc.row)
 			m, _ = createKey(m, "enter")
-			if m.createTask.mode != creationEnumMode || taskCreateInput(tc.row) || !slices.Equal(taskCreateEnumOptions(tc.row), tc.want) {
+			if m.creation.task.mode != creationEnumMode || taskCreateInput(tc.row) || !slices.Equal(taskCreateEnumOptions(tc.row), tc.want) {
 				t.Fatal("bounded field did not use the expected enum selector")
 			}
 			if !strings.Contains(ansi.Strip(m.View().Content), "‹default›") {
@@ -620,34 +577,34 @@ func TestTaskCreateConstrainedOptionsStageCancelAndReset(t *testing.T) {
 			for _, arbitrary := range []string{"9", "x", "q"} {
 				m, _ = createKey(m, arbitrary)
 			}
-			if m.createTask.inputs[tc.row].Value() != "" || m.createTask.enumCursor != 0 {
+			if m.creation.task.inputs[tc.row].Value() != "" || m.creation.task.enumCursor != 0 {
 				t.Fatal("arbitrary text entered a constrained field")
 			}
 			for range slices.Index(tc.want, tc.value) {
 				m, _ = createKey(m, "j")
 			}
 			m, _ = createKey(m, "enter")
-			if m.createTask.mode == creationEnumMode || m.createTask.saving || m.createTask.inputs[tc.row].Value() != tc.value || !m.createTask.dirty() {
+			if m.creation.task.mode == creationEnumMode || m.creation.task.saving || m.creation.task.inputs[tc.row].Value() != tc.value || !m.creation.task.dirty() {
 				t.Fatal("accept did not stage the value without submitting")
 			}
-			m.createTask.focus(tc.row)
+			m.creation.task.focus(tc.row)
 			m, _ = createKey(m, "enter")
 			m, _ = createKey(m, "l")
 			m, _ = createKey(m, "esc")
-			if !m.createTask.active || m.createTask.mode == creationDiscardMode || m.createTask.inputs[tc.row].Value() != tc.value {
+			if !m.creation.task.active || m.creation.task.mode == creationDiscardMode || m.creation.task.inputs[tc.row].Value() != tc.value {
 				t.Fatal("Esc did not cancel just the unaccepted selector choice")
 			}
 			m, _ = createKey(m, "esc")
-			if m.createTask.mode != creationDiscardMode {
+			if m.creation.task.mode != creationDiscardMode {
 				t.Fatal("a staged enum override was not treated as dirty input")
 			}
 			m, _ = createKey(m, "enter") // keep editing
 			m, _ = createKey(m, "enter") // reopen enum
-			for m.createTask.enumCursor != 0 {
+			for m.creation.task.enumCursor != 0 {
 				m, _ = createKey(m, "k")
 			}
 			m, _ = createKey(m, "tab")
-			if m.createTask.inputs[tc.row].Value() != "" || m.createTask.dirty() || !maps.Equal(before, testutil.SnapshotTree(t, root)) {
+			if m.creation.task.inputs[tc.row].Value() != "" || m.creation.task.dirty() || !maps.Equal(before, testutil.SnapshotTree(t, root)) {
 				t.Fatal("default reset pinned UI policy or changed persistent data")
 			}
 		})
@@ -675,10 +632,10 @@ func TestTaskCreateReceiptRecoveryNeverReplays(t *testing.T) {
 			m.svc = core.MustNewService(fs, core.WithSelectedEpicTaskCreationStore(port))
 			m = openCreate(t, m)
 			fillCreate(&m)
-			m.createTask.focus(taskCreateSubmit)
+			m.creation.task.focus(taskCreateSubmit)
 			m, write := createKey(m, "enter")
 			m = settleCreate(t, m, write)
-			if !m.createTask.locked || m.createTask.err == "" || port.calls != 1 || m.createTask.inputs[taskCreateTitle].Value() != "Ship a task" {
+			if !m.creation.task.locked || m.creation.task.err == "" || port.calls != 1 || m.creation.task.inputs[taskCreateTitle].Value() != "Ship a task" {
 				t.Fatal("uncertain/committed attempt did not retain non-replayable recovery")
 			}
 			m, cmd := createKey(m, "enter")
@@ -707,7 +664,7 @@ func TestTaskCreateOriginBindingAndDisplacedRecovery(t *testing.T) {
 			fillCreate(&m)
 			var write tea.Cmd
 			if issued {
-				m.createTask.focus(taskCreateSubmit)
+				m.creation.task.focus(taskCreateSubmit)
 				m, write = createKey(m, "enter")
 			}
 			oldGen := m.sessionGen
@@ -715,15 +672,15 @@ func TestTaskCreateOriginBindingAndDisplacedRecovery(t *testing.T) {
 			incoming := core.Workspace{Checkout: beta, PlanningRoot: beta,
 				Planning: core.MustNewService(testutil.Must(store.NewFS(beta, core.UnrestrictedMutations())))}
 			m.activateWorkspace(incoming, nil, nil)
-			if !m.createTask.active || !m.createTask.displaced || !m.createTask.locked || m.createTask.inputs[taskCreateTitle].Value() != "Ship a task" {
+			if !m.creation.task.active || !m.creation.task.displaced || !m.creation.task.locked || m.creation.task.inputs[taskCreateTitle].Value() != "Ship a task" {
 				t.Fatal("workspace activation lost/rebound the draft")
 			}
 			if issued {
 				m = settleCreate(t, m, write)
-				if !m.createTask.receipt.Committed || m.createTask.saving {
+				if !m.creation.task.receipt.Committed || m.creation.task.saving {
 					t.Fatal("old-session result lost its origin receipt")
 				}
-				record, err := m.createTask.origin.ShowTask(m.createTask.receipt.Task.ID)
+				record, err := m.creation.task.origin.ShowTask(m.creation.task.receipt.Task.ID)
 				if err != nil || record.Value.Task.Slug != "ship-a-task" {
 					t.Fatal("issued command did not write exclusively to its originating Service")
 				}
@@ -743,16 +700,16 @@ func TestTaskCreateBlocksPendingWorkspaceOpenAndFitsSmallTerminals(t *testing.T)
 	m := loaded(t, 120, 40)
 	m.atlas.opening = true
 	m, _ = createKey(m, "c")
-	if m.createTask.active || !strings.Contains(m.flash, "pending workspace") {
+	if m.creation.task.active || !strings.Contains(m.flash, "pending workspace") {
 		t.Fatal("creation opened under an outstanding workspace open")
 	}
 	m.atlas.opening = false
 	m = openCreate(t, m)
 	fillCreate(&m)
-	m.createTask.more = true
+	m.creation.task.more = true
 	for _, size := range [][2]int{{120, 40}, {72, 24}, {48, 20}, {30, 10}, {12, 5}} {
-		for _, row := range m.createTask.rows() {
-			m.createTask.focus(row)
+		for _, row := range m.creation.task.rows() {
+			m.creation.task.focus(row)
 			next, _ := m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
 			m = next.(Model)
 			v := m.View().Content
@@ -764,7 +721,7 @@ func TestTaskCreateBlocksPendingWorkspaceOpenAndFitsSmallTerminals(t *testing.T)
 			}
 		}
 	}
-	if m.createTask.inputs[taskCreateTitle].Value() != "Ship a task" {
+	if m.creation.task.inputs[taskCreateTitle].Value() != "Ship a task" {
 		t.Fatal("resizing changed input")
 	}
 }

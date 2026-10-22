@@ -26,7 +26,7 @@ func openEpicForm(t *testing.T, m Model) Model {
 	m = settleCreate(t, m, m.switchTab(indexOfKind(m.tabs, entityEpics)))
 	m, cmd := createKey(m, "c")
 	m = settleCreate(t, m, cmd)
-	if !m.createEpic.active || m.createTask.active {
+	if !m.creation.epic.active || m.creation.task.active {
 		t.Fatal("Epics c did not open only an epic form")
 	}
 	return m
@@ -59,7 +59,7 @@ func TestEpicCreateDurableDefaultsAndOverrides(t *testing.T) {
 				m, _ = createKey(m, "enter") // status selector
 				m, _ = createKey(m, "j")     // retired
 				m, _ = createKey(m, "esc")   // unaccepted candidate is not staged
-				if m.createEpic.inputs[epicCreateStatus].Value() != "active" {
+				if m.creation.epic.inputs[epicCreateStatus].Value() != "active" {
 					t.Fatal("selector cancel staged its candidate")
 				}
 				m, _ = createKey(m, "enter")
@@ -70,7 +70,7 @@ func TestEpicCreateDurableDefaultsAndOverrides(t *testing.T) {
 				m, _ = createKey(m, "enter") // stage low; advance to Cancel
 				status, priority = "retired", "low"
 			}
-			m.createEpic.controls().focus(epicCreateSubmit)
+			m.creation.epic.controls().focus(epicCreateSubmit)
 			if !maps.Equal(before, testutil.SnapshotTree(t, root)) {
 				t.Fatal("staging created a partial record")
 			}
@@ -81,7 +81,7 @@ func TestEpicCreateDurableDefaultsAndOverrides(t *testing.T) {
 			}
 			m = settleCreate(t, m, write)
 			ref := m.selectedRef()
-			if m.createEpic.active || ref.key != "02-organize-qhjkn-世界" {
+			if m.creation.epic.active || ref.key != "02-organize-qhjkn-世界" {
 				t.Fatalf("did not land on adapter-numbered epic: %+v", ref)
 			}
 			detail, err := m.svc.ShowEpic(ref.key)
@@ -129,11 +129,11 @@ func TestEpicCreatePaletteAndPendingLanding(t *testing.T) {
 	}
 	m, cmd = createKey(m, "enter")
 	m = settleCreate(t, m, cmd)
-	if !m.createEpic.active || m.createTask.active {
+	if !m.creation.epic.active || m.creation.task.active {
 		t.Fatal("New epic action did not open the epic form")
 	}
 	m = fillEpic(m)
-	m.createEpic.controls().focus(epicCreateSubmit)
+	m.creation.epic.controls().focus(epicCreateSubmit)
 	m, cmd = createKey(m, "enter")
 	// Widen a pre-existing status restriction and preserve the new target when a
 	// watcher reload races the initial landing, not only a later stable refresh.
@@ -147,7 +147,7 @@ func TestEpicCreatePaletteAndPendingLanding(t *testing.T) {
 	}
 	m.atlas.opening = true
 	m, _ = createKey(m, "c")
-	if m.createEpic.active || !strings.Contains(m.flash, "pending workspace") {
+	if m.creation.epic.active || !strings.Contains(m.flash, "pending workspace") {
 		t.Fatal("epic form opened under a pending workspace activation")
 	}
 }
@@ -158,10 +158,10 @@ func TestEpicCreateReadOnlyAndPasteOwnership(t *testing.T) {
 	m.svc = core.MustNewService(testutil.Must(store.NewFS(root, core.ReadOnlyMutations())))
 	m = fillEpic(openEpicForm(t, m))
 	before := testutil.SnapshotTree(t, root)
-	m.createEpic.controls().focus(epicCreateSubmit)
+	m.creation.epic.controls().focus(epicCreateSubmit)
 	m, cmd := createKey(m, "enter")
 	m = settleCreate(t, m, cmd)
-	if !m.createEpic.active || m.createEpic.locked || m.createEpic.err == "" || !maps.Equal(before, testutil.SnapshotTree(t, root)) {
+	if !m.creation.epic.active || m.creation.epic.locked || m.creation.epic.err == "" || !maps.Equal(before, testutil.SnapshotTree(t, root)) {
 		t.Fatal("guarded read-only refusal lost draft or performed a write")
 	}
 	for _, mode := range []string{"help", "enum", "discard", "saving", "locked", "displaced"} {
@@ -170,21 +170,21 @@ func TestEpicCreateReadOnlyAndPasteOwnership(t *testing.T) {
 		case "help":
 			m.showHelp = true
 		case "enum":
-			m.createEpic.controls().focus(epicCreateStatus)
+			m.creation.epic.controls().focus(epicCreateStatus)
 			m, _ = createKey(m, "enter")
 		case "discard":
 			m, _ = createKey(m, "esc")
 		case "saving":
-			m.createEpic.controls().focus(epicCreateSubmit)
+			m.creation.epic.controls().focus(epicCreateSubmit)
 			m, _ = createKey(m, "enter")
 		case "locked":
-			m.createEpic.locked = true
+			m.creation.epic.locked = true
 		case "displaced":
-			m.createEpic.displace()
+			m.creation.epic.displace()
 		}
-		before := m.createEpic.recoveryText()
+		before := m.creation.epic.recoveryText()
 		m = pasteCreation(m, "invisible")
-		if m.createEpic.recoveryText() != before {
+		if m.creation.epic.recoveryText() != before {
 			t.Fatalf("paste escaped %s input ownership", mode)
 		}
 	}
@@ -193,33 +193,33 @@ func TestEpicCreateReadOnlyAndPasteOwnership(t *testing.T) {
 func TestEpicCreateValidationCancelAndEmptyList(t *testing.T) {
 	root := testutil.NewRepo(t).Root
 	m := openEpicForm(t, loadedAt(t, root, 120, 40))
-	if m.createEpic.dirty() {
+	if m.creation.epic.dirty() {
 		t.Fatal("visible initial enum choices made an untouched draft dirty")
 	}
 	m, _ = createKey(m, "esc")
-	if m.createEpic.active {
+	if m.creation.epic.active {
 		t.Fatal("clean draft did not cancel")
 	}
 	m = openEpicForm(t, m)
 	m = pasteCreation(m, "Retain title")
 	m, _ = createKey(m, "esc")
 	m, _ = createKey(m, "enter") // keep editing is the default
-	if !m.createEpic.active || m.createEpic.inputs[epicCreateTitle].Value() != "Retain title" {
+	if !m.creation.epic.active || m.creation.epic.inputs[epicCreateTitle].Value() != "Retain title" {
 		t.Fatal("dirty confirmation discarded title")
 	}
 	before := testutil.SnapshotTree(t, root)
-	m.createEpic.controls().focus(epicCreateSubmit)
+	m.creation.epic.controls().focus(epicCreateSubmit)
 	m, cmd := createKey(m, "enter")
 	m = settleCreate(t, m, cmd)
-	if !m.createEpic.active || m.createEpic.locked || m.createEpic.err == "" || !maps.Equal(before, testutil.SnapshotTree(t, root)) {
+	if !m.creation.epic.active || m.creation.epic.locked || m.creation.epic.err == "" || !maps.Equal(before, testutil.SnapshotTree(t, root)) {
 		t.Fatal("required-description refusal lost draft, locked retry or changed files")
 	}
-	m.createEpic.controls().focus(epicCreateDescription)
+	m.creation.epic.controls().focus(epicCreateDescription)
 	m = pasteCreation(m, "A description")
-	m.createEpic.controls().focus(epicCreateSubmit)
+	m.creation.epic.controls().focus(epicCreateSubmit)
 	m, cmd = createKey(m, "enter")
 	m = settleCreate(t, m, cmd)
-	if m.createEpic.active || m.selectedRef().key != "01-retain-title" {
+	if m.creation.epic.active || m.selectedRef().key != "01-retain-title" {
 		t.Fatal("explicit retry did not create first epic with optional empty tags")
 	}
 	// Complete the advertised no-CLI sequence: use this newly created epic as
@@ -228,7 +228,7 @@ func TestEpicCreateValidationCancelAndEmptyList(t *testing.T) {
 	m = settleCreate(t, m, cmd)
 	m, cmd = createKey(m, "enter")
 	m = settleCreate(t, m, cmd)
-	if !m.createTask.active || m.createTask.epic.key != "01-retain-title" {
+	if !m.creation.task.active || m.creation.task.epic.key != "01-retain-title" {
 		t.Fatal("new epic was not retained as the selected task parent")
 	}
 	m = pasteCreation(m, "First task")
@@ -300,7 +300,7 @@ func TestEpicCreatePortableAndNonReplayableReceipts(t *testing.T) {
 			m, _ = createKey(m, "c")
 			m = fillEpic(m)
 			before := testutil.SnapshotTree(t, root)
-			m.createEpic.controls().focus(epicCreateSubmit)
+			m.creation.epic.controls().focus(epicCreateSubmit)
 			m, write := createKey(m, "enter")
 			next, _ := m.Update(write()) // inspect delivery without unrelated fake reads
 			m = next.(Model)
@@ -309,19 +309,19 @@ func TestEpicCreatePortableAndNonReplayableReceipts(t *testing.T) {
 				t.Fatal("per-kind request/scaffold did not reach the portable creation port")
 			}
 			if outcome == "pathless" {
-				if m.createEpic.active || m.tabs[indexOfKind(m.tabs, entityEpics)].restore.key != "urn:epic:opaque" || strings.Contains(m.flash, "editor") {
+				if m.creation.epic.active || m.tabs[indexOfKind(m.tabs, entityEpics)].restore.key != "urn:epic:opaque" || strings.Contains(m.flash, "editor") {
 					t.Fatal("pathless receipt lost exact landing identity or promised a local editor")
 				}
 				return
 			}
-			if !m.createEpic.active || m.createEpic.locked != (outcome != "read-only") {
+			if !m.creation.epic.active || m.creation.epic.locked != (outcome != "read-only") {
 				t.Fatal("outcome did not preserve the correct retry/recovery state")
 			}
 			if outcome != "committed cleanup" && !maps.Equal(before, testutil.SnapshotTree(t, root)) {
 				t.Fatal("portable refusal/recovery changed files")
 			}
 			if outcome != "read-only" {
-				if !strings.Contains(m.createEpic.recoveryText(), "Organize / qhjkn 世界") {
+				if !strings.Contains(m.creation.epic.recoveryText(), "Organize / qhjkn 世界") {
 					t.Fatal("recovery lost typed input")
 				}
 				var follow tea.Cmd
@@ -356,19 +356,19 @@ func TestEpicCreateOriginAndWidgetBinding(t *testing.T) {
 			m.sessionScope = true
 			var write tea.Cmd
 			if issued {
-				m.createEpic.controls().focus(epicCreateSubmit)
+				m.creation.epic.controls().focus(epicCreateSubmit)
 				m, write = createKey(m, "enter")
 			}
 			before := testutil.SnapshotTree(t, beta)
 			m.activateWorkspace(core.Workspace{Checkout: beta, PlanningRoot: beta,
 				Planning: core.MustNewService(testutil.Must(store.NewFS(beta, core.UnrestrictedMutations())))}, nil, nil)
-			if !m.createEpic.displaced || !m.createEpic.locked || m.createEpic.inputs[epicCreateTitle].Value() != "Organize / qhjkn 世界" {
+			if !m.creation.epic.displaced || !m.creation.epic.locked || m.creation.epic.inputs[epicCreateTitle].Value() != "Organize / qhjkn 世界" {
 				t.Fatal("workspace activation discarded or rebound the epic draft")
 			}
 			if issued {
 				next, cmd := m.Update(write())
 				m = next.(Model)
-				if cmd != nil || !m.createEpic.receipt.Committed || m.createEpic.saving {
+				if cmd != nil || !m.creation.epic.receipt.Committed || m.creation.epic.saving {
 					t.Fatal("departed result lost receipt or issued incoming-space work")
 				}
 			}
@@ -379,18 +379,18 @@ func TestEpicCreateOriginAndWidgetBinding(t *testing.T) {
 		})
 	}
 	m := openEpicForm(t, loaded(t, 120, 40))
-	late := m.createEpic.widgetCmd(func() tea.Msg { return tea.PasteMsg{Content: "late"} })
+	late := m.creation.epic.widgetCmd(func() tea.Msg { return tea.PasteMsg{Content: "late"} })
 	m, _ = createKey(m, "tab")
 	next, _ := m.Update(late())
 	m = next.(Model)
-	if m.createEpic.inputs[epicCreateDescription].Value() != "" {
+	if m.creation.epic.inputs[epicCreateDescription].Value() != "" {
 		t.Fatal("departed field received delayed input")
 	}
 	// Deliberately collide form/input generations: the entity kind must still
 	// prevent a task widget result from editing an epic field.
-	next, _ = m.Update(creationWidgetMsg{kind: entityTasks, gen: m.createEpic.gen, inputGen: m.createEpic.inputGen,
+	next, _ = m.Update(creationWidgetMsg{kind: entityTasks, gen: m.creation.epic.gen, inputGen: m.creation.epic.inputGen,
 		msg: tea.PasteMsg{Content: "wrong kind"}})
-	if next.(Model).createEpic.inputs[epicCreateDescription].Value() != "" {
+	if next.(Model).creation.epic.inputs[epicCreateDescription].Value() != "" {
 		t.Fatal("widget delivery crossed entity kinds")
 	}
 }
@@ -424,7 +424,7 @@ func TestEpicCreateRuntimePaste(t *testing.T) {
 	wait("created 02-runtime-domain", "# Runtime domain")
 	tm.Send(press("q"))
 	final := tm.FinalModel(t, teatest.WithFinalTimeout(5*time.Second)).(Model)
-	if final.createEpic.active || final.selectedRef().key != "02-runtime-domain" {
+	if final.creation.epic.active || final.selectedRef().key != "02-runtime-domain" {
 		t.Fatal("running program failed to create and focus epic")
 	}
 }
@@ -435,15 +435,15 @@ func TestEpicCreateNarrowModes(t *testing.T) {
 			m := fillEpic(openEpicForm(t, loaded(t, 120, 40)))
 			switch mode {
 			case "enum":
-				m.createEpic.controls().focus(epicCreateStatus)
+				m.creation.epic.controls().focus(epicCreateStatus)
 				m, _ = createKey(m, "enter")
 			case "discard":
 				m, _ = createKey(m, "esc")
 			case "pending":
-				m.createEpic.controls().focus(epicCreateSubmit)
+				m.creation.epic.controls().focus(epicCreateSubmit)
 				m, _ = createKey(m, "enter")
 			case "recovery":
-				m.createEpic.displace()
+				m.creation.epic.displace()
 			}
 			for _, size := range [][2]int{{120, 40}, {48, 20}, {30, 10}} {
 				next, _ := m.Update(tea.WindowSizeMsg{Width: size[0], Height: size[1]})
@@ -456,9 +456,9 @@ func TestEpicCreateNarrowModes(t *testing.T) {
 					t.Fatal("explicit Create disappeared at supported size")
 				}
 			}
-			before := m.createEpic.recoveryText()
+			before := m.creation.epic.recoveryText()
 			next, _ := m.Update(tea.PasteMsg{Content: "invisible"})
-			if next.(Model).createEpic.recoveryText() != before {
+			if next.(Model).creation.epic.recoveryText() != before {
 				t.Fatal("tiny terminal accepted invisible input")
 			}
 		})
@@ -476,10 +476,10 @@ func TestEpicCreateVerboseRecoveryKeepsIdentityAndActionsVisible(t *testing.T) {
 	m.svc = core.MustNewService(port)
 	m, _ = createKey(m, "c")
 	m = fillEpic(m)
-	m.createEpic.controls().focus(epicCreateSubmit)
+	m.creation.epic.controls().focus(epicCreateSubmit)
 	m, write := createKey(m, "enter")
 	m = settleCreate(t, m, write)
-	if !m.createEpic.locked || !m.createEpic.receipt.Committed {
+	if !m.creation.epic.locked || !m.creation.epic.receipt.Committed {
 		t.Fatal("fixture did not reach committed cleanup recovery")
 	}
 	for _, size := range [][2]int{{120, 40}, {48, 20}, {46, 18}} {
@@ -495,7 +495,7 @@ func TestEpicCreateVerboseRecoveryKeepsIdentityAndActionsVisible(t *testing.T) {
 		if lipgloss.Width(m.View().Content) > size[0] || lipgloss.Height(m.View().Content) > size[1] {
 			t.Fatalf("recovery overflow at %v", size)
 		}
-		if !strings.Contains(m.createEpic.recoveryText(), diagnostic) {
+		if !strings.Contains(m.creation.epic.recoveryText(), diagnostic) {
 			t.Fatal("bounded display discarded full copyable diagnostics")
 		}
 	}

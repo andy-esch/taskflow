@@ -13,8 +13,16 @@ import (
 
 type creationModal struct{}
 
-func (creationModal) active(m *Model) bool       { return m.activeCreation() != nil }
-func (creationModal) inputVisible(m *Model) bool { return m.width >= 46 && m.paneOuterH >= 16 }
+func (creationModal) active(m *Model) bool { return m.activeCreation() != nil }
+func (creationModal) inputVisible(m *Model) bool {
+	return creationInputFits(m.modalSize())
+}
+
+// Dimensions are the modal's outer bounds after the shell gutter, before the
+// action border/padding. The same rule selects resize rendering and input rights.
+func creationInputFits(width, height int) bool {
+	return width >= 44 && height >= 14
+}
 
 // inputOwner applies to terminal paste and opaque native clipboard results alike.
 // Do not identify native input by its library-private message type.
@@ -74,7 +82,7 @@ type creationFrame struct {
 func creationHeader(f creationState, p creationPresentation, s *styles, maxW, maxH int) creationFrame {
 	innerW := max(min(84, maxW)-s.actionBorder.GetHorizontalFrameSize(), 1)
 	frame := creationFrame{innerW: innerW, maxW: maxW, maxH: maxH}
-	if maxW < 44 || maxH < 14 {
+	if !creationInputFits(maxW, maxH) {
 		frame.rendered = clampBox(s.actionBorder.Render("New "+p.noun+" · draft retained\nResize to continue safely.\nSave to: "+truncateMiddle(f.destination, innerW)), maxW, maxH)
 		return frame
 	}

@@ -120,7 +120,8 @@ func (m Model) bodyView() string {
 			// Normalize the body to exact dimensions, then composite the box on top
 			// so it floats over the items rather than blanking them.
 			canvas := lipgloss.Place(m.width, m.paneOuterH, lipgloss.Left, lipgloss.Top, base)
-			return overlay(canvas, o.view(&m, m.width-2, m.paneOuterH-2), m.width, m.paneOuterH)
+			width, height := m.modalSize()
+			return overlay(canvas, o.view(&m, width, height), m.width, m.paneOuterH)
 		}
 	}
 	return base
@@ -416,10 +417,7 @@ func (m Model) withWatchHealth(hints string) string {
 
 func (m Model) footer() string {
 	if f := m.activeCreation(); f != nil {
-		noun := "task"
-		if f.kind == entityEpics {
-			noun = "epic"
-		}
+		noun := m.creationDraft().noun()
 		hint := "New " + noun + " · Tab/Shift+Tab fields · Enter advance/action · Esc cancel · Ctrl+C force quit"
 		if f.saving {
 			hint = "Saving in the origin space · no repeat submission · not cancellable"

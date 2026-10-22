@@ -25,10 +25,10 @@ func TestCreationSharedStatePreservesValueOwnershipAndRecovery(t *testing.T) {
 			next, _ := m.Update(tea.PasteMsg{Content: "New input"})
 			after := next.(Model)
 			if kind == "task" {
-				if m.createTask.inputs[taskCreateTitle].Value() != "" || after.createTask.inputs[taskCreateTitle].Value() != "New input" {
+				if m.creation.task.inputs[taskCreateTitle].Value() != "" || after.creation.task.inputs[taskCreateTitle].Value() != "New input" {
 					t.Fatal("shared controls mutated the previous task model's widgets")
 				}
-			} else if m.createEpic.inputs[epicCreateTitle].Value() != "" || after.createEpic.inputs[epicCreateTitle].Value() != "New input" {
+			} else if m.creation.epic.inputs[epicCreateTitle].Value() != "" || after.creation.epic.inputs[epicCreateTitle].Value() != "New input" {
 				t.Fatal("shared controls mutated the previous epic model's widgets")
 			}
 			f := after.activeCreation()
@@ -62,18 +62,18 @@ func TestCreationTextEditsDetachPriorDraft(t *testing.T) {
 				} else {
 					m = openCreate(t, m)
 					if surface == "epic picker" {
-						m.createTask.focus(taskCreateEpic)
+						m.creation.task.focus(taskCreateEpic)
 						m, _ = createKey(m, "enter")
 					}
 				}
 				value := func(m Model) string {
 					switch surface {
 					case "epic":
-						return m.createEpic.inputs[epicCreateTitle].Value()
+						return m.creation.epic.inputs[epicCreateTitle].Value()
 					case "epic picker":
-						return m.createTask.query.Value()
+						return m.creation.task.query.Value()
 					default:
-						return m.createTask.inputs[taskCreateTitle].Value()
+						return m.creation.task.inputs[taskCreateTitle].Value()
 					}
 				}
 				m = pasteCreation(m, "abcd")
@@ -120,9 +120,9 @@ func TestCreationHiddenWidgetKeepsBlinkContinuation(t *testing.T) {
 			}
 			var blink tea.Cmd
 			if kind == "task" {
-				blink = m.createTask.controls().focus(taskCreateTitle)
+				blink = m.creation.task.controls().focus(taskCreateTitle)
 			} else {
-				blink = m.createEpic.controls().focus(epicCreateTitle)
+				blink = m.creation.epic.controls().focus(epicCreateTitle)
 			}
 			next, _ := m.Update(tea.WindowSizeMsg{Width: 30, Height: 10})
 			m = next.(Model)
@@ -168,9 +168,9 @@ func TestCreationDelayedPasteRequiresVisibleOwner(t *testing.T) {
 				m = next.(Model)
 				title := func(m Model) string {
 					if kind == "task" {
-						return m.createTask.inputs[taskCreateTitle].Value()
+						return m.creation.task.inputs[taskCreateTitle].Value()
 					}
-					return m.createEpic.inputs[epicCreateTitle].Value()
+					return m.creation.epic.inputs[epicCreateTitle].Value()
 				}
 				if title(m) != "" {
 					t.Fatal("delayed paste edited a hidden form")

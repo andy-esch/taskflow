@@ -31,6 +31,12 @@ type pasteModal interface {
 	handlePaste(m *Model, msg tea.PasteMsg) tea.Cmd
 }
 
+// Modal rendering and input visibility share the shell's outside gutter. These
+// dimensions already exclude it; children must not subtract it again.
+func (m Model) modalSize() (width, height int) {
+	return m.width - 2, m.paneOuterH - 2
+}
+
 // defaultModals is the overlay registry in precedence order — help, Config/About,
 // staged creation, action/follow/direction pickers, inline editor, then palette.
 // The first active modal owns input and the floated box.
