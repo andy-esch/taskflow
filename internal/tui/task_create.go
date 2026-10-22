@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/textinput"
@@ -34,32 +33,10 @@ var taskCreateLabels = [...]string{
 	"Priority", "Effort", "Tier", "Autonomy", "Cancel", "Create",
 }
 
-// One interaction owns the keys at a time. Saving/recovery and displacement are
-// separate write/authority state: for example, an issued write can still be
-// pending after its origin workspace has been displaced.
-type taskCreateMode uint8
-
-const (
-	taskCreateFields taskCreateMode = iota
-	taskCreateEpicPicker
-	taskCreateEnumPicker
-	taskCreateDiscard
-)
-
 type taskCreateForm struct {
-	active        bool
+	creationState
 	more          bool
-	mode          taskCreateMode
-	enumCursor    int
-	saving        bool
-	locked        bool
-	displaced     bool
-	gen, session  uint64
-	inputGen      uint64 // delayed paste/cursor results belong to one focused widget
-	origin        *core.Service
-	destination   string
 	inputs        [taskCreateSubmit + 1]textinput.Model
-	cursor        int
 	epic          entityRef
 	initialEpic   entityRef
 	epics         []core.EpicSummary
@@ -69,9 +46,10 @@ type taskCreateForm struct {
 	unreadable    int
 	query         textinput.Model
 	pickCursor    int
-	err           string
 	receipt       core.TaskCreationReceipt
 }
+
+func (f *taskCreateForm) state() *creationState { return &f.creationState }
 
 type taskCreateEpicsMsg struct {
 	gen      uint64
@@ -85,11 +63,6 @@ type taskCreatedMsg struct {
 	gen, session uint64
 	receipt      core.TaskCreationReceipt
 	err          error
-}
-
-type taskCreateWidgetMsg struct {
-	gen, inputGen uint64
-	msg           tea.Msg
 }
 
 func taskCreateInput(row int) bool {
@@ -115,8 +88,8 @@ func taskCreateEnumOptions(row int) []string {
 // kinds get their own field definitions and typed request conversion, not task
 // fields disguised behind a universal create schema.
 func newTaskCreateForm(origin *core.Service, gen, session uint64, destination string, epic entityRef) taskCreateForm {
-	f := taskCreateForm{active: true, gen: gen, session: session,
-		origin: origin, destination: destination, epic: epic, initialEpic: epic}
+	f := taskCreateForm{creationState: creationState{active: true, kind: entityTasks, gen: gen, session: session,
+		origin: origin, destination: destination}, epic: epic, initialEpic: epic}
 	for i := range f.inputs {
 		f.inputs[i] = textinput.New()
 		f.inputs[i].Prompt = ""
@@ -137,20 +110,11 @@ func newTaskCreateForm(origin *core.Service, gen, session uint64, destination st
 
 func (f *taskCreateForm) close() {
 	f.active = false
-	f.mode = taskCreateFields
+	f.mode = creationFieldsMode
 	for i := range f.inputs {
 		f.inputs[i].Blur()
 	}
 	f.query.Blur()
-}
-
-func (f *taskCreateForm) displace() {
-	if !f.active {
-		return
-	}
-	f.displaced, f.locked = true, true
-	f.mode = taskCreateFields
-	f.err = "Workspace changed. Draft retained for recovery; it cannot be submitted here."
 }
 
 func (f taskCreateForm) dirty() bool {
@@ -173,60 +137,37 @@ func (f taskCreateForm) rows() []int {
 	return append(rows, taskCreateCancel, taskCreateSubmit)
 }
 
+func (f *taskCreateForm) controls() creationControls {
+	return creationControls{state: &f.creationState, inputs: f.inputs[:], rows: f.rows(),
+		isText: taskCreateInput, options: taskCreateEnumOptions, dirty: f.dirty(), close: f.close,
+		enumValue: func(value string) string {
+			if value == "default" {
+				return "" // leave task defaulting to core, not the shared host
+			}
+			return value
+		}}
+}
+
 func (f *taskCreateForm) focus(row int) tea.Cmd {
-	f.inputGen++
-	f.mode = taskCreateFields
-	for i := range f.inputs {
-		f.inputs[i].Blur()
-	}
-	f.cursor = row
-	if taskCreateInput(row) && !f.locked && !f.saving {
-		return f.widgetCmd(f.inputs[row].Focus())
-	}
-	return nil
+	return f.controls().focus(row)
 }
 
 func (f *taskCreateForm) advance(delta int) tea.Cmd {
-	rows := f.rows()
-	index := slices.Index(rows, f.cursor)
-	return f.focus(rows[(index+delta+len(rows))%len(rows)])
-}
-
-func (f taskCreateForm) widgetCmd(cmd tea.Cmd) tea.Cmd {
-	return routeTaskCreateWidget(f.gen, f.inputGen, cmd)
-}
-
-// Capture only routing tokens, not a complete draft and its retained Service.
-// Cursor/paste timers can outlive the field or form that created them.
-func routeTaskCreateWidget(gen, inputGen uint64, cmd tea.Cmd) tea.Cmd {
-	if cmd == nil {
-		return nil
-	}
-	return func() tea.Msg {
-		msg := cmd()
-		if batch, ok := msg.(tea.BatchMsg); ok {
-			wrapped := make([]tea.Cmd, len(batch))
-			for i, child := range batch {
-				wrapped[i] = routeTaskCreateWidget(gen, inputGen, child)
-			}
-			return tea.BatchMsg(wrapped)
-		}
-		return taskCreateWidgetMsg{gen: gen, inputGen: inputGen, msg: msg}
-	}
+	return f.controls().advance(delta)
 }
 
 func (f *taskCreateForm) updateInput(msg tea.Msg) tea.Cmd {
-	if f.saving || f.locked || (f.mode != taskCreateFields && f.mode != taskCreateEpicPicker) {
+	if !f.editable() {
 		return nil
 	}
 	var cmd tea.Cmd
-	if f.mode == taskCreateEpicPicker {
+	if f.mode == creationPickerMode {
 		if _, ok := msg.(tea.PasteMsg); ok {
 			f.pickCursor = 0
 		}
-		f.query, cmd = f.query.Update(msg)
+		f.query, cmd = updateCreationInput(f.query, msg)
 	} else if taskCreateInput(f.cursor) {
-		f.inputs[f.cursor], cmd = f.inputs[f.cursor].Update(msg)
+		f.inputs[f.cursor], cmd = updateCreationInput(f.inputs[f.cursor], msg)
 	}
 	return f.widgetCmd(cmd)
 }
@@ -245,8 +186,7 @@ func (f taskCreateForm) matches() []core.EpicSummary {
 	return out
 }
 
-func (m *Model) handleTaskCreateKey(msg tea.KeyPressMsg) tea.Cmd {
-	f := &m.createTask
+func (f *taskCreateForm) handleKey(m *Model, msg tea.KeyPressMsg) tea.Cmd {
 	if f.saving {
 		if f.displaced && msg.String() == "y" {
 			return f.copyRecovery()
@@ -258,7 +198,7 @@ func (m *Model) handleTaskCreateKey(msg tea.KeyPressMsg) tea.Cmd {
 		case "y":
 			return f.copyRecovery()
 		case "enter":
-			if !f.displaced && f.receipt.Committed && f.receipt.Task.ID != "" {
+			if !f.displaced && f.receipt.Committed && f.receipt.Task.ID != "" && !f.receipt.DryRun {
 				receipt := f.receipt
 				f.close()
 				return m.landCreatedTask(receipt)
@@ -269,25 +209,14 @@ func (m *Model) handleTaskCreateKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		return nil
 	}
-	if f.mode == taskCreateDiscard {
-		switch msg.String() {
-		case "tab", "shift+tab", "left", "right":
-			// Keep editing is the default. Discard needs an explicit y, not Enter.
-		case "y", "Y":
-			f.close()
-		default:
-			f.mode = taskCreateFields
-		}
-		return nil
-	}
-	if f.mode == taskCreateEpicPicker {
+	if f.mode == creationPickerMode {
 		switch msg.String() {
 		case "ctrl+r":
 			f.catalogLoaded = false
 			return f.loadEpics()
 		case "esc":
 			f.inputGen++
-			f.mode = taskCreateFields
+			f.mode = creationFieldsMode
 			f.query.Blur()
 		case "up":
 			f.pickCursor = max(f.pickCursor-1, 0)
@@ -298,7 +227,7 @@ func (m *Model) handleTaskCreateKey(msg tea.KeyPressMsg) tea.Cmd {
 			if len(matches) > 0 {
 				ep := matches[min(f.pickCursor, len(matches)-1)]
 				f.epic = entityRef{key: ep.Source.ID, label: ep.Epic.ID}
-				f.mode, f.err = taskCreateFields, ""
+				f.mode, f.err = creationFieldsMode, ""
 				f.query.Blur()
 				return f.advance(1)
 			}
@@ -308,73 +237,22 @@ func (m *Model) handleTaskCreateKey(msg tea.KeyPressMsg) tea.Cmd {
 		}
 		return nil
 	}
-	if f.mode == taskCreateEnumPicker {
-		options := taskCreateEnumOptions(f.cursor)
-		switch msg.String() {
-		case "j", "down", "l", "right":
-			f.enumCursor = (f.enumCursor + 1) % len(options)
-		case "k", "up", "h", "left":
-			f.enumCursor = (f.enumCursor - 1 + len(options)) % len(options)
-		case "enter", "tab", "shift+tab":
-			value := options[f.enumCursor]
-			if value == "default" {
-				value = "" // preserve core defaults rather than pinning them in UI state
-			}
-			f.inputs[f.cursor].SetValue(value)
-			f.mode = taskCreateFields
-			if msg.String() == "shift+tab" {
-				return f.advance(-1)
-			}
-			return f.advance(1)
-		case "esc":
-			f.mode = taskCreateFields // discard only the unaccepted choice
-		}
-		return nil
+	if handled, cmd := f.controls().handleKey(msg); handled {
+		return cmd
 	}
 	switch msg.String() {
-	case "q":
-		if taskCreateInput(f.cursor) {
-			return f.updateInput(msg)
-		}
-		if f.dirty() {
-			f.mode = taskCreateDiscard
-		} else {
-			f.close()
-		}
-		return nil
-	case "esc":
-		if f.dirty() {
-			f.mode = taskCreateDiscard
-		} else {
-			f.close()
-		}
-		return nil
-	case "tab":
-		return f.advance(1)
-	case "shift+tab":
-		return f.advance(-1)
 	case "enter":
-		if options := taskCreateEnumOptions(f.cursor); len(options) > 0 {
-			f.inputGen++
-			f.mode = taskCreateEnumPicker
-			f.enumCursor = max(slices.Index(options, f.inputs[f.cursor].Value()), 0)
-			return nil
-		}
 		switch f.cursor {
 		case taskCreateEpic:
 			f.inputGen++
-			f.mode = taskCreateEpicPicker
+			f.mode = creationPickerMode
 			f.query.SetValue("")
 			f.pickCursor = 0
 			return f.widgetCmd(f.query.Focus())
 		case taskCreateMore:
 			f.more = !f.more
 		case taskCreateCancel:
-			if f.dirty() {
-				f.mode = taskCreateDiscard
-			} else {
-				f.close()
-			}
+			f.controls().cancel()
 		case taskCreateSubmit:
 			return m.submitTaskCreate()
 		default:
@@ -398,9 +276,5 @@ func (f taskCreateForm) recoveryText() string {
 }
 
 func (f taskCreateForm) copyRecovery() tea.Cmd {
-	text := f.recoveryText()
-	return func() tea.Msg {
-		// Even native clipboard-tool discovery belongs off the reducer.
-		return copyToClipboard(text)()
-	}
+	return copyCreationRecovery(f.recoveryText())
 }

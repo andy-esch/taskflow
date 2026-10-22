@@ -58,7 +58,7 @@ func settleCreate(t *testing.T, m Model, cmd tea.Cmd) Model {
 	if scoped, ok := inner.(sessionMsg); ok {
 		inner = scoped.msg
 	}
-	if _, ok := inner.(taskCreateWidgetMsg); ok {
+	if _, ok := inner.(creationWidgetMsg); ok {
 		return m
 	}
 	next, follow := m.Update(msg)
@@ -90,7 +90,7 @@ func chooseCreateOption(t *testing.T, m Model, row int, value string) Model {
 	m, _ = createKey(m, "enter")
 	options := taskCreateEnumOptions(row)
 	want := slices.Index(options, value)
-	if want < 0 || m.createTask.mode != taskCreateEnumPicker {
+	if want < 0 || m.createTask.mode != creationEnumMode {
 		t.Fatalf("no selector option %q on row %d", value, row)
 	}
 	for range len(options) {
@@ -115,6 +115,10 @@ func TestTaskCreateFromTasksAndEpicContext(t *testing.T) {
 				if m.createTask.active {
 					t.Fatal("epic-page c must not create a task")
 				}
+				if !m.createEpic.active {
+					t.Fatal("epic-page c must create an epic")
+				}
+				m, _ = createKey(m, "esc") // cancel the clean epic draft before the contextual action
 				var cmd tea.Cmd
 				m, cmd = createKey(m, "ctrl+p")
 				// Named actions lead an empty palette; choose it through real routing.
@@ -198,11 +202,11 @@ func TestTaskCreateKeyboardAndDirtyCancel(t *testing.T) {
 		t.Fatal("text keys escaped into global navigation")
 	}
 	m, _ = createKey(m, "esc")
-	if m.createTask.mode != taskCreateDiscard {
+	if m.createTask.mode != creationDiscardMode {
 		t.Fatal("dirty cancel did not confirm")
 	}
 	m, _ = createKey(m, "enter")
-	if !m.createTask.active || m.createTask.mode == taskCreateDiscard || m.createTask.inputs[taskCreateTitle].Value() != "qhjkn" {
+	if !m.createTask.active || m.createTask.mode == creationDiscardMode || m.createTask.inputs[taskCreateTitle].Value() != "qhjkn" {
 		t.Fatal("Enter did not default to keeping input")
 	}
 	m, _ = createKey(m, "esc")
@@ -253,7 +257,7 @@ func TestTaskCreatePickerRetainsExactSelectionOnParentDrift(t *testing.T) {
 		m, _ = createKey(m, string(char))
 	}
 	m, _ = createKey(m, "enter")
-	if m.createTask.mode == taskCreateEpicPicker || m.createTask.epic.key != "01-test" {
+	if m.createTask.mode == creationPickerMode || m.createTask.epic.key != "01-test" {
 		t.Fatal("picker did not retain source identity")
 	}
 	m.createTask.focus(taskCreateSubmit)
@@ -607,7 +611,7 @@ func TestTaskCreateConstrainedOptionsStageCancelAndReset(t *testing.T) {
 			m.createTask.more = true
 			m.createTask.focus(tc.row)
 			m, _ = createKey(m, "enter")
-			if m.createTask.mode != taskCreateEnumPicker || taskCreateInput(tc.row) || !slices.Equal(taskCreateEnumOptions(tc.row), tc.want) {
+			if m.createTask.mode != creationEnumMode || taskCreateInput(tc.row) || !slices.Equal(taskCreateEnumOptions(tc.row), tc.want) {
 				t.Fatal("bounded field did not use the expected enum selector")
 			}
 			if !strings.Contains(ansi.Strip(m.View().Content), "‹default›") {
@@ -623,18 +627,18 @@ func TestTaskCreateConstrainedOptionsStageCancelAndReset(t *testing.T) {
 				m, _ = createKey(m, "j")
 			}
 			m, _ = createKey(m, "enter")
-			if m.createTask.mode == taskCreateEnumPicker || m.createTask.saving || m.createTask.inputs[tc.row].Value() != tc.value || !m.createTask.dirty() {
+			if m.createTask.mode == creationEnumMode || m.createTask.saving || m.createTask.inputs[tc.row].Value() != tc.value || !m.createTask.dirty() {
 				t.Fatal("accept did not stage the value without submitting")
 			}
 			m.createTask.focus(tc.row)
 			m, _ = createKey(m, "enter")
 			m, _ = createKey(m, "l")
 			m, _ = createKey(m, "esc")
-			if !m.createTask.active || m.createTask.mode == taskCreateDiscard || m.createTask.inputs[tc.row].Value() != tc.value {
+			if !m.createTask.active || m.createTask.mode == creationDiscardMode || m.createTask.inputs[tc.row].Value() != tc.value {
 				t.Fatal("Esc did not cancel just the unaccepted selector choice")
 			}
 			m, _ = createKey(m, "esc")
-			if m.createTask.mode != taskCreateDiscard {
+			if m.createTask.mode != creationDiscardMode {
 				t.Fatal("a staged enum override was not treated as dirty input")
 			}
 			m, _ = createKey(m, "enter") // keep editing
@@ -651,7 +655,7 @@ func TestTaskCreateConstrainedOptionsStageCancelAndReset(t *testing.T) {
 }
 
 func TestTaskCreateReceiptRecoveryNeverReplays(t *testing.T) {
-	for _, outcome := range []string{"committed cleanup", "unknown", "unconfirmed success", "uncommitted finalization"} {
+	for _, outcome := range []string{"committed cleanup", "unknown", "unconfirmed success", "uncommitted finalization", "preview"} {
 		t.Run(outcome, func(t *testing.T) {
 			root := seedRepo(t)
 			fs := testutil.Must(store.NewFS(root, core.UnrestrictedMutations()))
@@ -663,6 +667,9 @@ func TestTaskCreateReceiptRecoveryNeverReplays(t *testing.T) {
 				port.err = errors.New("transport disconnected")
 			case "uncommitted finalization":
 				port.err = &core.CreateFinalizationError{Cause: domain.ErrConflict}
+			case "preview":
+				port.receipt = core.TaskCreationReceipt{Committed: true, DryRun: true,
+					Task: domain.Task{ID: "preview-only", Slug: "preview-only"}}
 			}
 			m := loadedAt(t, root, 120, 40)
 			m.svc = core.MustNewService(fs, core.WithSelectedEpicTaskCreationStore(port))
@@ -678,6 +685,9 @@ func TestTaskCreateReceiptRecoveryNeverReplays(t *testing.T) {
 			m = settleCreate(t, m, cmd)
 			if port.calls != 1 {
 				t.Fatal("recovery replayed Create")
+			}
+			if outcome == "preview" && m.selectedRef().key == "preview-only" {
+				t.Fatal("preview receipt became a durable inspection target")
 			}
 			if outcome == "committed cleanup" {
 				if task, ok := m.selectedTask(); !ok || task.Slug != "ship-a-task" {

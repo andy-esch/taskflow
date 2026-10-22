@@ -6,8 +6,8 @@ description: Make routine planning possible without CLI round trips, with native
 goal: Create and maintain planning work and registered entry points through the TUI, using the external editor for prose and the same guarded application services.
 created: "2026-10-17"
 tags: [tui, authoring, spaces, ux]
-tasks: [6ffdv9g01q40, 6g321mybqvfz, 6g3cp32y9149, 6g4ym5y2dkp8, 6gkkzvr92waq, 6gmbfxy96tpw, 6gmshzw7we0m, 6gmshzwfkj62, 6gmshzwphadw, 6gmshzwxxce3, 6gmshzx55n1y, 6gmshzxchdzc, 6gmshzxksjcn, 6gmshzxvgagj, 6gmshzy2ppfb, 6gmy4c0x6e31, 6gmy4c15aj30]
-updated_at: "2026-10-18"
+tasks: [6ffdv9g01q40, 6g321mybqvfz, 6g3cp32y9149, 6g4ym5y2dkp8, 6gkkzvr92waq, 6gmbfxy96tpw, 6gmshzw7we0m, 6gmshzwfkj62, 6gmshzwphadw, 6gmshzwxxce3, 6gmshzx55n1y, 6gmshzxchdzc, 6gmshzxksjcn, 6gmshzxvgagj, 6gmshzy2ppfb, 6gmy4c0x6e31, 6gmy4c15aj30, 6gp1ytfvm652, 6gp1ytg50tev, 6gp1ytgea8dt, 6gp2qmse4prt]
+updated_at: "2026-10-21"
 started_at: "2026-10-18"
 ---
 # Enable routine planning and workspace management in the TUI
@@ -96,6 +96,9 @@ turn this into full CLI parity or require the separate navigation redesign first
 | Confirmed-entry removal foundation | [Guard forget against registry label reuse](../tasks/6gmy4c15aj30-guard-forgetting-a-confirmed-space-registration-against-label-reuse.md) |
 | Atlas registry management | [Register/forget existing entry points](../tasks/6gmshzwfkj62-register-and-forget-existing-space-entry-points-from-atlas.md) |
 | Further entity creation | [Epics, audits, research and Threads](../tasks/6gmshzwphadw-extend-tui-creation-to-epics-audits-research-and-threads.md) |
+| First reuse slice | [Epic creation and shared staged mechanics](../tasks/6gp1ytfvm652-create-epics-in-the-tui-with-shared-staged-form-mechanics.md) |
+| Different input/default contracts | [Audit and research creation](../tasks/6gp1ytg50tev-create-audits-and-research-from-shared-tui-authoring-forms.md) |
+| Graph-aware creation | [Guarded Thread creation](../tasks/6gp1ytgea8dt-create-threads-from-the-tui-with-guarded-per-kind-intent.md) |
 | Checklist decisions | [Acceptance-criterion actions](../tasks/6g3cp32y9149-let-the-tui-flip-an-acceptance-criterion.md) |
 | Existing checklist policy consistency | [Align tracked writes and lint](../tasks/6gkkzvr92waq-align-tracked-criterion-writes-and-lint-reason-semantics.md) |
 | Routine task fields | [Remaining metadata pickers](../tasks/6gmshzwxxce3-expose-remaining-routine-task-metadata-through-tui-pickers.md) |

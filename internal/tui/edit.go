@@ -36,8 +36,8 @@ const (
 	fieldEnum                      // a fixed option set shown inline (priority, tier)
 )
 
-// editField is one inline-editable task field: its frontmatter key (for
-// SetFields), display label, what it means (desc, from the entity descriptor),
+// editField is one inline-editable task or epic field: its authoring key,
+// display label, what it means (desc, from the entity descriptor),
 // widget kind, options (enum only), and current value (for prefill + display).
 type editField struct {
 	key     string
@@ -50,10 +50,8 @@ type editField struct {
 
 // editableFields are the typed task fields the TUI edits in place, in form order.
 // Status is excluded by design. Tags ride as a comma-list and tier as a string —
-// the SetFields coercion turns them into a YAML list / int, the same path `task
-// set` uses, so the GUI and the agent face can't drift. Field meanings come from
-// the entity descriptor (domain.AuthoringFields), the same source `schema task`
-// shows, so they can't drift either.
+// core field coercion turns them into a YAML list / int, as with `task set`.
+// Field meanings come from domain.AuthoringFields, also used by `schema task`.
 func editableFields(t domain.Task) []editField {
 	d := fieldDescs("task")
 	fields := []editField{
@@ -81,9 +79,8 @@ func editableFields(t domain.Task) []editField {
 // editableEpicFields are the typed epic fields the TUI edits in place, in form
 // order. Epics carry no effort/tier (those are task-only), and status moves via
 // the `m` action menu (`epic move`), so the set is description/priority/tags only.
-// Submit routes to SetEpicFields (the same write `epic set` uses); priority shares
-// the task enum, and tags ride as a comma-list the SetEpicFields coercion turns
-// into a YAML list — so the GUI and the agent face can't drift.
+// Submit routes to SetSelectedEpicFields with the adapter-established selection;
+// priority shares the task enum, and core coerces comma-separated tags.
 func editableEpicFields(e domain.Epic) []editField {
 	d := fieldDescs("epic")
 	return []editField{
@@ -132,7 +129,7 @@ type editMenu struct {
 	ref       entityRef
 	sourceGen int // list generation from which the form was opened
 	fields    []editField
-	apply     fieldSetter     // routes submit to the entity's write (SetFields / SetEpicFields)
+	apply     fieldSetter     // routes submit to the entity's selected-field write
 	cursor    int             // selected field
 	editing   bool            // false: navigating fields; true: editing the selected one
 	input     textinput.Model // single-line text fields
@@ -388,9 +385,8 @@ func unsetFieldCmd(svc *core.Service, ref entityRef, key string) tea.Cmd {
 	}
 }
 
-// setEpicFieldCmd is setFieldCmd's epic twin: it routes through SetEpicFields (the
-// `epic set` write), reporting the same editedMsg/actionErrMsg so the form's flash,
-// reload, and on-field error handling are reused unchanged.
+// setEpicFieldCmd routes through SetSelectedEpicFields with the captured source
+// identity, reporting the same editedMsg/actionErrMsg as the task editor.
 func setEpicFieldCmd(svc *core.Service, ref entityRef, key, value string) tea.Cmd {
 	return func() tea.Msg {
 		if _, err := svc.SetSelectedEpicFields(core.EpicMutationTarget{ID: ref.key}, map[string]any{key: value}, false, false); err != nil {

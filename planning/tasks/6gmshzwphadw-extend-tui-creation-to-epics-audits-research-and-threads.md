@@ -10,8 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [tui, authoring, ux]
 created: "2026-10-17"
-depends_on: [6g4ym5y2dkp8]
-updated_at: "2026-10-20"
+depends_on: [6gp1ytfvm652, 6gp1ytg50tev, 6gp1ytgea8dt]
+updated_at: "2026-10-21"
 ---
 # Extend TUI creation to epics audits research and Threads
 
@@ -22,6 +22,18 @@ Reuse the proven staged task-creation interaction to create the remaining four p
 ## Scope
 
 Add entity-specific form definitions and contextual create actions for epics, audits, research and Threads. Use existing New* use cases, their defaults and default body scaffolds; long bodies remain editor-assisted. Threads have a real tab and are explicitly included.
+
+### Reviewable delivery slices (2026-10-21)
+
+This task is the integration/finish-line owner, not one four-kind implementation PR:
+
+1. [Epic creation and shared mechanics](6gp1ytfvm652-create-epics-in-the-tui-with-shared-staged-form-mechanics.md), reusing the task form without sharing entity policy.
+2. [Audit and research forms](6gp1ytg50tev-create-audits-and-research-from-shared-tui-authoring-forms.md), exercising different input/default contracts.
+3. [Guarded Thread creation](6gp1ytgea8dt-create-threads-from-the-tui-with-guarded-per-kind-intent.md), with its own graph receipts and selected-member design checkpoint.
+
+Both later slices depend on the proven common host, not on each other. This task
+depends on all three and verifies the combined criteria below before the final
+TUI-only walkthrough. The parent estimate is historical, not a single-PR budget.
 
 ## Acceptance criteria
 

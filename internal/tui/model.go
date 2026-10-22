@@ -100,7 +100,8 @@ type Model struct {
 	direction               detailDirectionMenu     // an ambiguous semantic h/l move inside a structured detail
 	edit                    editMenu                // the `e` inline field editor (task set with a GUI)
 	createTask              taskCreateForm          // staged task authoring; no writes until explicit Create
-	createTaskGen           uint64                  // never reused across forms or workspace activations
+	createEpic              epicCreateForm          // separate typed intent over shared staging mechanics
+	creationGen             uint64                  // never reused across kinds, forms or activations
 	navStack                []navLoc                // where each `f` jump came from; ctrl+o pops (S6)
 	pendingDetailNavigation detailNavigationRestore // presentation/selection to restore after an async ctrl+o return
 	flash                   string                  // transient post-action feedback line (cleared on the next key)
@@ -285,6 +286,9 @@ func (m Model) cur() *entityTab { return m.tabs[m.active] }
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if scoped, ok := msg.(sessionMsg); ok && m.sessionScope {
 		if scoped.gen != m.sessionGen {
+			if result, ok := scoped.msg.(epicCreatedMsg); ok {
+				return m.handleEpicCreated(result)
+			}
 			if result, ok := scoped.msg.(taskCreatedMsg); ok {
 				return m.handleTaskCreated(result) // retain origin receipt, never navigate the new space
 			}
@@ -338,9 +342,15 @@ func (m Model) update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case taskCreatedMsg:
 		return m.handleTaskCreated(msg)
 
-	case taskCreateWidgetMsg:
-		if m.createTask.active && msg.gen == m.createTask.gen && msg.inputGen == m.createTask.inputGen {
-			return m, m.createTask.updateInput(msg.msg)
+	case epicCreatedMsg:
+		return m.handleEpicCreated(msg)
+
+	case creationWidgetMsg:
+		if f := m.activeCreation(); f != nil && msg.kind == f.kind && msg.gen == f.gen && msg.inputGen == f.inputGen {
+			if !creationWidgetMaintenance(msg.msg) && !(creationModal{}).inputOwner(&m) {
+				return m, nil
+			}
+			return m, m.creationDraft().updateInput(msg.msg)
 		}
 		return m, nil
 
@@ -896,6 +906,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case key.Matches(msg, keys.Create):
 		if m.cur().kind == entityTasks {
 			return m, m.openTaskCreate(entityRef{})
+		}
+		if m.cur().kind == entityEpics {
+			return m, m.openEpicCreate()
 		}
 		m.flash, m.flashErr = "creation is not available on this page yet", true
 		return m, nil
