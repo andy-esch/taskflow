@@ -10,8 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [tui, authoring, ux]
 created: "2026-10-21"
-depends_on: [6gp1ytfvm652]
-updated_at: "2026-10-21"
+depends_on: [6gpb4y5yqmjp]
+updated_at: "2026-10-22"
 ---
 # Create Threads from the TUI with guarded per-kind intent
 

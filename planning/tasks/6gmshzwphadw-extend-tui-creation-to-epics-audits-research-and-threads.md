@@ -35,6 +35,11 @@ Both later slices depend on the proven common host, not on each other. This task
 depends on all three and verifies the combined criteria below before the final
 TUI-only walkthrough. The parent estimate is historical, not a single-PR budget.
 
+After the epic slice landed, the owner approved a bounded
+[host and interaction-contract hardening step](6gpb4y5yqmjp-harden-the-shared-tui-creation-host-and-interaction-contracts.md)
+before either remaining creation slice. It consolidates active-draft/result/session
+wiring, finite widget testing and layout visibility bounds, not entity policy.
+
 ## Acceptance criteria
 
 - [ ] Create an epic, audit, research document and unstarted Thread from their respective TUI contexts through core services.
