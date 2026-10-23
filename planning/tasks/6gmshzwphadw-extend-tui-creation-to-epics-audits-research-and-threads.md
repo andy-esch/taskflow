@@ -11,7 +11,7 @@ autonomy_level: 3
 tags: [tui, authoring, ux]
 created: "2026-10-17"
 depends_on: [6gp1ytfvm652, 6gp1ytg50tev, 6gp1ytgea8dt]
-updated_at: "2026-10-21"
+updated_at: "2026-10-23"
 ---
 # Extend TUI creation to epics audits research and Threads
 
@@ -40,6 +40,16 @@ After the epic slice landed, the owner approved a bounded
 before either remaining creation slice. It consolidates active-draft/result/session
 wiring, finite widget testing and layout visibility bounds, not entity policy.
 
+### Delivery checkpoint — 2026-10-23
+
+Task, epic, audit and research forms now exercise the same host, staging and input
+mechanics with separate typed requests/receipts and independent durable tests.
+The audit/research slice completed both independent reviews with no findings;
+its task links the evidence. This satisfies shared-reuse criterion 6 only.
+Thread creation and the combined four-kind criteria remain outstanding; this
+integration task stays pending until guarded Thread creation lands and the full
+finish-line checks run.
+
 ## Acceptance criteria
 
 - [ ] Create an epic, audit, research document and unstarted Thread from their respective TUI contexts through core services.
@@ -47,7 +57,7 @@ wiring, finite widget testing and layout visibility bounds, not entity policy.
 - [ ] Thread initial-member selection, if offered, uses guarded creation and exact intended task identities; creating a Thread does not silently create dependencies or start it.
 - [ ] One explicit submission creates one record; duplicate submission, validation refusal, committed cleanup failure and watcher reload cannot create duplicates or steal selection.
 - [ ] Forms preserve input and origin-space binding, open/select the created record by stable identity, and pass focused tests, normal code gates and updated help/architecture guidance.
-- [ ] Shared staging, navigation and asynchronous result mechanics are exercised
+- [x] Shared staging, navigation and asynchronous result mechanics are exercised
   by the existing task form and at least two materially different entity forms,
   while typed requests, capabilities, defaults and receipt/recovery semantics
   remain per kind.
