@@ -4,7 +4,7 @@ id: 6g8zy840z6gj
 bucket: open
 area: test-rigour
 date: "2026-09-11"
-updated_at: "2026-09-22"
+updated_at: "2026-10-23"
 ---
 
 # Code Quality Audit: test-rigour — 2026-09-11
@@ -163,6 +163,18 @@ set branch — extend it to the unset branch in the same commit.
 (`domain/entity.go`) so create, set, unset, and lint all read one table is epic 26's
 territory, not this fix.
 
+**Resolution:** Re-verified still open on 2026-10-23 and reproduced end-to-end
+    in a throwaway planning repo: epic new --description 'a required
+    description' then epic set 01-probe-epic --unset description returns '✔
+    updated 01-probe-epic', and the next lint fails with '01-probe-epic /
+    description: missing'. The guard is still absent, only relocated — the unset
+    branch now lives in Service.prepareEpicFieldUpdates
+    (internal/core/service_epic.go:348) and still gates only on
+    domain.KnownEpicField, so a registry-known but contract-required field
+    unsets freely. No open task owns this; the field-registry follow-up it names
+    remains 6fkkz41cax80 (next-up), which would subsume the fix but is an
+    ADR-first design task, not this XS correction.
+
 #### M2. `TaskLifecycleOverride` closed vocabulary has no exhaustiveness or negative test  · **Status:** tracked by 6gcqz5aqt2sg
 
 **File:** `internal/core/task_lifecycle.go:229` | **Component:** core (task lifecycle)
@@ -244,6 +256,18 @@ malformed state this prevents is one the read side already knows about —
 `ValidateTaskLifecyclePlan(graph, TaskLifecyclePlan{TaskID: id, To: domain.StatusInProgress, RevisitAt: "2026-10-01"}, "")`
 → `errors.Is(err, domain.ErrValidation)`.
 
+**Resolution:** Re-verified still open on 2026-10-23; guard now at
+    internal/core/task_lifecycle.go:232. Confirmed read-only: grep for both
+    revisit_at refusal strings ('revisit_at is valid only for a transition to
+    deferred' and the create-and-start variant added since) across every
+    _test.go returns nothing, and no core or store test passes RevisitAt with a
+    non-deferred target. PARTIAL overlap with open task 6gcqz5aqt2sg (make
+    closed-vocabulary switches fail closed): that task adds the
+    out-of-vocabulary override negative test to this same function and test file
+    but no acceptance criterion covers this predicate, so the finding stays open
+    — the one-line case belongs in that commit. Cross-referenced on the task
+    side.
+
 #### L2. `TestService_NewEpic`'s failure table proves less than it claims  · **Status:** open
 
 **File:** `internal/core/usecases_test.go:362` | **Component:** core tests
@@ -265,7 +289,14 @@ lets a guard removal go green.
 case a valid `Status: "active"` so each trips the predicate its comment names, and add
 an explicit `{Status: "planning"}` case for the status guard.
 
-#### L3. Dependency planner guards the dependent against an unreadable record, not the prerequisites  · **Status:** open
+**Resolution:** Re-verified still open on 2026-10-23; TestService_NewEpic has
+    moved to internal/core/usecases_test.go:503 and is otherwise unchanged. The
+    failure table still asserts only 'err == nil', still gives no case a Status,
+    and the '// empty slug' case ({Title: "!!!"}) therefore still trips
+    ValidateEpicStatus before the slug guard it claims to cover. No open task
+    owns it.
+
+#### L3. Dependency planner guards the dependent against an unreadable record, not the prerequisites  · **Status:** fixed
 
 **File:** `internal/core/dependency_operations.go:191` | **Component:** core (dependency planner)
 **Effort:** XS · **Urgency:** eventually
@@ -294,6 +325,18 @@ make.
 dependent check with a comment naming `ValidateTaskGraphMutationSource` as the real
 gate, or add the symmetric prerequisite check. Do **not** add a test for an
 unreachable branch; the honest fix is in the source, not the suite.
+
+**Resolution:** Fixed by 498de98 (2026-10-16, 'retain selected endpoints across
+    fresh retry plans'), which split planSelectedDependencyEdges out of
+    planDependencyEdges and gave every prerequisite the same graph.Task
+    readability check the dependent already had
+    (internal/core/dependency_operations.go, 'selected prerequisite %s:
+    ErrNotFound'). The asymmetry this finding named is gone; both sides now
+    check. Re-verified by reading the current source on 2026-10-23. One residual
+    nit, not worth reopening for: the dependent's unreadable case is now spelled
+    twice with two different sentinels (ErrValidation in planDependencyEdges,
+    ErrNotFound in planSelectedDependencyEdges), the second being unreachable
+    behind the first.
 
 ## What audited clean
 

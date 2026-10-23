@@ -4,7 +4,7 @@ id: 6g9g0jf3rsja
 bucket: open
 area: tui-overview-parity-and-miami-vice-implementation
 date: "2026-09-12"
-updated_at: "2026-09-12"
+updated_at: "2026-10-23"
 ---
 # Audit: TUI Overview parity + the miami-vice theme — 2026-09-12
 
@@ -146,6 +146,20 @@ The zero filter was removed from `countLine` on the premise that all callers rec
 
 **Recommendation:** Restore the defensive zero check in `countLine`, or pass a zero-filtered projection at the compact caller; add a `StatusAllHuman` regression test built from a canonical Summary containing all status buckets.
 
+**Resolution:** Re-verified still open on 2026-10-23 and reproduced: 'tskflwctl
+    --no-color status --all' in a throwaway repo renders 'tasks 0 next-up · 0
+    ready-to-start · 0 in-progress · 0 completed · 0 deprecated · 0 deferred'
+    where the single-space 'status' correctly renders nothing — so the empty
+    case prints six zero buckets instead of the 'none' fallback two lines below
+    it. The mechanism is unchanged, only refactored: countLine
+    (internal/cli/render/status.go:104) now delegates to theme.Breakdown, which
+    joins every item and filters nothing, while renderCompactSpaceSummary:174
+    still passes raw summary.Counts. Summary.Counts is still documented as
+    carrying every status including zeroes (internal/core/service.go:535), and
+    SplitCounts (:519) is still the only zero filter. No open task owns it: the
+    two keyword hits, 6g9fpr190sxd and 6g0fzhc3m7mc, are both completed —
+    6g9fpr190sxd is the changeset this audit reviewed.
+
 #### M2. Short Overviews can make the new task counts permanently unreachable  · **Status:** open
 
 **File:** internal/tui/dashboard.go:79 | **Component:** TUI dashboard viewport
@@ -154,6 +168,19 @@ The zero filter was removed from `countLine` on the premise that all callers rec
 The new task heading and count lines deliberately have no navigation target, while `dashboard.view` centers its window exclusively on the selected target row (`internal/tui/dashboard.go:299-315`). When there is no in-progress task, the first selectable row is normally an epic below the counts and the empty in-progress widget. In a real 60x12 Zsh PTY, this branch opened with `in progress (0)` as the first visible line; `tasks`, `active`, and `archived` were all clipped above the window. The dashboard key handler moves only through `d.nav`, so no key can focus or reveal those non-target rows: moving up from the first epic wraps to the last target. The feature is therefore absent, not merely initially scrolled, on a supported short terminal. Existing count tests all use height 40, while the short-screen test checks only that the selected last row remains visible.
 
 **Recommendation:** Give informational rows a reachable vertical viewport policy, or pin/reserve the count band while cursor-scrolling the remaining widgets; add a no-in-progress short-height test proving both the counts and current selection can be reached.
+
+**Resolution:** Re-verified still open on 2026-10-23 by reading the current
+    source; line references have shifted but no mechanism changed. The
+    tasks/active/archived rows are still built with the targetless 'line' helper
+    (internal/tui/dashboard.go:79-90), dashboard.move still steps only through
+    d.nav (:308), and scrollTo still windows exclusively on the cursor row
+    (:328-367, 'keeps the focused row visible — centered when it can be'), so
+    informational rows above the first navigable row remain unreachable on a
+    short terminal with nothing in progress. Survived the recent TUI navigation
+    and creation-host churn untouched. No open task owns it; the viewport-policy
+    decision is adjacent to 6g8vxcnezktm (reassess TUI navigation and
+    information architecture at current scale), which would settle the policy
+    but does not name this defect.
 
 #### L1. Theme preview completes an impossible second theme name  · **Status:** open
 
@@ -164,6 +191,15 @@ The new task heading and count lines deliberately have no navigation target, whi
 
 **Recommendation:** Use a positional wrapper that returns no candidates once `len(args) >= 1`, while keeping the registry-driven function for `--theme`; cover both the first and second positional completion requests.
 
+**Resolution:** Re-verified still open on 2026-10-23 and reproduced through the
+    Cobra driver: './bin/tskflwctl __complete theme preview neon ""' still
+    offers catppuccin, miami-vice and neon for an already-filled positional that
+    cobra.MaximumNArgs(1) will reject. completeThemeNames
+    (internal/cli/theme.go:148) still ignores its args parameter and is still
+    wired directly as the preview command's ValidArgsFunction (:82). No open
+    task owns it — 6g50ry3ffjxe is a keyword-only hit (it adds a Surface swatch
+    row to ThemePreviewHuman output, not completion behaviour).
+
 #### L2. Staleness tests do not prove the Overview uses the colored helper  · **Status:** open
 
 **File:** internal/tui/column_staleness_test.go:11 | **Component:** TUI regression coverage
@@ -172,6 +208,14 @@ The new task heading and count lines deliberately have no navigation target, whi
 The new tests call `staleDateCells` directly and prove that helper differs from `relDateCells`, but no test observes styling through `dashboard.setSummary`. The existing dashboard age test at `internal/tui/dashboard_test.go:286` strips ANSI before checking dates and alignment. Consequently, changing the production call at `internal/tui/dashboard.go:105` back to `relDateCells` would leave the helper tests and every rendered-dashboard assertion satisfied while removing the delivered feature. The current wiring is correct, but its load-bearing integration is unguarded.
 
 **Recommendation:** Render an Overview fixture with fresh and stale in-progress tasks and compare the two date cells styling before stripping ANSI, so the test fails if the dashboard call site returns to the neutral helper.
+
+**Resolution:** Re-verified still open on 2026-10-23: the integration is still
+    unguarded. staleDateCells has exactly one production call site
+    (internal/tui/dashboard.go:110) and is only ever tested directly, in
+    internal/tui/column_staleness_test.go; every assertion in dashboard_test.go
+    runs through ansi.Strip, so no test can observe which helper the dashboard
+    called. Reverting :110 to relDateCells would still leave the whole suite
+    green. No open task owns it.
 
 ## Candidate tasks
 

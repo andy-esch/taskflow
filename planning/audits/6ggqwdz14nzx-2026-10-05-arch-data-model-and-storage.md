@@ -1,10 +1,10 @@
 ---
 schema: 1
 id: 6ggqwdz14nzx
-bucket: open
+bucket: closed
 area: arch-data-model-and-storage
 date: "2026-10-05"
-updated_at: "2026-10-05"
+updated_at: "2026-10-23"
 ---
 
 # Audit: arch-data-model-and-storage — 2026-10-05
@@ -38,7 +38,7 @@ ADR-0007 (§4) · Files read: `internal/store/frontmatter.go`, `internal/store/c
 `internal/core/service.go`, `internal/core/thread_creation.go`, `internal/tools/{flatmigrate,researchmigrate,wikimigrate}/main.go`
 · Sources cited: 4
 
-#### H1. A surgical frontmatter write silently appends one newline per write to a folded block scalar's decoded value · **Status:** tracked by 6g1dhhk6721x
+#### H1. A surgical frontmatter write silently appends one newline per write to a folded block scalar's decoded value · **Status:** fixed
 
 **File:** internal/store/frontmatter.go:273 | **Component:** store/frontmatter (surgical write path)
 **Effort:** S · **Urgency:** soon
@@ -80,11 +80,13 @@ Two scoping facts, stated so the severity is not overread:
 
 **Recommendation:** At updateFrontmatter/assembleFile, re-emit only the nodes an update names (or fail closed on a folded scalar), pinned by a decoded-value round-trip fixture covering >, >-, | and a more-indented body.
 
-**Resolution:** Independently reproduced during boundary closeout: five
-updateFrontmatter tier writes changed a more-indented folded scalar from 41 to
-46 decoded bytes. Existing task now covers decoded-value fidelity, is high
-priority/tier 2, and remains ready in epic 21 outside the adapter-neutral
-migration. Not fixed; prioritize before the next release.
+**Resolution:** Fixed by beca0b2 (2026-10-06), which added
+    internal/store/frontmatter_preserve.go to carry untouched block-scalar
+    source through a surgical write, plus frontmatter_fidelity_test.go;
+    destination task 6g1dhhk6721x is completed. Re-verified by reproduction on
+    2026-10-23: five consecutive task set --tier writes over a more-indented
+    folded scalar left the frontmatter source byte-identical and the decoded
+    value at 36 bytes with no newline accumulation.
 
 ## Executive summary
 
@@ -433,4 +435,4 @@ Again tracked, not re-reported.
 <!-- candidate-tasks:v1 · ○ open · ● in-progress · ✔ fixed · → tracked · ◌ deferred · ◌ superseded · ✘ wontfix -->
 <!-- Add or replace one row with `tskflwctl audit finding <audit> <code> --candidate "<one line>"`; an empty value removes it. -->
 
-- → H1 · tracked — Preserve untouched YAML scalar values and wrapping | tracked by 6g1dhhk6721x | high priority; decoded-value corruption reproduced
+- ✔ H1 · fixed — Preserve untouched YAML scalar values and wrapping | tracked by 6g1dhhk6721x | high priority; decoded-value corruption reproduced

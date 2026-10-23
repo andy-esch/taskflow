@@ -11,6 +11,7 @@ autonomy_level: 3
 tags: [correctness, lint, testing]
 created: "2026-09-22"
 audit_sources: [planning/audits/6gch6xep2mh2-2026-09-22-correctness-and-errors.md, planning/audits/6g8zy840z6gj-2026-09-11-test-rigour.md]
+updated_at: "2026-10-23"
 ---
 
 # Make closed-vocabulary switches fail closed and exhaustively checked
@@ -57,3 +58,5 @@ blanket suppressions.
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
 - Audit [2026-09-22 correctness and errors](../audits/6gch6xep2mh2-2026-09-22-correctness-and-errors.md), findings L1 and L2
 - Audit [2026-09-11 test rigour](../audits/6g8zy840z6gj-2026-09-11-test-rigour.md), finding M2
+
+Reinforced by audit 2026-09-11-test-rigour: finding L1 (partial overlap, left open) names a second untested predicate in the same function and test file this task already touches — ValidateTaskLifecyclePlan refuses RevisitAt for any target but deferred (internal/core/task_lifecycle.go:232) and no test constructs that state. One case in task_lifecycle_test.go, worth landing in the same commit as the out-of-vocabulary override test.
