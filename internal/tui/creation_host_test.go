@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"charm.land/bubbles/v2/cursor"
+	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 
@@ -14,8 +15,10 @@ import (
 )
 
 // This inventory covers mechanical contracts, not domain defaults or receipts.
-// Per-kind durable expectations remain in task_create_test and epic_create_test.
-var creationContractKinds = map[string]entityKind{"task": entityTasks, "epic": entityEpics}
+// Per-kind durable expectations remain in the concrete creation tests.
+var creationContractKinds = map[string]entityKind{
+	"task": entityTasks, "epic": entityEpics, "audit": entityAudits, "research": entityResearch,
+}
 
 func openCreationKind(t *testing.T, m Model, kind entityKind) Model {
 	t.Helper()
@@ -29,13 +32,37 @@ func openCreationKind(t *testing.T, m Model, kind entityKind) Model {
 }
 
 func creationTitle(m Model) string {
+	return creationContractInputs(&m)[0].Value()
+}
+
+// Test-only mechanics inventory; expectations for parameters, defaults and
+// durable records must not derive from these widget arrays or production helpers.
+func creationContractInputs(m *Model) []textinput.Model {
 	switch m.creation.kind {
 	case entityTasks:
-		return m.creation.task.inputs[taskCreateTitle].Value()
+		return m.creation.task.inputs[:]
 	case entityEpics:
-		return m.creation.epic.inputs[epicCreateTitle].Value()
+		return m.creation.epic.inputs[:]
+	case entityAudits:
+		return m.creation.audit.inputs[:]
+	case entityResearch:
+		return m.creation.research.inputs[:]
 	}
-	return ""
+	panic("missing creation contract input inventory")
+}
+
+func creationContractControls(m *Model) creationControls {
+	switch m.creation.kind {
+	case entityTasks:
+		return m.creation.task.controls()
+	case entityEpics:
+		return m.creation.epic.controls()
+	case entityAudits:
+		return m.creation.audit.controls()
+	case entityResearch:
+		return m.creation.research.controls()
+	}
+	panic("missing creation contract controls inventory")
 }
 
 func TestCreationHostLifetimeContract(t *testing.T) {
@@ -49,7 +76,9 @@ func TestCreationHostLifetimeContract(t *testing.T) {
 			gen := m.activeCreation().gen
 			// Host entry points refuse replacement independently of shell guards.
 			if m.creation.openTask(m.svc, m.sessionGen, "wrong", entityRef{}) != nil ||
-				m.creation.openEpic(m.svc, m.sessionGen, "wrong") != nil || m.creation.gen != gen {
+				m.creation.openEpic(m.svc, m.sessionGen, "wrong") != nil ||
+				m.creation.openAudit(m.svc, m.sessionGen, "wrong") != nil ||
+				m.creation.openResearch(m.svc, m.sessionGen, "wrong") != nil || m.creation.gen != gen {
 				t.Fatal("active intent was replaced or consumed a generation")
 			}
 			m, _ = createKey(m, "esc")
@@ -65,7 +94,7 @@ func TestCreationHostLifetimeContract(t *testing.T) {
 			if m.activeCreation() != nil || !prior.activeCreation().active {
 				t.Fatal("close failed or changed the retained prior Model")
 			}
-			if m.creation.begin(entityResearch) || m.creation.gen != gen {
+			if m.creation.begin(entityThreads) || m.creation.gen != gen {
 				t.Fatal("unsupported kind consumed a lifetime or opened a form")
 			}
 			nextKind := entityTasks

@@ -12,10 +12,12 @@ import (
 // only a synchronous borrow from the current copy.
 // See docs/architecture/tui.md#epic-creation-and-shared-staging.
 type creationHost struct {
-	kind entityKind
-	gen  uint64 // monotonic across kinds, closes and workspace activation
-	task taskCreateForm
-	epic epicCreateForm
+	kind     entityKind
+	gen      uint64 // monotonic across kinds, closes and workspace activation
+	task     taskCreateForm
+	epic     epicCreateForm
+	audit    auditCreateForm
+	research researchCreateForm
 }
 
 func (m Model) creationActions() []paletteItem {
@@ -25,6 +27,10 @@ func (m Model) creationActions() []paletteItem {
 	switch m.cur().kind {
 	case entityTasks:
 		return []paletteItem{{kind: palAction, word: "new-task", title: "New task", filter: "new create task"}}
+	case entityAudits:
+		return []paletteItem{{kind: palAction, word: "new-audit", title: "New audit", filter: "new create audit"}}
+	case entityResearch:
+		return []paletteItem{{kind: palAction, word: "new-research", title: "New research", filter: "new create research"}}
 	case entityEpics:
 		ref := m.selectedRef()
 		title := "New task in this epic — select an epic first"
@@ -47,6 +53,10 @@ func (m *Model) openPageCreation() tea.Cmd {
 		return m.openTaskCreate(entityRef{})
 	case entityEpics:
 		return m.openEpicCreate()
+	case entityAudits:
+		return m.openAuditCreate()
+	case entityResearch:
+		return m.openResearchCreate()
 	default:
 		m.flash, m.flashErr = "creation is not available on this page yet", true
 		return nil
@@ -59,6 +69,10 @@ func (m *Model) runCreationAction(it paletteItem) tea.Cmd {
 		return m.openEpicCreate()
 	case "new-task":
 		return m.openTaskCreate(entityRef{})
+	case "new-audit":
+		return m.openAuditCreate()
+	case "new-research":
+		return m.openResearchCreate()
 	case "new-task-in-epic":
 		if it.ref.empty() || it.ref != m.selectedRef() {
 			m.flash, m.flashErr = "select the epic again before creating a task", true
@@ -76,6 +90,10 @@ func (h *creationHost) draft() stagedCreation {
 		draft = &h.task
 	case entityEpics:
 		draft = &h.epic
+	case entityAudits:
+		draft = &h.audit
+	case entityResearch:
+		draft = &h.research
 	}
 	if draft == nil || !draft.state().active {
 		return nil
@@ -91,7 +109,12 @@ func (h *creationHost) active() *creationState {
 }
 
 func (h *creationHost) begin(kind entityKind) bool {
-	if h.active() != nil || (kind != entityTasks && kind != entityEpics) {
+	if h.active() != nil {
+		return false
+	}
+	switch kind {
+	case entityTasks, entityEpics, entityAudits, entityResearch:
+	default:
 		return false
 	}
 	h.gen++
@@ -119,6 +142,22 @@ func (h *creationHost) displace() {
 	if f := h.active(); f != nil {
 		f.displace()
 	}
+}
+
+func (h *creationHost) openAudit(origin *core.Service, session uint64, destination string) tea.Cmd {
+	if !h.begin(entityAudits) {
+		return nil
+	}
+	h.audit = newAuditCreateForm(origin, h.gen, session, destination)
+	return h.audit.controls().focus(auditCreateArea)
+}
+
+func (h *creationHost) openResearch(origin *core.Service, session uint64, destination string) tea.Cmd {
+	if !h.begin(entityResearch) {
+		return nil
+	}
+	h.research = newResearchCreateForm(origin, h.gen, session, destination)
+	return h.research.controls().focus(researchCreateTitle)
 }
 
 // Only typed create outcomes implement this private seam. It allows the shell's

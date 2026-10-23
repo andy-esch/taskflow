@@ -33,16 +33,11 @@ func stubCreationClipboard(t *testing.T) {
 
 func TestCreationNativeClipboardOwnership(t *testing.T) {
 	stubCreationClipboard(t)
-	for _, kind := range []string{"task", "epic"} {
+	for name, kind := range creationContractKinds {
 		for _, blocker := range []string{"visible", "resize", "help", "config", "field changed"} {
-			t.Run(kind+"/"+blocker, func(t *testing.T) {
+			t.Run(name+"/"+blocker, func(t *testing.T) {
 				root := seedRepo(t)
-				m := loadedAt(t, root, 120, 40)
-				if kind == "task" {
-					m = openCreate(t, m)
-				} else {
-					m = openEpicForm(t, m)
-				}
+				m := openCreationKind(t, loadedAt(t, root, 120, 40), kind)
 				before := testutil.SnapshotTree(t, root)
 				next, late := m.Update(tea.KeyPressMsg{Code: 'v', Mod: tea.ModCtrl})
 				m = next.(Model)
@@ -79,10 +74,8 @@ func TestCreationNativeClipboardOwnership(t *testing.T) {
 					next, _ = m.Update(result)
 					m = next.(Model)
 				}
-				values := []string{m.creation.task.inputs[taskCreateTitle].Value(), m.creation.task.inputs[taskCreateTags].Value()}
-				if kind == "epic" {
-					values = []string{m.creation.epic.inputs[epicCreateTitle].Value(), m.creation.epic.inputs[epicCreateDescription].Value()}
-				}
+				inputs := creationContractInputs(&m)
+				values := []string{inputs[0].Value(), inputs[1].Value()}
 				want := ""
 				if blocker == "visible" {
 					want = creationClipboardText

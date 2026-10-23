@@ -14,22 +14,13 @@ import (
 )
 
 func TestCreationSharedStatePreservesValueOwnershipAndRecovery(t *testing.T) {
-	for _, kind := range []string{"task", "epic"} {
-		t.Run(kind, func(t *testing.T) {
-			m := loaded(t, 120, 40)
-			if kind == "task" {
-				m = openCreate(t, m)
-			} else {
-				m = openEpicForm(t, m)
-			}
+	for name, kind := range creationContractKinds {
+		t.Run(name, func(t *testing.T) {
+			m := openCreationKind(t, loaded(t, 120, 40), kind)
 			next, _ := m.Update(tea.PasteMsg{Content: "New input"})
 			after := next.(Model)
-			if kind == "task" {
-				if m.creation.task.inputs[taskCreateTitle].Value() != "" || after.creation.task.inputs[taskCreateTitle].Value() != "New input" {
-					t.Fatal("shared controls mutated the previous task model's widgets")
-				}
-			} else if m.creation.epic.inputs[epicCreateTitle].Value() != "" || after.creation.epic.inputs[epicCreateTitle].Value() != "New input" {
-				t.Fatal("shared controls mutated the previous epic model's widgets")
+			if creationTitle(m) != "" || creationTitle(after) != "New input" {
+				t.Fatal("shared controls mutated the previous model's widgets")
 			}
 			f := after.activeCreation()
 			f.locked, f.err = true, "Original cleanup failure"
@@ -44,7 +35,7 @@ func TestCreationSharedStatePreservesValueOwnershipAndRecovery(t *testing.T) {
 }
 
 func TestCreationTextEditsDetachPriorDraft(t *testing.T) {
-	for _, surface := range []string{"task", "epic", "epic picker"} {
+	for _, surface := range []string{"task", "epic", "audit", "research", "epic picker"} {
 		for _, edit := range []struct {
 			name string
 			msg  tea.Msg
@@ -57,8 +48,8 @@ func TestCreationTextEditsDetachPriorDraft(t *testing.T) {
 		} {
 			t.Run(surface+"/"+edit.name, func(t *testing.T) {
 				m := loaded(t, 120, 40)
-				if surface == "epic" {
-					m = openEpicForm(t, m)
+				if kind, ok := creationContractKinds[surface]; ok {
+					m = openCreationKind(t, m, kind)
 				} else {
 					m = openCreate(t, m)
 					if surface == "epic picker" {
@@ -67,14 +58,10 @@ func TestCreationTextEditsDetachPriorDraft(t *testing.T) {
 					}
 				}
 				value := func(m Model) string {
-					switch surface {
-					case "epic":
-						return m.creation.epic.inputs[epicCreateTitle].Value()
-					case "epic picker":
+					if surface == "epic picker" {
 						return m.creation.task.query.Value()
-					default:
-						return m.creation.task.inputs[taskCreateTitle].Value()
 					}
+					return creationTitle(m)
 				}
 				m = pasteCreation(m, "abcd")
 				next, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
@@ -110,20 +97,10 @@ func TestCreationInputCopyPreservesWidgetState(t *testing.T) {
 }
 
 func TestCreationHiddenWidgetKeepsBlinkContinuation(t *testing.T) {
-	for _, kind := range []string{"task", "epic"} {
-		t.Run(kind, func(t *testing.T) {
-			m := loaded(t, 120, 40)
-			if kind == "task" {
-				m = openCreate(t, m)
-			} else {
-				m = openEpicForm(t, m)
-			}
-			var blink tea.Cmd
-			if kind == "task" {
-				blink = m.creation.task.controls().focus(taskCreateTitle)
-			} else {
-				blink = m.creation.epic.controls().focus(epicCreateTitle)
-			}
+	for name, kind := range creationContractKinds {
+		t.Run(name, func(t *testing.T) {
+			m := openCreationKind(t, loaded(t, 120, 40), kind)
+			blink := creationContractControls(&m).focus(0)
 			next, _ := m.Update(tea.WindowSizeMsg{Width: 30, Height: 10})
 			m = next.(Model)
 			msg := blink()
@@ -140,16 +117,11 @@ func TestCreationHiddenWidgetKeepsBlinkContinuation(t *testing.T) {
 }
 
 func TestCreationDelayedPasteRequiresVisibleOwner(t *testing.T) {
-	for _, kind := range []string{"task", "epic"} {
+	for name, kind := range creationContractKinds {
 		for _, blocker := range []string{"resize", "help", "config"} {
-			t.Run(kind+"/"+blocker, func(t *testing.T) {
+			t.Run(name+"/"+blocker, func(t *testing.T) {
 				root := seedRepo(t)
-				m := loadedAt(t, root, 120, 40)
-				if kind == "task" {
-					m = openCreate(t, m)
-				} else {
-					m = openEpicForm(t, m)
-				}
+				m := openCreationKind(t, loadedAt(t, root, 120, 40), kind)
 				before := testutil.SnapshotTree(t, root)
 				late := m.activeCreation().widgetCmd(func() tea.Msg { return tea.PasteMsg{Content: "hidden paste"} })
 				switch blocker {
@@ -166,13 +138,7 @@ func TestCreationDelayedPasteRequiresVisibleOwner(t *testing.T) {
 				}
 				next, _ := m.Update(late())
 				m = next.(Model)
-				title := func(m Model) string {
-					if kind == "task" {
-						return m.creation.task.inputs[taskCreateTitle].Value()
-					}
-					return m.creation.epic.inputs[epicCreateTitle].Value()
-				}
-				if title(m) != "" {
+				if creationTitle(m) != "" {
 					t.Fatal("delayed paste edited a hidden form")
 				}
 				m.showHelp, m.configOpen = false, false
@@ -181,7 +147,7 @@ func TestCreationDelayedPasteRequiresVisibleOwner(t *testing.T) {
 				fresh := m.activeCreation().widgetCmd(func() tea.Msg { return tea.PasteMsg{Content: "visible paste"} })
 				next, _ = m.Update(fresh())
 				m = next.(Model)
-				if title(m) != "visible paste" || !maps.Equal(before, testutil.SnapshotTree(t, root)) {
+				if creationTitle(m) != "visible paste" || !maps.Equal(before, testutil.SnapshotTree(t, root)) {
 					t.Fatal("restored form rejected current input or staging wrote files")
 				}
 			})
