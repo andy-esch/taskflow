@@ -1,10 +1,10 @@
 ---
 schema: 1
 id: 6gjzzvdy5jnw
-bucket: open
+bucket: closed
 area: arch-machine-contract
 date: "2026-10-12"
-updated_at: "2026-10-12"
+updated_at: "2026-10-23"
 ---
 
 # Audit: arch-machine-contract — 2026-10-12
@@ -28,7 +28,7 @@ updated_at: "2026-10-12"
 **Resolution:** <how it was resolved — written by `audit finding --note`, not by hand>
 ```
 
-#### H1. The generated JSON Schema is silent on the closed vocabularies that most often force a NOT ADDITIVE revision · **Status:** open
+#### H1. The generated JSON Schema is silent on the closed vocabularies that most often force a NOT ADDITIVE revision · **Status:** tracked by 6gppr2k482rm
 
 **File:** internal/wire/envelopes.go:1291 | **Component:** wire — JSON Schema generation
 **Effort:** M · **Urgency:** soon
@@ -134,7 +134,12 @@ member rather than silently defaulting it.
 
 **Recommendation:** Do NOT add enum — it would reject the tolerant reads lint depends on. Annotate each vocabulary-bearing property in the generated schema with an x- extension keyword naming its schema --json registry (e.g. x-taskflow-vocabulary: "statuses"), derived from the same domain owners runSchemaContract already uses, and guard it in the shape of TestDispositionDescriptionsReferencePublishedVocabularies so a vocabulary-typed DTO field with no annotation fails the build.
 
-#### M1. The list-projection selector registries are declared contract surface that the binary never publishes · **Status:** open
+**Resolution:** Re-verified 2026-10-23: no x-taskflow vocabulary annotations
+    exist. Tracked by a decision-first task whose first criterion is accepting,
+    revising or rejecting the proposed ADR-0008 amendment before any schema
+    change.
+
+#### M1. The list-projection selector registries are declared contract surface that the binary never publishes · **Status:** tracked by 6gppr2k0exeb
 
 **File:** internal/cli/schema.go:85 | **Component:** cli — schema contract / render column registry
 **Effort:** S · **Urgency:** soon
@@ -221,7 +226,11 @@ fix it.
 
 **Recommendation:** Add a per-entity selector registry to SchemaContract, populated from render.Specs(...) in runSchemaContract — the same assembly point that already derives exit codes and command safety — carrying each selector's name, description and aliases plus an explicit string value type, and reduce TestGolden_ProjectionContract to asserting the published contract instead of re-deriving it.
 
-#### L1. The contract publishes the command surface and the payload surface but not the edge between them · **Status:** open
+**Resolution:** Re-verified 2026-10-23: schema --json still publishes no
+    selector registry. Tracked with L1, and the residual of 2026-07-24 M3, by
+    the schema-contract publication task.
+
+#### L1. The contract publishes the command surface and the payload surface but not the edge between them · **Status:** tracked by 6gppr2k0exeb
 
 **File:** internal/wire/envelopes.go:1289 | **Component:** wire / cli — schema contract
 **Effort:** S · **Urgency:** eventually
@@ -245,6 +254,9 @@ and validation is the minority consumer path. The cost grows linearly — one
 unmapped command per new leaf — and nothing compounds structurally.
 
 **Recommendation:** Carry the emitted envelope definition name on SchemaCommand, set where each command's renderer is wired, so the already-published commands list becomes the join.
+
+**Resolution:** SchemaCommand still carries only path, safety, hidden and
+    deprecated. Tracked with M1 by the schema-contract publication task.
 
 ## Routine metadata
 
@@ -751,6 +763,6 @@ actually crosses a process boundary.
 <!-- candidate-tasks:v1 · ○ open · ● in-progress · ✔ fixed · → tracked · ◌ deferred · ◌ superseded · ✘ wontfix -->
 <!-- Add or replace one row with `tskflwctl audit finding <audit> <code> --candidate "<one line>"`; an empty value removes it. -->
 
-- ○ H1 · open — tskflwctl task new "Annotate closed vocabularies in the generated JSON Schema" --epic 26-frontmatter-schema-declared-validation-contract
-- ○ M1 · open — tskflwctl task new "Publish the list-projection selector registry in schema --json" --epic 20-cli-ux-and-ergonomics
-- ○ L1 · open — tskflwctl task new "Name each command's emitted envelope in the schema contract" --epic 21-code-quality-architecture-hardening
+- → H1 · tracked — Decide how the JSON Schema expresses closed vocabularies | tracked by 6gppr2k482rm
+- → M1 · tracked — Publish selector registries in schema --json | tracked by 6gppr2k0exeb
+- → L1 · tracked — Name each command's emitted envelope | tracked by 6gppr2k0exeb

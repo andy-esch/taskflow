@@ -10,7 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [correctness, lint, testing]
 created: "2026-09-22"
-audit_sources: [planning/audits/6gch6xep2mh2-2026-09-22-correctness-and-errors.md, planning/audits/6g8zy840z6gj-2026-09-11-test-rigour.md]
+audit_sources: [planning/audits/6gch6xep2mh2-2026-09-22-correctness-and-errors.md, planning/audits/6g8zy840z6gj-2026-09-11-test-rigour.md, planning/audits/6gh1frgyz2fh-2026-10-06-adapter-hygiene.md]
+updated_at: "2026-10-23"
 ---
 
 # Make closed-vocabulary switches fail closed and exhaustively checked
@@ -32,6 +33,9 @@ blanket suppressions.
   test for an out-of-vocabulary value.
 - Enable and configure the existing golangci-lint `exhaustive` analyzer after inventorying affected
   switches. Every suppression must name why a default is intentionally safe.
+- Pin the TUI's hand-typed epic/audit view and epic transition tables to the domain vocabularies the
+  way `TestStatusViewsCoverAllStatuses` already pins task statuses, and replace the archived-task
+  filter's two-status negation with a domain predicate (added in 2026-10-23 audit triage).
 
 ## Acceptance criteria
 
@@ -45,6 +49,10 @@ blanket suppressions.
       level or analyzer-wide suppression.
 - [ ] Existing status, revisit-date, dependency-lint, and lifecycle behavior remains unchanged for
       every declared value.
+- [ ] The TUI epic and audit view tables and epic transitions are pinned to
+  domain.AllEpicStatuses/AllAuditBuckets and the EpicStatus constants by
+  coverage tests, and the archived-task filter uses a domain predicate instead
+  of negating two statuses.
 
 ## Out of scope
 
@@ -57,3 +65,4 @@ blanket suppressions.
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
 - Audit [2026-09-22 correctness and errors](../audits/6gch6xep2mh2-2026-09-22-correctness-and-errors.md), findings L1 and L2
 - Audit [2026-09-11 test rigour](../audits/6g8zy840z6gj-2026-09-11-test-rigour.md), finding M2
+- Audit [2026-10-06 adapter hygiene](../audits/6gh1frgyz2fh-2026-10-06-adapter-hygiene.md), finding L1

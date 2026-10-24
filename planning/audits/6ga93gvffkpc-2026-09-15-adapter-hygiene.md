@@ -1,10 +1,10 @@
 ---
 schema: 1
 id: 6ga93gvffkpc
-bucket: open
+bucket: closed
 area: adapter-hygiene
 date: "2026-09-15"
-updated_at: "2026-10-05"
+updated_at: "2026-10-23"
 ---
 # Code Quality Audit: adapter-hygiene — 2026-09-15
 
@@ -140,7 +140,7 @@ are reconciled; Antigravity's mapper-test gap is fixed and Codex's pre-existing
 TUI consumer gap is tracked by 6ggkdbg0816h. Release inclusion remains separate;
 repair authorization and transactions are unchanged.
 
-#### M2. MarkerUnreadable brands readable tasks whose prerequisite is broken  · **Status:** open
+#### M2. MarkerUnreadable brands readable tasks whose prerequisite is broken  · **Status:** tracked by 6gppr2kfa1dz
 
 **File:** `internal/tui/detail.go:1322` (also `detail.go:1467`, `thread_spatial.go:2774`, `thread_spatial.go:2792`, `thread_spatial.go:2896`) | **Component:** tui
 **Effort:** S · **Urgency:** soon
@@ -202,6 +202,11 @@ the inspector's colour and the node's marker cannot disagree.
 `SoundlyCompleted`) is a design call worth its own task — see L1, which is the same question
 arriving from the CLI side.
 
+**Resolution:** Re-verified 2026-10-23: detail.go and the spatial marker sites
+    still draw MarkerUnreadable for GateBroken. The owner approved a fix in
+    2026-10-23 triage; tracked with L2 by a task in the
+    refine-thread-and-tui-navigation Thread.
+
 ### Low
 
 #### L1. The "newly unsafe impact" predicate is spelled three times, twice inside the adapter  · **Status:** fixed 2026-10-04 (PR #282)
@@ -250,7 +255,7 @@ reconciled; the strengthened mapper regression covers 36 task and four Thread
 transition cases and rejects three compiler-valid shallow-rule mutants. Release
 inclusion remains a separate milestone.
 
-#### L2. The spatial anchor guard is narrower than its sibling render guards  · **Status:** open
+#### L2. The spatial anchor guard is narrower than its sibling render guards  · **Status:** tracked by 6gppr2kfa1dz
 
 **File:** `internal/tui/thread_spatial.go:428` (also `:443`) | **Component:** tui
 **Effort:** XS · **Urgency:** eventually
@@ -273,6 +278,10 @@ nothing in the code says which question each is asking.
 **Recommendation:** once M2's helper exists, give the two questions two names —
 "is this record readable" (anchorable) and "is this task's gate sound" (marker colour) — and
 call the right one at each site. No behaviour change is intended at `:428`/`:443`.
+
+**Resolution:** Tracked with M2: the task names the readable-record and
+    sound-gate predicates separately, with no intended change to which members
+    are anchorable.
 
 ## What audited clean
 
@@ -378,3 +387,11 @@ or new implementation ticket for those findings is silently approved here.
 The earlier candidate commands and no-overlap statement describe the original audit capture.
 Do not recreate the M1/L1 candidate: its destination is now the task above. This audit stays open
 because its two TUI findings still lack settled dispositions.
+
+## Owner triage (2026-10-23)
+
+The owner approved a fix for the marker-semantics findings. M2 and L2 are tracked together by
+[6gppr2kfa1dz](../tasks/6gppr2kfa1dz-stop-branding-readable-broken-gate-thread-members-as-unreadable.md),
+linked into the refine-thread-and-tui-navigation Thread. That task keeps anchor selection unchanged;
+it separates the readable-record and sound-gate predicates rather than redesigning Thread markers
+wholesale. Every finding now has a terminal disposition, so the audit closes.

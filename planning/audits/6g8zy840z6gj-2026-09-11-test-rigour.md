@@ -1,10 +1,10 @@
 ---
 schema: 1
 id: 6g8zy840z6gj
-bucket: open
+bucket: closed
 area: test-rigour
 date: "2026-09-11"
-updated_at: "2026-09-22"
+updated_at: "2026-10-23"
 ---
 
 # Code Quality Audit: test-rigour — 2026-09-11
@@ -111,7 +111,7 @@ Validation of this audit is recorded in the PR body.
 
 ### Medium
 
-#### M1. `epic set --unset description` writes a lint-invalid epic  · **Status:** open
+#### M1. `epic set --unset description` writes a lint-invalid epic  · **Status:** tracked by 6gppr2j8g1h4
 
 **File:** `internal/core/service_epic.go:302` | **Component:** core (epic mutation)
 **Effort:** XS · **Urgency:** soon
@@ -162,6 +162,11 @@ set branch — extend it to the unset branch in the same commit.
 (`NewEpic` and `LintEpic` separately). Declaring it once on the entity descriptor
 (`domain/entity.go`) so create, set, unset, and lint all read one table is epic 26's
 territory, not this fix.
+
+**Resolution:** Re-verified 2026-10-23: prepareEpicFieldUpdates still gates
+    unset only on the field registry, so --unset description succeeds and leaves
+    a lint-invalid epic. Tracked with L2 by a task that refuses required-field
+    unsets and adds the epic unset path's missing negative tests.
 
 #### M2. `TaskLifecycleOverride` closed vocabulary has no exhaustiveness or negative test  · **Status:** tracked by 6gcqz5aqt2sg
 
@@ -219,7 +224,7 @@ checks.
 
 ### Low
 
-#### L1. `revisit_at`-only-for-deferred guard has no negative test  · **Status:** open
+#### L1. `revisit_at`-only-for-deferred guard has no negative test  · **Status:** tracked by 6gppr2jd4amw
 
 **File:** `internal/core/task_lifecycle.go:214` | **Component:** core (task lifecycle)
 **Effort:** XS · **Urgency:** eventually
@@ -244,7 +249,11 @@ malformed state this prevents is one the read side already knows about —
 `ValidateTaskLifecyclePlan(graph, TaskLifecyclePlan{TaskID: id, To: domain.StatusInProgress, RevisitAt: "2026-10-01"}, "")`
 → `errors.Is(err, domain.ErrValidation)`.
 
-#### L2. `TestService_NewEpic`'s failure table proves less than it claims  · **Status:** open
+**Resolution:** Still unpinned at 2026-10-23 triage. Tracked by the residual
+    test-rigour task as one focused ValidateTaskLifecyclePlan case with a
+    non-deferred target.
+
+#### L2. `TestService_NewEpic`'s failure table proves less than it claims  · **Status:** tracked by 6gppr2j8g1h4
 
 **File:** `internal/core/usecases_test.go:362` | **Component:** core tests
 **Effort:** XS · **Urgency:** eventually
@@ -265,7 +274,11 @@ lets a guard removal go green.
 case a valid `Status: "active"` so each trips the predicate its comment names, and add
 an explicit `{Status: "planning"}` case for the status guard.
 
-#### L3. Dependency planner guards the dependent against an unreadable record, not the prerequisites  · **Status:** open
+**Resolution:** Tracked with M1 on the same epic mutation surface: the NewEpic
+    failure table will assert ErrValidation per case, give each case a valid
+    status, and add an explicit invalid-status case.
+
+#### L3. Dependency planner guards the dependent against an unreadable record, not the prerequisites  · **Status:** tracked by 6gppr2jd4amw
 
 **File:** `internal/core/dependency_operations.go:191` | **Component:** core (dependency planner)
 **Effort:** XS · **Urgency:** eventually
@@ -294,6 +307,11 @@ make.
 dependent check with a comment naming `ValidateTaskGraphMutationSource` as the real
 gate, or add the symmetric prerequisite check. Do **not** add a test for an
 unreachable branch; the honest fix is in the source, not the suite.
+
+**Resolution:** Tracked by the residual test-rigour task, which settles the
+    dependent/prerequisite asymmetry in source (a symmetric check, or removal
+    with a comment naming ValidateTaskGraphMutationSource) without testing an
+    unreachable branch.
 
 ## What audited clean
 

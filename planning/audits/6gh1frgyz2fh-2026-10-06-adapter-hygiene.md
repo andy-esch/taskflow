@@ -1,10 +1,10 @@
 ---
 schema: 1
 id: 6gh1frgyz2fh
-bucket: open
+bucket: closed
 area: adapter-hygiene
 date: "2026-10-06"
-updated_at: "2026-10-06"
+updated_at: "2026-10-23"
 ---
 
 # Audit: adapter-hygiene — 2026-10-06
@@ -28,7 +28,7 @@ updated_at: "2026-10-06"
 **Resolution:** <how it was resolved — written by `audit finding --note`, not by hand>
 ```
 
-#### H1. init silently ignores -C/--space and scaffolds the caller's cwd · **Status:** tracked by 6ggjmtmdd54w
+#### H1. init silently ignores -C/--space and scaffolds the caller's cwd · **Status:** fixed (PR #287)
 
 **File:** internal/cli/init.go:50 | **Component:** cli
 **Effort:** S · **Urgency:** acute
@@ -130,15 +130,12 @@ with this fix.
 
 **Recommendation:** Route init's bootstrap target through startDir() — honor -C (and resolve --path relative to it, as git does), or reject the selectors it cannot honor before any write.
 
-**Resolution:** Already owned by 6ggjmtmdd54w
-(prevent-silently-ignored-target-selectors-during-init), which records the -C
-case from 2026-10-04 dogfood. This run adds deterministic reproductions of the
-two variants that task lists as not yet reproduced: -C plus --space bypasses the
-mutual-exclusion guard, and an unknown --space is swallowed, both scaffolding
-cwd at exit 0. git -C's applied-first semantics are offered as the precedent for
-its open policy question.
+**Resolution:** Fixed by 6ggjmtmdd54w in PR #287: a two-directory test proves
+    init cannot write to the caller's cwd after an explicit different target
+    selector, and unsupported or conflicting selectors fail before any write.
+    Reconciled in 2026-10-23 triage.
 
-#### M1. ShowAudit discards the findings and near-misses its own read parsed, so both primary adapters re-parse the body · **Status:** open
+#### M1. ShowAudit discards the findings and near-misses its own read parsed, so both primary adapters re-parse the body · **Status:** tracked by 6gppr2k7xk5s
 
 **File:** internal/core/entity_read.go:105 | **Component:** core + cli + tui
 **Effort:** S · **Urgency:** soon
@@ -235,7 +232,12 @@ nudge is a UX call that belongs with that task, not with this fix.
 
 **Recommendation:** Carry parseAuditWithFindings' already-computed findings and near-misses through ShowAudit, reduce both adapters to consuming them, and let audit show report a near-miss count.
 
-#### L1. The epics tab's lifecycle and view vocabularies are hand-typed where the task axis is pinned to the domain · **Status:** open
+**Resolution:** Re-verified 2026-10-23: AuditWithBody is still {Audit, Body},
+    and cli/audit.go and tui/detail.go each call domain.ParseFindings. Tracked
+    by a dedicated task that carries the store's parse through ShowAudit and
+    publishes it on audit show --json.
+
+#### L1. The epics tab's lifecycle and view vocabularies are hand-typed where the task axis is pinned to the domain · **Status:** tracked by 6gcqz5aqt2sg
 
 **File:** internal/tui/action.go:63 | **Component:** tui
 **Effort:** XS · **Urgency:** eventually
@@ -300,6 +302,11 @@ share one spelling is the same question the previous adapter-hygiene audit's L1 
 from the CLI side; it is worth its own task rather than riding this one.
 
 **Recommendation:** Add domain-coverage tests for epicViews/auditViews mirroring TestStatusViewsCoverAllStatuses, and use the domain.EpicStatus* constants in epicTransitions.
+
+**Resolution:** Tracked by the existing closed-vocabulary task, extended in
+    2026-10-23 triage with a criterion pinning the TUI epic/audit view and
+    transition tables to the domain vocabularies and replacing
+    dropArchivedRecords' negation with a domain predicate.
 
 ## Run context
 
@@ -501,6 +508,6 @@ the answer to the unguarded-presentation-packages question noted above.
 <!-- candidate-tasks:v1 · ○ open · ● in-progress · ✔ fixed · → tracked · ◌ deferred · ◌ superseded · ✘ wontfix -->
 <!-- Add or replace one row with `tskflwctl audit finding <audit> <code> --candidate "<one line>"`; an empty value removes it. -->
 
-- → H1 · tracked — Tracked in planning/tasks/6ggjmtmdd54w-prevent-silently-ignored-target-selectors-during-init.md
-- ○ M1 · open — `tskflwctl task new "Carry the audit finding parse through ShowAudit instead of re-parsing it in each adapter" --epic 21-code-quality-architecture-hardening --tags audit,cli,tui,contracts --tier 2 --priority medium --description "ShowAudit returns AuditWithBody, so cli/audit.go and tui/detail.go each re-run domain.ParseFindings and neither can see the near-misses the same store read already computed."`
-- ○ L1 · open — `tskflwctl task new "Pin the TUI epic and audit view vocabularies to the domain accessors" --epic 21-code-quality-architecture-hardening --tags tui,tests,contracts --tier 3 --priority low --description "epicViews/auditViews/epicTransitions are hand-typed literals with no domain-coverage guard, while the task axis is pinned to domain.AllStatuses by TestStatusViewsCoverAllStatuses."`
+- ✔ H1 · fixed — Honor init target selectors | fixed by 6ggjmtmdd54w in PR #287
+- → M1 · tracked — Carry parsed audit findings and near-misses through ShowAudit | tracked by 6gppr2k7xk5s
+- → L1 · tracked — Pin TUI epic and audit vocabularies to the domain | tracked by 6gcqz5aqt2sg
