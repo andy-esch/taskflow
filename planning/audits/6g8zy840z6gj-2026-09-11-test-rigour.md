@@ -4,7 +4,7 @@ id: 6g8zy840z6gj
 bucket: closed
 area: test-rigour
 date: "2026-09-11"
-updated_at: "2026-10-23"
+updated_at: "2026-10-24"
 ---
 
 # Code Quality Audit: test-rigour — 2026-09-11
@@ -278,7 +278,7 @@ an explicit `{Status: "planning"}` case for the status guard.
     failure table will assert ErrValidation per case, give each case a valid
     status, and add an explicit invalid-status case.
 
-#### L3. Dependency planner guards the dependent against an unreadable record, not the prerequisites  · **Status:** tracked by 6gppr2jd4amw
+#### L3. Dependency planner guards the dependent against an unreadable record, not the prerequisites  · **Status:** fixed 2026-10-16 (PR #310)
 
 **File:** `internal/core/dependency_operations.go:191` | **Component:** core (dependency planner)
 **Effort:** XS · **Urgency:** eventually
@@ -308,10 +308,13 @@ dependent check with a comment naming `ValidateTaskGraphMutationSource` as the r
 gate, or add the symmetric prerequisite check. Do **not** add a test for an
 unreachable branch; the honest fix is in the source, not the suite.
 
-**Resolution:** Tracked by the residual test-rigour task, which settles the
-    dependent/prerequisite asymmetry in source (a symmetric check, or removal
-    with a comment naming ValidateTaskGraphMutationSource) without testing an
-    unreachable branch.
+**Resolution:** Fixed by 498de98 in PR #310: planSelectedDependencyEdges now
+    gives every prerequisite the same graph.Task readability check as the
+    dependent, so the asymmetry is gone. The 2026-10-23 triage wrongly tracked
+    this as open; corrected on 2026-10-24 after the 2026-10-20 and 2026-10-23
+    backpressure runs both caught it. Residual nit, not carried: the dependent's
+    unreadable case is spelled twice with different sentinels (ErrValidation in
+    planDependencyEdges, an unreachable ErrNotFound in the selected planner).
 
 ## What audited clean
 
