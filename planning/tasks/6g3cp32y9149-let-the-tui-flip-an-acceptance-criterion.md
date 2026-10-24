@@ -10,9 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [tui, domain, ux]
 created: "2026-08-24"
-updated_at: "2026-10-18"
+updated_at: "2026-10-24"
 audited: "2026-10-04"
-depends_on: [6gkkzvr92waq, 6gmshzw7we0m]
+depends_on: [6gkkzvr92waq, 6gmshzw7we0m, 6gpxh6ncaqpw]
 ---
 # Let the TUI flip an acceptance criterion
 
@@ -31,6 +31,10 @@ this task's kickoff; it does not hold the shared creation checkpoint open.
 The existing [tracked write/lint policy alignment](6gkkzvr92waq-align-tracked-criterion-writes-and-lint-reason-semantics.md)
 is a separate prerequisite. Reuse its owner-approved policy rather than choosing
 different reason requirements in the form.
+The [criterion-section shadowing repair](6gpxh6ncaqpw-prevent-narrative-headings-from-hiding-task-criteria.md)
+is also a prerequisite: narrative headings must not hide the real criterion list
+before this UI starts enumerating and acting on it. It is independent of the
+tracked-reason policy decision.
 
 Use the core criterion policy and its required reason or destination inputs rather
 than copying a state/reason matrix into the TUI. Long prose remains in $EDITOR.

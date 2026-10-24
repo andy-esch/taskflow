@@ -1,7 +1,7 @@
 ---
 schema: 1
 id: 6gmshzwphadw
-status: ready-to-start
+status: completed
 epic: 18-tui-bubble-tea-interactive-planning-browser
 description: Reuse the proven staged task-creation interaction to create the remaining four planning entity kinds without pretending their required inputs or mutation policies are identical.
 effort: 2-3 days
@@ -12,6 +12,8 @@ tags: [tui, authoring, ux]
 created: "2026-10-17"
 depends_on: [6gp1ytfvm652, 6gp1ytg50tev, 6gp1ytgea8dt]
 updated_at: "2026-10-24"
+started_at: "2026-10-24"
+completed_at: "2026-10-24"
 ---
 # Extend TUI creation to epics audits research and Threads
 
@@ -59,15 +61,92 @@ Membership and sequencing remain separate design work. This integration task
 stays pending for the combined creation walkthrough and remaining criteria; the
 individual delivery slices do not substitute for that finish-line check.
 
+### Integrated verification — 2026-10-24
+
+Validated the merged creation implementation at `b560e20c` in one real
+pseudo-terminal session (140×40), using page-local `c`, keyboard navigation and
+bracketed terminal paste. A disposable tree contained an unrelated epic/task;
+`TSKFLW_CONFIG_HOME` was isolated and initialization used `--no-register`.
+All four creations were performed in the TUI, not through CLI creation verbs:
+
+| Created record | Observed per-kind contract |
+| --- | --- |
+| Touring bike workshop | Auto-numbered epic; explicit active/medium choices, description and tags. |
+| Touring release readiness | Open audit; blank date became 2026-10-24; zero parsed findings. |
+| Touring tyre comparison 世界 | Research backdated to 2026-10-01, with description/tags and no lifecycle. |
+| Release the touring bike | Empty, unstarted Thread; required description/goal, target date and tags; no task/dependency inputs. |
+
+Each success selected its new record and loaded its correct scaffold. A missing
+Thread goal produced an editable refusal with no Thread on disk; correcting the
+retained draft created exactly one. A second draft survived Keep editing, then
+Discard left the original Thread selected; refresh retained that selection.
+Independent CLI JSON assertions checked exact counts, metadata and healthy Thread
+projections after the walkthrough. The preexisting task, epic and repository
+configuration retained their SHA-256 hashes and permissions.
+
+The combined race-enabled creation regressions passed across all five consumers.
+These cover duplicate/stale delivery, known refusals, committed/uncertain recovery,
+watcher landing, portable capabilities, workspace-origin isolation, narrow modes
+and native/delayed paste. See [shared host tests](../../internal/tui/creation_host_test.go),
+[epic tests](../../internal/tui/epic_create_test.go),
+[audit/research tests](../../internal/tui/document_create_test.go), and
+[Thread tests](../../internal/tui/thread_create_test.go). Receipt fault injection
+is regression evidence, not a claim that cleanup failures or workspace switches
+were forced in the terminal walkthrough. Typed `New*Params`, defaults and receipt
+policies remain per-kind; no persisted-field metadata became a form schema.
+
+This check also corrected stale `ui --help`/generated reference text and incomplete
+CLI-only empty-page advice for tasks/Threads. Focused tests pin the native empty-page
+action and help boundary. Membership, sequencing and lifecycle authoring are not
+silently included. The broader [TUI-only workflow closeout](6gmshzy2ppfb-prove-routine-tui-planning-without-cli-round-trips.md)
+still owns owner feedback and the remaining authoring/workspace capabilities.
+
+The planning dogfood pass also reproduced a preexisting
+[criterion-section shadowing defect](6gpxh6ncaqpw-prevent-narrative-headings-from-hiding-task-criteria.md):
+a narrative heading mentioning acceptance before the real section hides its
+criteria from reads/writes and permits completion preview despite an unmet item;
+lint does not diagnose it. The control's neutral heading restores 0/1 and the
+completion refusal. This document uses a neutral verification heading; the parser
+fix is tracked separately, in this Thread and ahead of criterion UI work.
+
+Validation: `just build`, full `just test` (race), `just lint` and the combined
+creation regression command passed. Focused native-empty-page and help tests
+passed. `just docs` is repeatably idempotent; `just docs-check` passed after the
+generated reference was committed. Its earlier failure was only the intended
+uncommitted `tskflwctl_ui.md` update. No CLI wire shape or persisted format changed
+in this closeout.
+
+### Repeat the bounded smoke check
+
+After `just build`, run in a subshell so the temporary home override cannot leak:
+
+```sh
+(
+  creation_dir=$(mktemp -d "${TMPDIR:-/tmp}/taskflow-creation.XXXXXX")
+  export TSKFLW_CONFIG_HOME="$creation_dir/home"
+  ./bin/tskflwctl -C "$creation_dir" init --no-register
+  ./bin/tskflwctl -C "$creation_dir" ui
+)
+```
+
+Use `[ ]` to visit Epics, Audits, Research and Threads; `c` opens each form.
+Create one of each, leave the audit date blank, backdate research, and deliberately
+omit the Thread goal once before correcting it. Use Tab/Shift+Tab and explicit
+Create; inspect loaded detail, not just the success flash. Open another draft to
+exercise Keep/Discard, then refresh. The setup is CLI-assisted; creation is not.
+Use the per-kind `list --json` commands against the printed tree path afterward
+to verify counts/defaults. This is a bounded correctness check, not new human
+usability sign-off or the full authoring Thread's end-to-end acceptance.
+
 ## Acceptance criteria
 
-- [ ] Create an epic, audit, research document and unstarted Thread from their respective TUI contexts through core services.
-- [ ] Each kind collects its actual creation inputs and defaults without treating persisted-field Required metadata as a generic creation form specification.
+- [x] Create an epic, audit, research document and unstarted Thread from their respective TUI contexts through core services.
+- [x] Each kind collects its actual creation inputs and defaults without treating persisted-field Required metadata as a generic creation form specification.
 - [x] Thread creation produces an empty, unstarted record without selecting or
   creating tasks, changing dependencies or starting work; membership and
   sequencing belong to separately scoped interactions.
-- [ ] One explicit submission creates one record; duplicate submission, validation refusal, committed cleanup failure and watcher reload cannot create duplicates or steal selection.
-- [ ] Forms preserve input and origin-space binding, open/select the created record by stable identity, and pass focused tests, normal code gates and updated help/architecture guidance.
+- [x] One explicit submission creates one record; duplicate submission, validation refusal, committed cleanup failure and watcher reload cannot create duplicates or steal selection.
+- [x] Forms preserve input and origin-space binding, open/select the created record by stable identity, and pass focused tests, normal code gates and updated help/architecture guidance.
 - [x] Shared staging, navigation and asynchronous result mechanics are exercised
   by the existing task form and at least two materially different entity forms,
   while typed requests, capabilities, defaults and receipt/recovery semantics
