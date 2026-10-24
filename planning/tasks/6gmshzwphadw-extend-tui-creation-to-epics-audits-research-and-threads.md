@@ -11,7 +11,7 @@ autonomy_level: 3
 tags: [tui, authoring, ux]
 created: "2026-10-17"
 depends_on: [6gp1ytfvm652, 6gp1ytg50tev, 6gp1ytgea8dt]
-updated_at: "2026-10-23"
+updated_at: "2026-10-24"
 ---
 # Extend TUI creation to epics audits research and Threads
 
@@ -29,7 +29,7 @@ This task is the integration/finish-line owner, not one four-kind implementation
 
 1. [Epic creation and shared mechanics](6gp1ytfvm652-create-epics-in-the-tui-with-shared-staged-form-mechanics.md), reusing the task form without sharing entity policy.
 2. [Audit and research forms](6gp1ytg50tev-create-audits-and-research-from-shared-tui-authoring-forms.md), exercising different input/default contracts.
-3. [Guarded Thread creation](6gp1ytgea8dt-create-threads-from-the-tui-with-guarded-per-kind-intent.md), with its own graph receipts and selected-member design checkpoint.
+3. [Guarded Thread creation](6gp1ytgea8dt-create-threads-from-the-tui-with-guarded-per-kind-intent.md), with its own graph receipts and empty, unstarted membership; member selection and sequencing are separate workflows.
 
 Both later slices depend on the proven common host, not on each other. This task
 depends on all three and verifies the combined criteria below before the final
@@ -50,11 +50,22 @@ Thread creation and the combined four-kind criteria remain outstanding; this
 integration task stays pending until guarded Thread creation lands and the full
 finish-line checks run.
 
+### Delivery checkpoint — 2026-10-24
+
+The empty-Thread slice now supplies the fifth concrete form, with guarded
+creation, independent durable/portable regressions and two closed reviews linked
+from its task. It satisfies the empty/unstarted/no-task-effects criterion below.
+Membership and sequencing remain separate design work. This integration task
+stays pending for the combined creation walkthrough and remaining criteria; the
+individual delivery slices do not substitute for that finish-line check.
+
 ## Acceptance criteria
 
 - [ ] Create an epic, audit, research document and unstarted Thread from their respective TUI contexts through core services.
 - [ ] Each kind collects its actual creation inputs and defaults without treating persisted-field Required metadata as a generic creation form specification.
-- [ ] Thread initial-member selection, if offered, uses guarded creation and exact intended task identities; creating a Thread does not silently create dependencies or start it.
+- [x] Thread creation produces an empty, unstarted record without selecting or
+  creating tasks, changing dependencies or starting work; membership and
+  sequencing belong to separately scoped interactions.
 - [ ] One explicit submission creates one record; duplicate submission, validation refusal, committed cleanup failure and watcher reload cannot create duplicates or steal selection.
 - [ ] Forms preserve input and origin-space binding, open/select the created record by stable identity, and pass focused tests, normal code gates and updated help/architecture guidance.
 - [x] Shared staging, navigation and asynchronous result mechanics are exercised
@@ -82,8 +93,10 @@ Review the actual use cases at kickoff rather than transplant task defaults:
 - `NewResearchParams` supports a created date tied to ID minting and has no lifecycle;
   its bounded collision handling stays in core, never a UI replay loop.
 - `NewThreadParams` requires description/goal and guarded creation. Optional member
-  selection needs an exact selected-endpoint contract; ordinary reference matching
-  is not automatically that contract. A task receipt cannot model graph outcomes.
+  selection is excluded from this creation slice by the owner's scope decision.
+  Later membership curation needs an exact selected-endpoint contract; ordinary
+  reference matching is not automatically that contract. A task receipt cannot
+  model graph outcomes.
 
 Regression expectations must be independent of shared preparation helpers. Prove
 reuse with at least two materially different form definitions and the existing task
