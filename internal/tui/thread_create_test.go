@@ -534,7 +534,9 @@ func TestThreadCreateInRealProgram(t *testing.T) {
 	}
 	tm.Send(press("tab")) // Cancel -> Create
 	tm.Send(press("enter"))
-	wait("created runtime-thread-世界", "Runtime Thread")
+	// The success flash precedes async selection/detail loading. The empty
+	// rollup belongs to the loaded Thread, never the form or its success message.
+	wait("created runtime-thread-世界", "0/0 nominally done")
 	tm.Send(press("q"))
 	final := tm.FinalModel(t, teatest.WithFinalTimeout(5*time.Second)).(Model)
 	view, _, err := final.svc.ShowThread(final.selectedRef().key)
