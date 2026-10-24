@@ -112,7 +112,7 @@ these inputs. Numbering, validation, scaffolding and persistence stay in core an
 its adapter. Typed epic receipts independently determine retry, recovery and exact
 epic landing; a task receipt is not an entity-neutral creation result.
 
-Both forms use [shared staging mechanics](../../internal/tui/staged_creation.go)
+All creation forms use [shared staging mechanics](../../internal/tui/staged_creation.go)
 and [bounded presentation](../../internal/tui/staged_creation_view.go): focus,
 enum staging, dirty confirmation, modal/input routing and scrolling. Widget arrays
 belong to each form; before edits, the shared input update detaches the widget's
@@ -130,7 +130,7 @@ metadata, empty-list creation, portable receipts, cross-kind input isolation,
 session/result ordering and real-program keyboard/paste behavior alongside the
 task regressions.
 The [shared contract matrix](../../internal/tui/creation_host_test.go) pins host
-lifetime, routing tokens and supported-size boundaries for both kinds. The shell's
+lifetime, routing tokens and supported-size boundaries for all four kinds. The shell's
 modal gutter is removed once; the same creation-size rule gates input and chooses
 resize rendering. The [bounded interaction harness](../../internal/tui/staged_creation_helpers_test.go)
 executes finite application and widget results through Model.Update, including
@@ -140,6 +140,35 @@ remain necessary for actual asynchronous delivery ordering.
 The [Darwin native-clipboard integration tests](../../internal/tui/staged_creation_clipboard_darwin_test.go)
 execute Ctrl+V with a stub `pbpaste`, including delayed delivery after a runtime
 resize; the generic input/ownership tests run on every platform.
+
+### Audit and research creation
+
+[Audits](../../internal/tui/audit_create.go) and
+[research](../../internal/tui/research_create.go) use the same page-local `c`,
+named palette actions, value-owned host and staging controls. These text-only
+forms have no enum policy. Audits collect area and optional date; `NewAudit`
+owns today's-date default, open-bucket policy, identity and scaffold. Research
+collects title, optional description/tags and created date; `NewResearch` owns
+validation, date-based ID minting and bounded safe-collision retry. Blank dates
+are passed through, not frozen at form opening. Neither form accepts a lifecycle
+or task parent. Longer prose stays in the external editor after creation.
+
+Each controller captures copied inputs and the origin Service in `tea.Cmd`,
+then interprets its own typed receipt. Committed/uncertain outcomes disable Create;
+only known uncommitted refusals permit deliberate retry. Late origin outcomes
+can enrich displaced recovery but never reload or navigate the incoming space.
+Landing uses the receipt's record ID, clears list filters and widens the audit
+bucket so the new record remains selected across reloads. Optional local path
+capabilities govern editor hints; receipt paths are only recovery evidence.
+Audit/research creation belongs to the required Store contract, not a newly
+introduced optional creation capability.
+
+[Document-creation tests](../../internal/tui/document_create_test.go) independently
+pin durable metadata/scaffolds, core defaults/backdating, collision handling,
+pathless typed outcomes, recovery, workspace isolation, watcher landing and
+running-program keyboard/paste flows. Shared buffer/native-input and size tests
+also cover these two consumers; the test mechanics inventory is not an oracle
+for per-kind durable expectations.
 
 ### Extending creation to other kinds
 

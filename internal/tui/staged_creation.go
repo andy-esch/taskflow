@@ -129,7 +129,7 @@ type creationControls struct {
 	inputs  []textinput.Model
 	rows    []int
 	isText  func(int) bool
-	options func(int) []string
+	options func(int) []string // nil for text-only forms
 	// Optional per-kind presentation mapping, e.g. a task's displayed default
 	// choice stages an empty value. The host does not interpret domain values.
 	enumValue func(string) string
@@ -147,6 +147,13 @@ type stagedCreation interface {
 	updateInput(tea.Msg) tea.Cmd
 	handleKey(*Model, tea.KeyPressMsg) tea.Cmd
 	view(*styles, int, int) string
+}
+
+func (c creationControls) enumOptions(row int) []string {
+	if c.options == nil {
+		return nil // text-only forms have no enum policy
+	}
+	return c.options(row)
 }
 
 func (c creationControls) focus(row int) tea.Cmd {
@@ -181,7 +188,11 @@ func (c creationControls) handleKey(msg tea.KeyPressMsg) (bool, tea.Cmd) {
 		return true, nil
 	}
 	if f.mode == creationEnumMode {
-		options := c.options(f.cursor)
+		options := c.enumOptions(f.cursor)
+		if len(options) == 0 {
+			f.mode = creationFieldsMode
+			return true, nil
+		}
 		switch msg.String() {
 		case "j", "down", "l", "right":
 			f.enumCursor = (f.enumCursor + 1) % len(options)
@@ -217,7 +228,7 @@ func (c creationControls) handleKey(msg tea.KeyPressMsg) (bool, tea.Cmd) {
 	case "shift+tab":
 		return true, c.advance(-1)
 	case "enter":
-		if options := c.options(f.cursor); len(options) > 0 {
+		if options := c.enumOptions(f.cursor); len(options) > 0 {
 			f.inputGen++
 			f.mode = creationEnumMode
 			f.enumCursor = max(slices.Index(options, c.inputs[f.cursor].Value()), 0)
