@@ -58,7 +58,7 @@ Reduce the CI `Tests` job runtime (`go test -p 4 -race -coverprofile=coverage.ou
 
 ## Acceptance criteria
 
-- [ ] internal/tui staged-creation tests and settleCreationCommands no longer
+- [x] internal/tui staged-creation tests and settleCreationCommands no longer
   block on 530ms cursor.Blink() timers during focus and paste settling, while
   TestCreationHiddenWidgetKeepsBlinkContinuation and
   TestCreationHarnessStopsMaintenanceAndBoundsWork continue to verify blink
@@ -88,3 +88,7 @@ Reduce the CI `Tests` job runtime (`go test -p 4 -race -coverprofile=coverage.ou
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
 - Prior CI split task [6gdxymbybha8](6gdxymbybha8-decouple-ci-quality-and-test-jobs-for-parallel-execution.md)
 - Store `testing/synctest` modernization task [6gppr2jh0j3x](6gppr2jh0j3x-adopt-go-1.24-1.26-idioms-in-error-mapping-tests-and-dependencies.md)
+
+## Progress Log
+
+- 2026-10-24: Completed Slice 1 (`internal/tui` cursor-blink settling). Added `newCreationInput()` with configurable `creationBlinkSpeed` (1ms in package tests; 0/default ~530ms in production) and stopped unwrapped maintenance ticks in `settleCreationCommands`, dropping `go test -race -count=1 ./internal/tui` from `208.63s` to `37.58s` locally while keeping `TestCreationHiddenWidgetKeepsBlinkContinuation` and `TestCreationHarnessStopsMaintenanceAndBoundsWork` verifying real `cursor.BlinkMsg` continuation.
