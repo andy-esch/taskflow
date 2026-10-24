@@ -1,10 +1,10 @@
 ---
 schema: 1
 id: 6g9g0jf3rsja
-bucket: open
+bucket: closed
 area: tui-overview-parity-and-miami-vice-implementation
 date: "2026-09-12"
-updated_at: "2026-09-12"
+updated_at: "2026-10-23"
 ---
 # Audit: TUI Overview parity + the miami-vice theme — 2026-09-12
 
@@ -137,7 +137,7 @@ itself parse as a live finding:
 
 Codes are conventionally H/M/L plus a number, by severity.
 
-#### M1. Cross-space status now prints every zero-valued bucket  · **Status:** open
+#### M1. Cross-space status now prints every zero-valued bucket  · **Status:** tracked by 6gppr2j3h6ma
 
 **File:** internal/cli/render/status.go:99 | **Component:** CLI status renderer
 **Effort:** XS · **Urgency:** soon
@@ -146,7 +146,12 @@ The zero filter was removed from `countLine` on the premise that all callers rec
 
 **Recommendation:** Restore the defensive zero check in `countLine`, or pass a zero-filtered projection at the compact caller; add a `StatusAllHuman` regression test built from a canonical Summary containing all status buckets.
 
-#### M2. Short Overviews can make the new task counts permanently unreachable  · **Status:** open
+**Resolution:** Re-verified 2026-10-23: renderCompactSpaceSummary still passes
+    raw Summary.Counts, which carries zero buckets, to countLine, which no
+    longer filters. Tracked with M2, L1 and L2 by the Overview-parity follow-up
+    task.
+
+#### M2. Short Overviews can make the new task counts permanently unreachable  · **Status:** tracked by 6gppr2j3h6ma
 
 **File:** internal/tui/dashboard.go:79 | **Component:** TUI dashboard viewport
 **Effort:** S · **Urgency:** soon
@@ -155,7 +160,11 @@ The new task heading and count lines deliberately have no navigation target, whi
 
 **Recommendation:** Give informational rows a reachable vertical viewport policy, or pin/reserve the count band while cursor-scrolling the remaining widgets; add a no-in-progress short-height test proving both the counts and current selection can be reached.
 
-#### L1. Theme preview completes an impossible second theme name  · **Status:** open
+**Resolution:** Tracked by the Overview-parity follow-up task: the dashboard
+    window still centres only on navigation targets, so the task count band
+    needs a reachable viewport policy and a short-height regression.
+
+#### L1. Theme preview completes an impossible second theme name  · **Status:** tracked by 6gppr2j3h6ma
 
 **File:** internal/cli/theme.go:70 | **Component:** shell completion
 **Effort:** XS · **Urgency:** eventually
@@ -164,7 +173,11 @@ The new task heading and count lines deliberately have no navigation target, whi
 
 **Recommendation:** Use a positional wrapper that returns no candidates once `len(args) >= 1`, while keeping the registry-driven function for `--theme`; cover both the first and second positional completion requests.
 
-#### L2. Staleness tests do not prove the Overview uses the colored helper  · **Status:** open
+**Resolution:** Re-verified 2026-10-23: completeThemeNames still ignores args.
+    Tracked by the Overview-parity follow-up task with first- and
+    second-positional completion tests.
+
+#### L2. Staleness tests do not prove the Overview uses the colored helper  · **Status:** tracked by 6gppr2j3h6ma
 
 **File:** internal/tui/column_staleness_test.go:11 | **Component:** TUI regression coverage
 **Effort:** XS · **Urgency:** soon
@@ -172,6 +185,10 @@ The new task heading and count lines deliberately have no navigation target, whi
 The new tests call `staleDateCells` directly and prove that helper differs from `relDateCells`, but no test observes styling through `dashboard.setSummary`. The existing dashboard age test at `internal/tui/dashboard_test.go:286` strips ANSI before checking dates and alignment. Consequently, changing the production call at `internal/tui/dashboard.go:105` back to `relDateCells` would leave the helper tests and every rendered-dashboard assertion satisfied while removing the delivered feature. The current wiring is correct, but its load-bearing integration is unguarded.
 
 **Recommendation:** Render an Overview fixture with fresh and stale in-progress tasks and compare the two date cells styling before stripping ANSI, so the test fails if the dashboard call site returns to the neutral helper.
+
+**Resolution:** Re-verified 2026-10-23: only staleDateCells helper tests exist
+    and no rendered-Overview assertion observes the styling. Tracked by the
+    Overview-parity follow-up task.
 
 ## Candidate tasks
 

@@ -1,9 +1,10 @@
 ---
 schema: 1
 id: 6ga5dr4g73zq
-bucket: open
+bucket: closed
 area: go-1-27-modernization
 date: "2026-09-14"
+updated_at: "2026-10-23"
 ---
 
 # Code Quality Audit: Go 1.27 Modernization — 2026-09-14
@@ -66,7 +67,7 @@ An AST and grep sweep across `internal/` and `cmd/` checked:
 
 ### High
 
-#### H1. Reflection-based `errors.As` and verbose pointer variables can be modernized with Go 1.26 `errors.AsType` and `new(expr)`  · **Status:** open
+#### H1. Reflection-based `errors.As` and verbose pointer variables can be modernized with Go 1.26 `errors.AsType` and `new(expr)`  · **Status:** tracked by 6gppr2jh0j3x
 
 **File:** `internal/cli/exit.go:84-123` | **Component:** cli/exit, cli/fserror, core, configstore
 **Effort:** S · **Urgency:** acute
@@ -132,7 +133,12 @@ if threadApplyErr, ok := errors.AsType[*threadApplyCommandFailure](err); ok {
 
 ---
 
-#### H2. CLI JSON streaming and ordered projection allocate intermediate buffers and escape HTML without Go 1.27 `encoding/json/v2` and `jsontext`  · **Status:** open
+**Resolution:** Re-verified 2026-10-23: no errors.AsType use and 79 errors.As
+    call sites on the Go 1.26 minimum. Tracked with M5, L1 and L2 by the
+    1.24-1.26 idiom task. Acute urgency overstates a behavior-neutral refactor,
+    so the task is medium priority.
+
+#### H2. CLI JSON streaming and ordered projection allocate intermediate buffers and escape HTML without Go 1.27 `encoding/json/v2` and `jsontext`  · **Status:** tracked by 6gppr2jwqnpm
 
 **File:** `internal/wire/wire.go:288` · `internal/cli/render/columns.go:283` | **Component:** wire, cli/render
 **Effort:** M · **Urgency:** soon
@@ -179,9 +185,14 @@ Taskflow currently suffers from two serialization compromises:
 
 ---
 
+**Resolution:** The owner chose in 2026-10-23 triage to raise the Go minimum
+    from 1.26 to 1.27; json/v2 and jsontext compile on go1.27.2 without a
+    GOEXPERIMENT. Tracked with M3 and M4 by the minimum-bump task, which must
+    classify the HTML-escaping byte change per ADR-0008.
+
 ### Medium
 
-#### M1. Envelope DTOs use 15+ heap pointer fields for optional structs instead of Go 1.24/1.27 `omitzero`  · **Status:** open
+#### M1. Envelope DTOs use 15+ heap pointer fields for optional structs instead of Go 1.24/1.27 `omitzero`  · **Status:** tracked by 6gppr2js1bqq
 
 **File:** `internal/wire/envelopes.go:54,210,258,1043` · `internal/wire/thread.go:234` | **Component:** wire
 **Effort:** S · **Urgency:** soon
@@ -201,7 +212,11 @@ Go 1.24 introduced `omitzero` (fully standardized in Go 1.27 `json/v2`), which o
 
 ---
 
-#### M2. Store and dangler traversals lack kernel-level sandboxing available via `os.Root` (`os.OpenRoot`)  · **Status:** open
+**Resolution:** No omitzero use yet. Tracked by a dedicated task that converts
+    only nil-means-absent struct fields and proves machine goldens unchanged or
+    classifies the revision.
+
+#### M2. Store and dangler traversals lack kernel-level sandboxing available via `os.Root` (`os.OpenRoot`)  · **Status:** tracked by 6gppr2jnaahh
 
 **File:** `internal/store/fsstore.go:36` · `internal/store/create.go:194,439` · `internal/store/danglers.go:56` | **Component:** store, core
 **Effort:** M · **Urgency:** soon
@@ -227,7 +242,12 @@ Go 1.24 introduced `os.Root` (`os.OpenRoot(dir)`), expanded in Go 1.25 with `Roo
 
 ---
 
-#### M3. Manual string slice math and delimiter bounds checks can be simplified with Go 1.27 `strings.CutLast`  · **Status:** open
+**Resolution:** No os.Root use yet. Slugify cannot emit a path separator today,
+    so the create-slug gap is defence in depth rather than a reachable
+    traversal; tracked by a dedicated containment task coordinated with the
+    writeFileAtomic unification.
+
+#### M3. Manual string slice math and delimiter bounds checks can be simplified with Go 1.27 `strings.CutLast`  · **Status:** tracked by 6gppr2jwqnpm
 
 **File:** `internal/cli/task_dependency_repair.go:126` · `internal/domain/slug.go:68` · `internal/cli/listmode.go:231` | **Component:** cli, domain
 **Effort:** XS · **Urgency:** soon
@@ -278,7 +298,10 @@ In three distinct places, taskflow uses manual index tracking, slice bounds chec
 
 ---
 
-#### M4. Package-level retry, mutation, and list helpers can be converted to Go 1.27 Generic Methods on `*Service`, `*FS`, and `*App`  · **Status:** open
+**Resolution:** strings.CutLast needs the 1.27 minimum (confirmed on go1.27.2).
+    Tracked with H2 and M4 by the minimum-bump task.
+
+#### M4. Package-level retry, mutation, and list helpers can be converted to Go 1.27 Generic Methods on `*Service`, `*FS`, and `*App`  · **Status:** tracked by 6gppr2jwqnpm
 
 **File:** `internal/core/retry.go:62` · `internal/store/edit.go:69` · `internal/store/body.go:24` · `internal/cli/moves.go:32` | **Component:** core, store, cli
 **Effort:** S · **Urgency:** eventually
@@ -305,7 +328,11 @@ Go 1.27 supports generic methods on types: `func (s *Receiver) Method[T any](...
 
 ---
 
-#### M5. Store concurrency tests burn ~1s of wall-clock time and risk race flakiness without Go 1.25/1.27 `testing/synctest`  · **Status:** open
+**Resolution:** Generic methods need the 1.27 minimum (confirmed compiling on
+    go1.27.2). Tracked by the minimum-bump task, converting only where receiver
+    methods remove closure plumbing.
+
+#### M5. Store concurrency tests burn ~1s of wall-clock time and risk race flakiness without Go 1.25/1.27 `testing/synctest`  · **Status:** tracked by 6gppr2jh0j3x
 
 **File:** `internal/store/threadmutation_test.go:302` · `internal/store/lifecyclemutation_test.go:293` · `internal/store/threadcreation_test.go:266` | **Component:** store/test
 **Effort:** S · **Urgency:** soon
@@ -331,9 +358,13 @@ Wrap negative concurrency assertions in `synctest.Test(t, func(t *testing.T) { .
 
 ---
 
+**Resolution:** No testing/synctest use yet. Tracked by the 1.24-1.26 idiom
+    task, which must remove the wall-clock waits without weakening the
+    blocked-writer assertions.
+
 ### Low
 
-#### L1. Legacy benchmark loops, `WaitGroup` synchronization, and a TUI shutdown watcher leak can be modernized with `b.Loop()`, `wg.Go()`, and `goroutineleak` profiling  · **Status:** open
+#### L1. Legacy benchmark loops, `WaitGroup` synchronization, and a TUI shutdown watcher leak can be modernized with `b.Loop()`, `wg.Go()`, and `goroutineleak` profiling  · **Status:** tracked by 6gppr2jh0j3x
 
 **File:** `internal/store/graphrepair_test.go:309` · `internal/id/id_test.go:158` · `internal/tui/tui.go:56` | **Component:** store, tui, id
 **Effort:** XS · **Urgency:** eventually
@@ -348,7 +379,11 @@ Wrap negative concurrency assertions in `synctest.Test(t, func(t *testing.T) { .
 
 ---
 
-#### L2. Transitive and dual dependencies in `go.mod` (dual JSON schema validators, manpage generation) can be pruned against modern stdlib and Cobra tooling  · **Status:** open
+**Resolution:** Tracked by the 1.24-1.26 idiom task; the claimed TUI shutdown
+    watcher leak must be reproduced and fixed, or falsified with evidence,
+    rather than assumed.
+
+#### L2. Transitive and dual dependencies in `go.mod` (dual JSON schema validators, manpage generation) can be pruned against modern stdlib and Cobra tooling  · **Status:** tracked by 6gppr2jh0j3x
 
 **File:** `go.mod:17-20` · `internal/tools/mangen/main.go:20` | **Component:** build, dependencies
 **Effort:** S · **Urgency:** eventually
@@ -363,6 +398,10 @@ An inspection of `go.mod` reveals redundancy that can be streamlined:
 **Recommendation:** Prune `muesli/mango-cobra` in favor of `cobra/doc`, evaluate consolidating JSON schema test validation, and run Go 1.27 `go mod tidy` to merge require blocks.
 
 ---
+
+**Resolution:** mango-cobra and both JSON Schema libraries remain in go.mod.
+    Tracked by the 1.24-1.26 idiom task, which swaps in cobra/doc only if man
+    pages stay acceptable and records the validator decision.
 
 ## What audited clean
 

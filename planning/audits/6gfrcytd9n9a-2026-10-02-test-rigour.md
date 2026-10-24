@@ -1,10 +1,10 @@
 ---
 schema: 1
 id: 6gfrcytd9n9a
-bucket: open
+bucket: closed
 area: test-rigour
 date: "2026-10-02"
-updated_at: "2026-10-05"
+updated_at: "2026-10-23"
 ---
 
 # Audit: test-rigour — 2026-10-02
@@ -272,7 +272,7 @@ architecture audit.
 refuses template list, theme list and deterministic preview with ErrNotFound,
 exit 10 and no ambient output; removing the theme guard kills both theme rows.
 
-#### L1. The exit-taxonomy smoke test's filesystem probe is vacuous as root and aborts the rest of the test · **Status:** open
+#### L1. The exit-taxonomy smoke test's filesystem probe is vacuous as root and aborts the rest of the test · **Status:** tracked by 6gppr2jd4amw
 
 **File:** cmd/tskflwctl/main_test.go:179 | **Component:** cmd/smoke-tests
 **Effort:** XS · **Urgency:** soon
@@ -326,7 +326,11 @@ still runs — the value lost today is the assertions after line 188, not the pr
 
 **Recommendation:** Make the probe's precondition explicit: after the chmod, attempt a throwaway write and t.Skip("requires an unprivileged user") if it succeeds — or inject the failure without depending on DAC so the coverage survives.
 
-#### L2. `TestTemplateList_KindFilter` pins a catalog count that epic 22 exists to grow · **Status:** open
+**Resolution:** Re-verified 2026-10-23: the 0o500 chmod probe is unchanged.
+    Tracked by the residual test-rigour task, which must keep the later smoke
+    assertions running as root.
+
+#### L2. `TestTemplateList_KindFilter` pins a catalog count that epic 22 exists to grow · **Status:** tracked by 6gppr2jd4amw
 
 **File:** internal/cli/template_test.go:50 | **Component:** cli/templates
 **Effort:** XS · **Urgency:** eventually
@@ -365,7 +369,11 @@ and is the right home for that.
 
 **Recommendation:** Replace the len(got.Templates) != 2 equality with a floor and keep the per-row kind assertion that follows it; pin exact catalog contents in TestSchemaKind_AdvertisesTemplates instead.
 
-#### L3. `thread new`'s four input refusals are untested, and all four are redundant with a deeper layer · **Status:** open
+**Resolution:** Tracked by the residual test-rigour task: assert a floor plus
+    the per-row kind invariant, pinning exact catalog contents only where the
+    catalog is the subject.
+
+#### L3. `thread new`'s four input refusals are untested, and all four are redundant with a deeper layer · **Status:** tracked by 6gppr2jd4amw
 
 **File:** internal/core/service_thread.go:30 | **Component:** core/thread-creation
 **Effort:** XS · **Urgency:** eventually
@@ -434,6 +442,10 @@ the same four rules, is a simplification question — it will come round on that
 three weeks. Flagging it here only so the duplication is on record.
 
 **Recommendation:** Do not pin the redundant preamble; assert the four refusals once in internal/domain where ValidateThreadDocument enforces them, or add one test fixing the core spelling if the duplicated messages are deliberate.
+
+**Resolution:** Tracked by the residual test-rigour task: assert the four
+    refusals once where enforced, or make the core spelling deliberately
+    load-bearing, and resolve the case divergence.
 
 ## Review context
 
@@ -610,6 +622,12 @@ make each guard-removal probe fail for the intended condition, not unrelated inv
 L1-L3 remain open outside this approved scope. Tracked findings are not fixed, and this audit
 cannot close as fully triaged while those findings remain unresolved.
 
+## Owner triage (2026-10-23)
+
+L1-L3 are tracked together, with the 2026-09-11 test-rigour residue, by
+[6gppr2jd4amw](../tasks/6gppr2jd4amw-tighten-residual-test-rigour-gaps-from-the-september-and-october-audits.md).
+Every finding now has a terminal disposition, so the audit closes.
+
 ## Candidate tasks
 
 <!-- candidate-tasks:v1 · ○ open · ● in-progress · ✔ fixed · → tracked · ◌ deferred · ◌ superseded · ✘ wontfix -->
@@ -618,6 +636,6 @@ cannot close as fully triaged while those findings remain unresolved.
 - ✔ M1 · fixed — Malformed/stale Thread apply boundary contracts | implemented by 6ggdkzv2tnta and merged in PR #284 | reviews reconciled
 - ✔ M2 · fixed — Committed Thread creation conflict recovery | implemented by 6ggdkzv2tnta and merged in PR #284 | reviews reconciled
 - ✔ M3 · fixed — Explicit-space theme refusal | implemented by 6ggdkzv2tnta and merged in PR #284 | reviews reconciled
-- ○ L1 · open — `tskflwctl task new "Make the exit-taxonomy filesystem probe honest under root" --epic 21-code-quality-architecture-hardening --tags tests,ci --tier 3 --priority low --description "chmod 0o500 does not bite uid 0, so the smoke test fails in root containers and aborts before its remaining assertions."`
-- ○ L2 · open — `tskflwctl task new "Stop pinning built-in template catalog size in the kind-filter test" --epic 22-selectable-template-library --tags tests,cli --tier 4 --priority low --description "A third audit template would redden TestTemplateList_KindFilter; assert the per-row invariant and a floor instead of an exact count."`
-- ○ L3 · open — `tskflwctl task new "Resolve the duplicated thread-validation messages between core and domain" --epic 21-code-quality-architecture-hardening --tags threads,tests,simplification --tier 4 --priority low --description "NewThread re-checks four rules domain.ValidateThreadDocument already enforces, and the two copies have diverged in case."`
+- → L1 · tracked — Honest root-run smoke probe | tracked by 6gppr2jd4amw | bundled with residual test-rigour gaps
+- → L2 · tracked — Template catalog floor in the kind-filter test | tracked by 6gppr2jd4amw
+- → L3 · tracked — One home for thread new input refusals | tracked by 6gppr2jd4amw

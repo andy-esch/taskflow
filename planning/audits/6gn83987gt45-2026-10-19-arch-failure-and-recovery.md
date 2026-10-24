@@ -1,10 +1,10 @@
 ---
 schema: 1
 id: 6gn83987gt45
-bucket: open
+bucket: closed
 area: arch-failure-and-recovery
 date: "2026-10-19"
-updated_at: "2026-10-19"
+updated_at: "2026-10-23"
 ---
 # Weekly Architecture Audit: failure-and-recovery — 2026-10-19
 
@@ -398,7 +398,7 @@ lens where "follow the strictest best practice" is the wrong answer.
 **Resolution:** <how it was resolved — written by `audit finding --note`, not by hand>
 ```
 
-#### H1. Broken-graph repair reports genuine filesystem read failures as retryable conflicts, discarding the cause · **Status:** open
+#### H1. Broken-graph repair reports genuine filesystem read failures as retryable conflicts, discarding the cause · **Status:** tracked by 6gppr2kbgrzk
 
 **File:** internal/store/graphrepair.go:110 | **Component:** store/graph-repair
 **Effort:** S · **Urgency:** soon
@@ -466,6 +466,10 @@ the next family copies, and each copy also silently enlarges the set of permanen
 errors that burn the shared 4-attempt retry budget.
 
 **Recommendation:** In the per-write loop, split each load/read error from its snapshot-equality verdict exactly as graphrepair.go:91-98 and the four sibling mutation families already do: return the underlying error with %w, and reserve domain.ErrConflict for an actual evidence mismatch.
+
+**Resolution:** Re-verified 2026-10-23: the combined error-or-mismatch checks
+    remain in graphrepair.go's per-write loop. Tracked by a dedicated task that
+    wraps the real cause and reserves ErrConflict for an evidence mismatch.
 
 #### M1. The transient-filesystem retry hint is commit-aware per call site, so five of eight recovery envelopes can contradict their own receipt · **Status:** tracked by 6g7wsr8yvt1a
 
@@ -600,7 +604,7 @@ default; every release it stays a convention is one more branch to audit by hand
 <!-- candidate-tasks:v1 · ○ open · ● in-progress · ✔ fixed · → tracked · ◌ deferred · ◌ superseded · ✘ wontfix -->
 <!-- Add or replace one row with `tskflwctl audit finding <audit> <code> --candidate "<one line>"`; an empty value removes it. -->
 
-- ○ H1 · open — tskflwctl task new "Preserve filesystem causes through graph-repair reauthorization" --epic 21-code-quality-architecture-hardening --tier 2 --priority medium
+- → H1 · tracked — Preserve filesystem causes through graph-repair reauthorization | tracked by 6gppr2kbgrzk
 - → M1 · tracked — Tracked in planning/tasks/6g7wsr8yvt1a-define-the-next-shared-entity-integrity-foundations.md
 
 ## Related-task observations (propose-only)

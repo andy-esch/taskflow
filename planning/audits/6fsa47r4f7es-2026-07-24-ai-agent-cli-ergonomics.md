@@ -1,10 +1,10 @@
 ---
 schema: 1
 id: 6fsa47r4f7es
-bucket: open
+bucket: closed
 area: ai-agent-cli-ergonomics
 date: "2026-07-24"
-updated_at: "2026-09-19"
+updated_at: "2026-10-23"
 ---
 # Audit: AI-agent CLI ergonomics — 2026-07-24
 
@@ -141,7 +141,7 @@ distinction intact.
 it: create → `task info <id>` → **rename** → `task info <id>` still resolves. Asserting
 the filename prefix alone would not have proven the handle actually works.
 
-#### H3. Non-idempotent mutations have no replay identity after an unknown outcome  · **Status:** open
+#### H3. Non-idempotent mutations have no replay identity after an unknown outcome  · **Status:** tracked by 6gppr2kps7v9
 
 **File:** internal/core/service_task.go:134; internal/cli/task.go:588; internal/cli/audit.go:421 | **Component:** mutation reliability
 **Effort:** M · **Urgency:** soon
@@ -164,18 +164,15 @@ to return the prior result on replay, with bounded retention and a documented sc
 per workspace. If persistent receipts are judged too heavy for a local-first CLI,
 provide a narrower `--append-if-absent-hash` contract and document its limitations.
 
-**Resolution:** Re-verified still open on 2026-09-02 against v0.18.0: task
-append exposes no operation key, if-absent hash, or any replay identity, so a
-lost acknowledgement after a committed append still duplicates durable content.
-The finding's reasoning holds unchanged — OCC covers the process boundary, not
-an agent transport whose ack can be lost after success. Design-heavy (M): needs
-a decision on whether a local-first CLI should persist dedupe records at all,
-versus the narrower --append-if-absent-hash the finding offers as an
-alternative.
+**Resolution:** Re-verified open 2026-09-02 on v0.18.0 and still open at
+    2026-10-23 triage: no operation key or if-absent check exists, so a lost
+    acknowledgement after a committed append duplicates content. Tracked with M6
+    by a design-first task that decides whether a local-first CLI persists
+    replay records at all before any implementation.
 
 ### Medium
 
-#### M1. List and finding queries are projectable but still unbounded  · **Status:** tracked by 6gbn4g1j40pj
+#### M1. List and finding queries are projectable but still unbounded  · **Status:** fixed (PR #293)
 
 **File:** internal/cli/listmode.go; internal/cli/task.go:196; internal/cli/audit.go:102 | **Component:** query / token economy
 **Effort:** M · **Urgency:** soon
@@ -196,10 +193,12 @@ to task/audit/epic lists and `audit findings`; return `total` and `next_after` i
 Add `--query` over slug/title/description/tags and `--updated-since` for cross-session
 resumption. Preserve the current unbounded behavior when no bound is requested.
 
-**Resolution:** Cross-entity deterministic bounds, continuation, and filtering
-are scoped in 6gbn4g1j40pj with an adapter-neutral query boundary.
+**Resolution:** Fixed by 6gbn4g1j40pj in PR #293: --limit, --sort, --search,
+    --updated-since and a versioned next_cursor shipped across list surfaces and
+    audit findings, with the default unbounded shape unchanged. All five
+    acceptance criteria met; reconciled in 2026-10-23 triage.
 
-#### M2. Body mutation JSON echoes the entire resulting document by default  · **Status:** open
+#### M2. Body mutation JSON echoes the entire resulting document by default  · **Status:** tracked by 6gppr2kk1thc
 
 **File:** internal/wire/envelopes.go:137-153,382-395 | **Component:** wire / token economy
 **Effort:** S · **Urgency:** soon
@@ -219,15 +218,12 @@ post-write `version`. Add `--include-body` for the current echo behavior. A dry-
 optionally expose a short change summary or unified diff without serializing unrelated
 body content.
 
-**Resolution:** Re-verified still open on 2026-09-02 and measured: a --dry-run
-append of the 10-character body 'probe-only' returned 4271 bytes, 3276 of them
-the echoed body. Deliberately NOT fixed alongside M7, though both are S: making
-receipts compact by default changes the shape of an established --json contract,
-so it needs a schema version decision and an --include-body escape hatch agreed
-first. Additive enrichment (M7) was safe to land unilaterally; a breaking
-default is not.
+**Resolution:** Re-verified open 2026-09-02: a 10-character dry-run append
+    returned 4271 bytes, 3276 of them the echoed body. Tracked with L2 by a task
+    that makes body-mutation receipts compact by default with an opt-in full
+    body, classifying the default change per ADR-0008 before it lands.
 
-#### M3. `schema` describes entities but not the executable command surface  · **Status:** tracked by 6g63hhk3eddf
+#### M3. `schema` describes entities but not the executable command surface  · **Status:** tracked by 6gppr2k0exeb
 
 **File:** internal/cli/schema.go; internal/cli/root.go | **Component:** command discovery
 **Effort:** M · **Urgency:** soon
@@ -245,8 +241,12 @@ required/variadic args, flags and types, conflicts, whether it mutates, whether 
 be destructive, dry-run support, input body modes, and the JSON envelope name. This is
 a CLI manifest, not an MCP server and not a second execution path.
 
-**Resolution:** The existing command-safety task now owns the machine-readable
-command surface and its load-bearing safety classification.
+**Resolution:** 6g63hhk3eddf (PR #253) published every runnable command path
+    with a load-bearing read-only/mutating safety tag. Still missing are the
+    command-to-envelope mapping (also 2026-10-12 L1) and the per-command
+    argument/flag inventory, so this is re-tracked to the schema-contract
+    publication task, which also decides whether flags belong in the contract or
+    stay with --help.
 
 #### M4. Structure-aware body writes stop short of the edits agents make most  · **Status:** tracked by 6fpnn6zk157b
 
@@ -303,7 +303,7 @@ reason, mirroring MoveAudit's refusal to close an audit with open findings, with
 a state: it blocks silence, not disagreement — a task with three explicitly
 abandoned criteria completes, one with three never looked at does not.
 
-#### M6. Multi-document agent workflows have no preflighted, restartable change set  · **Status:** open
+#### M6. Multi-document agent workflows have no preflighted, restartable change set  · **Status:** tracked by 6gppr2kps7v9
 
 **File:** internal/cli/moves.go | **Component:** orchestration
 **Effort:** L · **Urgency:** eventually
@@ -325,14 +325,11 @@ Prefer resume-safe execution over pretending multiple renames are one transactio
 This also gives sandboxed agent environments one stable, least-privilege mutation
 entry point instead of a growing set of approval prefixes.
 
-**Resolution:** Re-verified still open on 2026-09-02: there is no apply command
-and no change-set format, so a multi-command closeout interrupted halfway still
-leaves state valid file-by-file but semantically incomplete. Largest item in
-this audit (L) and the only one whose own recommendation hedges on fit — it
-explicitly says cross-file atomicity may be wrong for a git-agnostic local-files
-tool and proposes restartability instead. Worth an explicit keep-or-drop
-decision before any implementation, rather than carrying indefinitely as an open
-finding.
+**Resolution:** Re-verified open 2026-09-02: no apply command or change-set
+    format exists. Its own recommendation questions the fit for a git-agnostic
+    tool, so it is tracked with H3 by a design-first task whose first output is
+    an explicit keep-or-drop decision, weighing reuse of the Thread
+    compose/apply plan machinery.
 
 #### M7. JSON errors classify domain failures but flatten OS recovery information  · **Status:** fixed
 
@@ -391,7 +388,7 @@ walks the whole command tree for retired directory vocabulary — the stale-pros
 class docgen cannot catch — and distinguishes a path claim from a
 slash-separated enumeration so it stays high-confidence.
 
-#### L2. Cross-session resumption still requires several reads and body interpretation  · **Status:** open
+#### L2. Cross-session resumption still requires several reads and body interpretation  · **Status:** tracked by 6gppr2kk1thc
 
 **File:** internal/cli/task.go:283-315; internal/domain/body.go | **Component:** handoff / token economy
 **Effort:** S · **Urgency:** eventually
@@ -408,12 +405,10 @@ from the existing section/AC parser, include only the latest dated progress item
 keep the underlying commands. This should be a compact read model, not a new stored
 summary that can drift.
 
-**Resolution:** Re-verified still open on 2026-09-02: no task brief and no task
-info --include, so resuming work is still task info plus task ac plus one or
-more task show --section calls, followed by prose interpretation. Its dependency
-has since strengthened rather than shifted: task ac now reports a criterion's
-state and tracked destination as structured fields, so an unchecked-AC section
-of a brief would be a projection rather than prose parsing.
+**Resolution:** Re-verified open 2026-09-02; task ac now reports criterion
+    states as structured fields, so a brief's unmet-criteria section is a
+    projection rather than prose parsing. Tracked with M2; the latest-progress
+    part depends on 6fpnn6zk157b settling the canonical progress-section shape.
 
 ## Candidate tasks
 

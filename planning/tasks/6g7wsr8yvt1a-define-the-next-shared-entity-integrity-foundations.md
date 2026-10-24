@@ -37,6 +37,10 @@ a deliberate sequence. This task owns design and scoping, not the implementation
   before remote or served adapters consume the aggregate lint boundary.
 - [Markdown-first storage durability reassessment](6g721w07mv1d-reassess-markdown-first-storage-durability-for-relational-planning-data.md)
   as a later evidence-driven decision, not an immediate rewrite.
+- [Store containment with `os.Root`](6gppr2jnaahh-contain-planning-store-filesystem-access-with-os.root.md),
+  added in 2026-10-23 audit triage. OS-level containment overlaps question 3's symlink-following,
+  dangling-symlink `Stat` preflight, and `verifyFixPath` hypotheses, so sequence it with the
+  atomic-write and preflight decisions rather than independently.
 
 ## Newly observed questions
 
