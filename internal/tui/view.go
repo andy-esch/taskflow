@@ -493,10 +493,11 @@ func (m Model) footer() string {
 		keyHint(keys.Atlas, "atlas"),
 		"/ filter", // the list's own filter (no keyMap binding)
 	}
-	if m.cur().kind == entityTasks {
-		listHints = append([]string{keyHint(keys.Create, "new task")}, listHints...)
-	} else if m.cur().kind == entityEpics {
-		listHints = append([]string{keyHint(keys.Create, "new epic"), keyHint(keys.Palette, "new task in epic")}, listHints...)
+	if hint := m.pageCreationHint(); hint != "" {
+		listHints = append([]string{keyHint(keys.Create, hint)}, listHints...)
+	}
+	if m.cur().kind == entityEpics {
+		listHints = append(listHints, keyHint(keys.Palette, "new task in epic"))
 	}
 	if len(m.cur().transitions) > 0 {
 		listHints = append(listHints, keyHint(keys.Action, "move"))

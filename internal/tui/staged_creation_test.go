@@ -35,7 +35,7 @@ func TestCreationSharedStatePreservesValueOwnershipAndRecovery(t *testing.T) {
 }
 
 func TestCreationTextEditsDetachPriorDraft(t *testing.T) {
-	for _, surface := range []string{"task", "epic", "audit", "research", "epic picker"} {
+	for _, surface := range []string{"task", "epic", "audit", "research", "thread", "epic picker"} {
 		for _, edit := range []struct {
 			name string
 			msg  tea.Msg
