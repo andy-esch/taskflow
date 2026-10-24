@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"maps"
+	"slices"
 	"strings"
 	"testing"
 
@@ -18,6 +19,7 @@ import (
 // Per-kind durable expectations remain in the concrete creation tests.
 var creationContractKinds = map[string]entityKind{
 	"task": entityTasks, "epic": entityEpics, "audit": entityAudits, "research": entityResearch,
+	"thread": entityThreads,
 }
 
 func openCreationKind(t *testing.T, m Model, kind entityKind) Model {
@@ -35,6 +37,30 @@ func creationTitle(m Model) string {
 	return creationContractInputs(&m)[0].Value()
 }
 
+func TestCreationPageHintsFollowActions(t *testing.T) {
+	for name, kind := range creationContractKinds {
+		t.Run(name, func(t *testing.T) {
+			m := loaded(t, 160, 40)
+			m = settleCreate(t, m, m.switchTab(indexOfKind(m.tabs, kind)))
+			action, ok := m.pageCreationAction()
+			if !ok || action.kind != palAction || action.word != "new-"+name || !action.ref.empty() || !slices.Contains(m.creationActions(), action) {
+				t.Fatal("page creation metadata disagrees with its palette action or inherits selected context")
+			}
+			if !strings.Contains(ansi.Strip(m.footer()), "c new "+name) {
+				t.Fatal("page-local creation is missing from the footer")
+			}
+			m.onDash = true
+			if m.pageCreationHint() != "" {
+				t.Fatal("dashboard advertises page creation")
+			}
+			m.onDash, m.onAtlas = false, true
+			if _, ok := m.pageCreationAction(); ok || m.pageCreationHint() != "" || len(m.creationActions()) != 0 {
+				t.Fatal("atlas advertises page creation")
+			}
+		})
+	}
+}
+
 // Test-only mechanics inventory; expectations for parameters, defaults and
 // durable records must not derive from these widget arrays or production helpers.
 func creationContractInputs(m *Model) []textinput.Model {
@@ -47,6 +73,8 @@ func creationContractInputs(m *Model) []textinput.Model {
 		return m.creation.audit.inputs[:]
 	case entityResearch:
 		return m.creation.research.inputs[:]
+	case entityThreads:
+		return m.creation.thread.inputs[:]
 	}
 	panic("missing creation contract input inventory")
 }
@@ -61,6 +89,8 @@ func creationContractControls(m *Model) creationControls {
 		return m.creation.audit.controls()
 	case entityResearch:
 		return m.creation.research.controls()
+	case entityThreads:
+		return m.creation.thread.controls()
 	}
 	panic("missing creation contract controls inventory")
 }
@@ -78,7 +108,8 @@ func TestCreationHostLifetimeContract(t *testing.T) {
 			if m.creation.openTask(m.svc, m.sessionGen, "wrong", entityRef{}) != nil ||
 				m.creation.openEpic(m.svc, m.sessionGen, "wrong") != nil ||
 				m.creation.openAudit(m.svc, m.sessionGen, "wrong") != nil ||
-				m.creation.openResearch(m.svc, m.sessionGen, "wrong") != nil || m.creation.gen != gen {
+				m.creation.openResearch(m.svc, m.sessionGen, "wrong") != nil ||
+				m.creation.openThread(m.svc, m.sessionGen, "wrong") != nil || m.creation.gen != gen {
 				t.Fatal("active intent was replaced or consumed a generation")
 			}
 			m, _ = createKey(m, "esc")
@@ -94,7 +125,7 @@ func TestCreationHostLifetimeContract(t *testing.T) {
 			if m.activeCreation() != nil || !prior.activeCreation().active {
 				t.Fatal("close failed or changed the retained prior Model")
 			}
-			if m.creation.begin(entityThreads) || m.creation.gen != gen {
+			if m.creation.begin(entityAtlas) || m.creation.gen != gen {
 				t.Fatal("unsupported kind consumed a lifetime or opened a form")
 			}
 			nextKind := entityTasks

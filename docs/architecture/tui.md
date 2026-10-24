@@ -49,9 +49,10 @@ delete/recreate with the identical ID is made transactional.
 See [selected local-action tests](../../internal/tui/selected_local_path_test.go).
 
 Lifecycle menus and command verbs use the registry's transition table and delegate.
-Tasks, audits and epics have their respective core transitions; Threads remain
-read-only here and research has no lifecycle. Task inline editing uses descriptor
-fields and core validation, not a second policy path.
+Tasks, audits and epics have their respective core transitions. Thread membership
+and lifecycle remain CLI-only; creation uses the staged form below. Research has
+no lifecycle. Task inline editing uses descriptor fields and core validation,
+not a second policy path.
 
 The generic [detail pane](../../internal/tui/detail.go) caches raw/pretty Markdown and
 owns alternate-view and structured-navigation seams. Presentations supply row order
@@ -130,7 +131,7 @@ metadata, empty-list creation, portable receipts, cross-kind input isolation,
 session/result ordering and real-program keyboard/paste behavior alongside the
 task regressions.
 The [shared contract matrix](../../internal/tui/creation_host_test.go) pins host
-lifetime, routing tokens and supported-size boundaries for all four kinds. The shell's
+lifetime, routing tokens and supported-size boundaries for all five kinds. The shell's
 modal gutter is removed once; the same creation-size rule gates input and chooses
 resize rendering. The [bounded interaction harness](../../internal/tui/staged_creation_helpers_test.go)
 executes finite application and widget results through Model.Update, including
@@ -170,6 +171,29 @@ running-program keyboard/paste flows. Shared buffer/native-input and size tests
 also cover these two consumers; the test mechanics inventory is not an oracle
 for per-kind durable expectations.
 
+### Thread creation
+
+[The Thread form](../../internal/tui/thread_create.go) stages title, required
+description/goal, optional target date and tags. One `NewThreadParams` with no
+members goes through core's guarded creation: an empty, unstarted Thread, with
+repository validation intact and existing tasks/edges untouched. Membership and
+sequencing are separate workflows.
+
+`ThreadCreationReceipt` stays typed. Its `Changed` flag and planned destination
+describe a proposal, not proof of durability. Known uncommitted refusals preserve
+editable input; committed evidence, `ThreadCreationMutationFailure`, unknown
+errors and unconfirmed success retain non-replayable recovery. Core owns bounded
+conflict retry. Missing creation capability currently returns an unclassified
+error, so retain safe recovery rather than infer retryability from text. Shared
+origin/inspection guards and exact-ID landing apply; paths are display evidence.
+
+[Thread creation tests](../../internal/tui/thread_create_test.go) combine portable
+capability/receipt probes with real guarded persistence, independent metadata and
+scaffold checks, task/dependency byte preservation, broken-graph/read-only refusal,
+same-ID incoming-space isolation, narrow modes and a running-program create flow.
+Shared native-paste, non-empty-buffer and mechanical matrices cover all five kinds.
+No graph-authoring or initial-membership UI is implied by this creation surface.
+
 ### Extending creation to other kinds
 
 The forms are concrete consumers, not a universal entity schema. Their explicit
@@ -178,7 +202,7 @@ interaction mode prevents simultaneous picker/enum/discard states;
 selected-parent request, typed receipt and task-list landing. Enum choices/rendering
 already have two consumers: creation and the existing field editor.
 
-For the next entity, reuse the shared widget routing, focus/scrolling, staging and
+For another creation consumer, reuse widget routing, focus/scrolling, staging and
 confirmation mechanics against the working consumers. Do not clone the whole
 task controller or grow task row IDs into a cross-kind field schema. Each kind
 keeps its actual `New*Params`, defaults, optional capabilities, selection intent,
@@ -190,7 +214,7 @@ creation-result route beside its controller; extend the shared mechanical matrix
 and its independent durable expectations. Do not add another root-model result
 case or displacement branch, or persist a pointer to a mutable form as host state.
 The [additional-creation task](../../planning/tasks/6gmshzwphadw-extend-tui-creation-to-epics-audits-research-and-threads.md)
-owns that extraction with regression evidence for genuinely different kinds.
+tracks integrated acceptance across these concrete consumers.
 
 ## Threads and local graph focus
 

@@ -635,7 +635,13 @@ func TestDocumentCreateInRealProgram(t *testing.T) {
 			tm.Send(press("enter")) // date -> Cancel
 			tm.Send(press("tab"))   // Cancel -> Create
 			tm.Send(press("enter"))
-			wait("created ", "Runtime document")
+			// Wait for loaded detail, not title text already printed by the form:
+			// the success flash can render before async selection has landed.
+			heading := "# Runtime document"
+			if kind == entityAudits {
+				heading = "# Audit: Runtime document"
+			}
+			wait("created ", heading)
 			tm.Send(press("q"))
 			final := tm.FinalModel(t, teatest.WithFinalTimeout(5*time.Second)).(Model)
 			if final.activeCreation() != nil || final.selectedRef().empty() {

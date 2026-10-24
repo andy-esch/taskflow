@@ -1,10 +1,21 @@
 package tui
 
 import (
+	"strings"
+
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/andy-esch/taskflow/internal/core"
 )
+
+// Page creation has one metadata owner for palette and footer discovery. It is
+// separate from contextual actions, so hints do not depend on their order/names.
+func (m Model) pageCreationHint() string {
+	if action, ok := m.pageCreationAction(); ok {
+		return strings.ToLower(action.title)
+	}
+	return ""
+}
 
 // creationHost owns the active-kind/lifetime boundary, not entity policy. Concrete
 // forms stay in value slots: storing a draft interface pointer here would alias
@@ -18,33 +29,47 @@ type creationHost struct {
 	epic     epicCreateForm
 	audit    auditCreateForm
 	research researchCreateForm
+	thread   threadCreateForm
 }
 
-func (m Model) creationActions() []paletteItem {
+func (m Model) pageCreationAction() (paletteItem, bool) {
 	if m.onDash || m.onAtlas {
-		return nil
+		return paletteItem{}, false
 	}
 	switch m.cur().kind {
 	case entityTasks:
-		return []paletteItem{{kind: palAction, word: "new-task", title: "New task", filter: "new create task"}}
+		return paletteItem{kind: palAction, word: "new-task", title: "New task", filter: "new create task"}, true
 	case entityAudits:
-		return []paletteItem{{kind: palAction, word: "new-audit", title: "New audit", filter: "new create audit"}}
+		return paletteItem{kind: palAction, word: "new-audit", title: "New audit", filter: "new create audit"}, true
 	case entityResearch:
-		return []paletteItem{{kind: palAction, word: "new-research", title: "New research", filter: "new create research"}}
+		return paletteItem{kind: palAction, word: "new-research", title: "New research", filter: "new create research"}, true
+	case entityThreads:
+		return paletteItem{kind: palAction, word: "new-thread", title: "New Thread", filter: "new create thread"}, true
 	case entityEpics:
-		ref := m.selectedRef()
-		title := "New task in this epic — select an epic first"
-		if _, ok := m.selectedEpic(); ok {
-			title = "New task in " + ref.label
-		} else {
-			ref = entityRef{}
-		}
-		return []paletteItem{
-			{kind: palAction, word: "new-task-in-epic", ref: ref, title: title, filter: "new create task in this epic " + ref.label},
-			{kind: palAction, word: "new-epic", title: "New epic", filter: "new create epic"},
-		}
+		return paletteItem{kind: palAction, word: "new-epic", title: "New epic", filter: "new create epic"}, true
 	}
-	return nil
+	return paletteItem{}, false
+}
+
+func (m Model) creationActions() []paletteItem {
+	action, ok := m.pageCreationAction()
+	if !ok {
+		return nil
+	}
+	if m.cur().kind != entityEpics {
+		return []paletteItem{action}
+	}
+	ref := m.selectedRef()
+	title := "New task in this epic — select an epic first"
+	if _, ok := m.selectedEpic(); ok {
+		title = "New task in " + ref.label
+	} else {
+		ref = entityRef{}
+	}
+	return []paletteItem{
+		{kind: palAction, word: "new-task-in-epic", ref: ref, title: title, filter: "new create task in this epic " + ref.label},
+		action,
+	}
 }
 
 func (m *Model) openPageCreation() tea.Cmd {
@@ -57,6 +82,8 @@ func (m *Model) openPageCreation() tea.Cmd {
 		return m.openAuditCreate()
 	case entityResearch:
 		return m.openResearchCreate()
+	case entityThreads:
+		return m.openThreadCreate()
 	default:
 		m.flash, m.flashErr = "creation is not available on this page yet", true
 		return nil
@@ -73,6 +100,8 @@ func (m *Model) runCreationAction(it paletteItem) tea.Cmd {
 		return m.openAuditCreate()
 	case "new-research":
 		return m.openResearchCreate()
+	case "new-thread":
+		return m.openThreadCreate()
 	case "new-task-in-epic":
 		if it.ref.empty() || it.ref != m.selectedRef() {
 			m.flash, m.flashErr = "select the epic again before creating a task", true
@@ -94,6 +123,8 @@ func (h *creationHost) draft() stagedCreation {
 		draft = &h.audit
 	case entityResearch:
 		draft = &h.research
+	case entityThreads:
+		draft = &h.thread
 	}
 	if draft == nil || !draft.state().active {
 		return nil
@@ -113,7 +144,7 @@ func (h *creationHost) begin(kind entityKind) bool {
 		return false
 	}
 	switch kind {
-	case entityTasks, entityEpics, entityAudits, entityResearch:
+	case entityTasks, entityEpics, entityAudits, entityResearch, entityThreads:
 	default:
 		return false
 	}
@@ -158,6 +189,14 @@ func (h *creationHost) openResearch(origin *core.Service, session uint64, destin
 	}
 	h.research = newResearchCreateForm(origin, h.gen, session, destination)
 	return h.research.controls().focus(researchCreateTitle)
+}
+
+func (h *creationHost) openThread(origin *core.Service, session uint64, destination string) tea.Cmd {
+	if !h.begin(entityThreads) {
+		return nil
+	}
+	h.thread = newThreadCreateForm(origin, h.gen, session, destination)
+	return h.thread.controls().focus(threadCreateTitle)
 }
 
 // Only typed create outcomes implement this private seam. It allows the shell's

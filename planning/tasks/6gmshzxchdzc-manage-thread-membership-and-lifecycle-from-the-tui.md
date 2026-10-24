@@ -33,6 +33,13 @@ Add/remove existing task members through searchable, identity-aware selection an
 
 ## Design attention
 
+The [creation slice](6gp1ytgea8dt-create-threads-from-the-tui-with-guarded-per-kind-intent.md)
+deliberately creates empty Threads. Resolve the member-selection, confirmation
+and refresh/recovery interaction with the owner before implementing this curation
+flow; no picker or combined authoring design was approved as part of creation.
+Task sequencing belongs to the [dependency-editing task](6gmshzxksjcn-edit-task-dependencies-from-the-tui-with-guarded-graph-feedback.md),
+not an implicit side effect of adding members.
+
 No drag-to-link graph editing is required. Adding a task to a Thread is not a dependency declaration, and cancelling a Thread does not cancel its tasks.
 
 ## Out of scope

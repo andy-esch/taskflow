@@ -570,12 +570,13 @@ horizontal fan-in/fan-out opens a chooser instead of guessing. `f` remains the f
 stable-identity picker for members and immediate external gates. Membership order
 is not presented as dependency or dispatch order.
 
-On Tasks, Epics, Audits or Research, `c` opens that page's staged creation form. From an epic,
+On any entity page, `c` opens its staged creation form. From an epic,
 choose **New task in …** in Ctrl+P to preselect it as the task's parent. Tab through
 the inputs and explicitly choose Create—nothing is saved while typing. Errors
 retain the draft; success selects the new record, with
 `E` for longer prose when local editing is available. Audit dates default to today;
-research supports backdating without a lifecycle. Thread creation remains CLI-only for now.
+research supports backdating without a lifecycle. New Threads are empty and unstarted;
+adding members and sequencing tasks remain separate CLI workflows.
 
 The TUI **live-reloads** via `fsnotify` — edits from
 your editor or a CLI `task move` in another terminal show up within ~200ms,
