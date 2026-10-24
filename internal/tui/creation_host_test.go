@@ -37,6 +37,30 @@ func creationTitle(m Model) string {
 	return creationContractInputs(&m)[0].Value()
 }
 
+func TestEmptyCreationHintsOpenNativeForms(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		kind entityKind
+		hint string
+	}{
+		{"tasks", entityTasks, "Press c to create a task."},
+		{"threads", entityThreads, "Press c to create an empty, unstarted Thread."},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			m := loadedAt(t, testutil.NewRepo(t).Root, 120, 40)
+			m = settleCreate(t, m, m.switchTab(indexOfKind(m.tabs, tc.kind)))
+			if hint := m.listPaneContent(); !strings.Contains(hint, tc.hint) || strings.Contains(hint, "tskflwctl") {
+				t.Fatalf("empty page does not guide native creation: %q", hint)
+			}
+			m, cmd := createKey(m, "c")
+			m = settleCreate(t, m, cmd)
+			if f := m.activeCreation(); f == nil || f.kind != tc.kind {
+				t.Fatal("advertised empty-page action did not open its creation form")
+			}
+		})
+	}
+}
+
 func TestCreationPageHintsFollowActions(t *testing.T) {
 	for name, kind := range creationContractKinds {
 		t.Run(name, func(t *testing.T) {

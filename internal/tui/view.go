@@ -194,15 +194,15 @@ func (m Model) renderBody() string {
 	}
 }
 
-// listPaneContent is the active list, or a helpful empty hint on an empty tasks
-// or audits tab (epics fall back to the list's own "No items."). The audits hint
+// listPaneContent is the active list, or an empty hint for tasks, audits and
+// Threads (other kinds use the list's own "No items."). The audits hint
 // names the empty bucket and points at the s/S cycle, since archived buckets are
 // reachable in-TUI now rather than only via `audit list --all`.
 func (m Model) listPaneContent() string {
 	t := m.cur()
 	// The chip is synced into t.list.Title by Update (not here) so View is pure.
 	if t.kind == entityTasks && t.statusView == "" && len(t.list.Items()) == 0 {
-		return "No active tasks.\n\nCreate one:\n  tskflwctl task new \"Title\" --epic <id>"
+		return "No active tasks.\n\nPress c to create a task."
 	}
 	if t.kind == entityAudits && len(t.list.Items()) == 0 {
 		switch t.statusView {
@@ -215,7 +215,7 @@ func (m Model) listPaneContent() string {
 		}
 	}
 	if t.kind == entityThreads && len(t.list.Items()) == 0 {
-		message := "No Threads.\n\nCreate one:\n  tskflwctl thread new \"Title\" --goal \"Outcome\""
+		message := "No Threads.\n\nPress c to create an empty, unstarted Thread."
 		if d := t.threadDiagnostics; d != nil {
 			if d.graphHealth != core.GraphHealthy {
 				message += fmt.Sprintf("\n\nRepository graph: %s", d.graphHealth)

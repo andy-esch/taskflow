@@ -9,8 +9,9 @@ Inside a planning repo it opens that repo; run it anywhere else and it opens the
 atlas of registered spaces instead. Press `a` or run `:atlas` to switch between the
 two; `o` changes atlas ordering and `O` reverses it. Open the shared
 Config/About editor from Overview, with `:config`, or from the command palette; writes
-use the same typed application service as `tskflwctl config edit`. Threads have a
-read-only list/detail route with lifecycle, graph health, progress, frontier, gates, and diagnostics.
+use the same typed application service as `tskflwctl config edit`.
+Press `c` on an entity page to stage creation. New Threads are empty and unstarted;
+Thread membership and lifecycle changes remain CLI-only.
 
 ```
 tskflwctl ui [flags]
