@@ -17,6 +17,21 @@ type uiLayoutFake struct{}
 
 func (uiLayoutFake) WatchPaths() []string { return []string{"/planning/tasks"} }
 
+func TestUIHelpDescribesStagedCreationBoundary(t *testing.T) {
+	out, err := runRootRC(t, "ui", "--help")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"Press `c` on an entity page", "New Threads are empty and unstarted", "membership and lifecycle changes remain CLI-only"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("ui help omits %q", want)
+		}
+	}
+	if strings.Contains(out, "read-only list/detail route") {
+		t.Fatal("ui help still describes Thread creation as unavailable")
+	}
+}
+
 func TestUIRefusesNonInteractiveAndDryRunInvocation(t *testing.T) {
 	repo := t.TempDir()
 	if _, err := config.Init(repo, "", false); err != nil {

@@ -21,8 +21,9 @@ func newUICmd(app *App) *cobra.Command {
 			"atlas of registered spaces instead. Press `a` or run `:atlas` to switch between the\n" +
 			"two; `o` changes atlas ordering and `O` reverses it. Open the shared\n" +
 			"Config/About editor from Overview, with `:config`, or from the command palette; writes\n" +
-			"use the same typed application service as `tskflwctl config edit`. Threads have a\n" +
-			"read-only list/detail route with lifecycle, graph health, progress, frontier, gates, and diagnostics.",
+			"use the same typed application service as `tskflwctl config edit`.\n" +
+			"Press `c` on an entity page to stage creation. New Threads are empty and unstarted;\n" +
+			"Thread membership and lifecycle changes remain CLI-only.",
 		Example:     "  tskflwctl ui",
 		Args:        cobra.NoArgs,
 		Annotations: map[string]string{"safety": "mutating"},
