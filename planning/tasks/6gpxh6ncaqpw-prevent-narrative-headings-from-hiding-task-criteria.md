@@ -10,6 +10,9 @@ priority: high
 autonomy_level: 2
 tags: [criteria, validation, lint, tui]
 created: "2026-10-24"
+audit_sources: [2026-10-25-weekly-task-sweep]
+audited: "2026-10-25"
+updated_at: "2026-10-25"
 ---
 # Prevent narrative headings from hiding task criteria
 
@@ -77,3 +80,42 @@ replacement, and bulk document rewrites.
 - [TUI criterion actions](6g3cp32y9149-let-the-tui-flip-an-acceptance-criterion.md): establish trustworthy criterion enumeration before shipping more editing UI.
 - [Tracked reason alignment](6gkkzvr92waq-align-tracked-criterion-writes-and-lint-reason-semantics.md): different policy defect; neither repair requires the other.
 - [Historical body structure work](6fpfcecdymca-structure-aware-body-mutation-and-metadata-reads.md): documents the broad matcher and its narrower lint guard.
+
+## Sweep refresh (2026-10-25)
+
+2026-10-25: automated weekly sweep — the reproduction was re-run end to end on
+today's `main` (47079a9) and still reproduces exactly as written; the cause
+analysis is unchanged.
+
+Re-run in a fresh throwaway space outside this checkout, with a body whose
+narrative heading is `### Integrated acceptance notes` followed by a canonical
+`## Acceptance criteria` holding one unticked box:
+
+| check | observed 2026-10-25 | task's 2026-10-24 record |
+| --- | --- | --- |
+| `task info --json` | `{"checked": 0, "total": 0}` | 0/0 |
+| `task ac --check 1` | refused: "task has no acceptance criteria to set" | refused |
+| `lint --links` | passes | passes |
+| `task complete --dry-run` | `✔ would move … -> completed` | permits completion |
+
+The control (same body, heading renamed to `### Integrated verification notes`)
+reported `0/1` and refused completion with "1 acceptance criterion/criteria
+still unmet with no reason (#1)". No task was completed in either run.
+
+Cause citations verified against current code:
+
+- `scanAcceptanceCheckboxes` (`internal/domain/body.go:251`) still opens the
+  section on `strings.Contains(strings.ToLower(m[2]), "acceptance")`
+  (`body.go:272`), and the *first* such heading wins — the canonical section
+  after it is never entered.
+- `isAcceptanceSectionHeading` (`internal/domain/body.go:764`) is still the
+  narrower predicate (`== "acceptance"`, or prefix `"acceptance criteria"` /
+  `"acceptance:"`), used only by the lint guard at `body.go:710`. Its own doc
+  comment names the divergence as deliberate, which is why this needs a
+  selection *policy* decision and not a one-line predicate swap.
+- All three Related tasks and the discovering task `6gmshzwphadw` still exist at
+  the cited slugs.
+
+No acceptance criterion was ticked and no scope changed: the Selection contract
+checkpoint is still an open human decision, and the sweep deliberately left it
+to the owner.
