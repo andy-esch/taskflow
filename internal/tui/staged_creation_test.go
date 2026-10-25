@@ -5,6 +5,7 @@ import (
 	"maps"
 	"strings"
 	"testing"
+	"time"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -12,6 +13,43 @@ import (
 
 	"github.com/andy-esch/taskflow/internal/testutil"
 )
+
+func TestNewCreationInputPreservesProductionCursorDefaults(t *testing.T) {
+	prev := creationBlinkSpeed
+	t.Cleanup(func() { creationBlinkSpeed = prev })
+
+	creationBlinkSpeed = 0
+	prod := newCreationInput()
+	defaults := textinput.New()
+	if prod.Prompt != "" || prod.CharLimit != 0 || prod.VirtualCursor() != defaults.VirtualCursor() ||
+		prod.Styles().Cursor != defaults.Styles().Cursor {
+		t.Fatalf("production creation input cursor settings drifted from Bubbles defaults: got %+v, want %+v",
+			prod.Styles().Cursor, defaults.Styles().Cursor)
+	}
+	prodCmd := prod.Focus()
+	done := make(chan tea.Msg, 1)
+	go func() { done <- prodCmd() }()
+	select {
+	case msg := <-done:
+		t.Fatalf("production focus command fired before default blink cadence: %T", msg)
+	case <-time.After(20 * time.Millisecond):
+	}
+	// Cancel the in-flight 530ms blink context so the goroutine exits immediately.
+	cancelStyles := prod.Styles()
+	cancelStyles.Cursor.BlinkSpeed = time.Millisecond
+	prod.SetStyles(cancelStyles)
+	_ = prod.Focus()()
+	<-done
+
+	creationBlinkSpeed = 2 * time.Millisecond
+	fast := newCreationInput()
+	if fast.Styles().Cursor.BlinkSpeed != 2*time.Millisecond || !fast.Styles().Cursor.Blink {
+		t.Fatalf("test blink override was not applied to creation input: %+v", fast.Styles().Cursor)
+	}
+	if msg := fast.Focus()(); !creationWidgetMaintenance(msg) {
+		t.Fatalf("fast focus command did not emit cursor maintenance tick: %T", msg)
+	}
+}
 
 func TestCreationSharedStatePreservesValueOwnershipAndRecovery(t *testing.T) {
 	for name, kind := range creationContractKinds {

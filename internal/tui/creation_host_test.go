@@ -222,6 +222,16 @@ func TestCreationHarnessStopsMaintenanceAndBoundsWork(t *testing.T) {
 	if _, err := settleCreationCommands(m, maintenance, 1); err != nil {
 		t.Fatal(err)
 	}
+	filtering, _ := createKey(loaded(t, 120, 40), "/")
+	filtering.sessionScope = true
+	raw := filtering.cur().list.FilterInput.Focus()
+	if _, err := settleCreationCommands(filtering, raw, 1); err != nil {
+		t.Fatal(err)
+	}
+	scoped := scopeSession(filtering.sessionGen, filtering.cur().list.FilterInput.Focus())
+	if _, err := settleCreationCommands(filtering, scoped, 1); err != nil {
+		t.Fatal(err)
+	}
 	var cycle tea.Cmd
 	cycle = func() tea.Msg { return tea.BatchMsg{cycle} }
 	if _, err := settleCreationCommands(m, cycle, 3); err == nil || !strings.Contains(err.Error(), "exceeded budget 3") {
