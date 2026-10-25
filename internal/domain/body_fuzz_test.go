@@ -28,6 +28,13 @@ func bodySeeds() []string {
 		"~~~\n## Acceptance criteria\n~~~\n## Acceptance criteria\n- [x] real after fence\n",
 		"## Acceptance criteria\n- [ ] a\n## Progress notes on acceptance criteria\n- [ ] b\n",
 		"## Acceptance criteria",
+		"### Integrated acceptance notes\n- [ ] narrative\n## Acceptance criteria\n- [ ] real\n",
+		"## Acceptance\n- [x] first\n## Acceptance criteria\n- [ ] second\n",
+		"## Notes / acceptance\n- [ ] unknown section\n",
+		"# Acceptance\n## Acceptance criteria\n- [ ] real\n",
+		"# Improve acceptance tests\n## Notes\n- [ ] ordinary\n",
+		"## Acceptance notes\n### Notes\n- [ ] ordinary\n",
+		"# Align acceptance lint\n## Acceptance notes\n### AcceptanceChecklist\n- [ ] actual\n",
 		"- [ ] no heading at all\n",
 		"#\n##\n###\n",
 	}
@@ -73,8 +80,20 @@ func FuzzAcceptanceCriteria(f *testing.F) {
 	}
 	f.Fuzz(func(t *testing.T, body string, n int) {
 		// 1. The tally and the list agree — they share the scanner, so pin it.
-		count := CountAcceptanceCriteria(body)
-		list := ListAcceptanceCriteria(body)
+		count, countErr := CountAcceptanceCriteria(body)
+		list, listErr := ListAcceptanceCriteria(body)
+		if (countErr == nil) != (listErr == nil) {
+			t.Fatalf("count/list disagree about structure: %v / %v", countErr, listErr)
+		}
+		if countErr != nil {
+			if len(LintAcceptanceCriteria(body)) == 0 {
+				t.Fatal("invalid criterion structure is invisible to lint")
+			}
+			if _, err := SetAcceptanceCriterion(body, n, true); err == nil {
+				t.Fatal("invalid criterion structure permitted an edit")
+			}
+			return
+		}
 		if count.Total != len(list) {
 			t.Fatalf("Count.Total=%d but len(list)=%d", count.Total, len(list))
 		}
@@ -97,7 +116,10 @@ func FuzzAcceptanceCriteria(f *testing.F) {
 		if err != nil {
 			return
 		}
-		got := ListAcceptanceCriteria(out)
+		got, err := ListAcceptanceCriteria(out)
+		if err != nil {
+			t.Fatalf("successful flip damaged criterion structure: %v", err)
+		}
 		if len(got) != len(list) {
 			t.Fatalf("flip changed the criterion count: %d -> %d", len(list), len(got))
 		}

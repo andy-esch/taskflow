@@ -821,7 +821,10 @@ func renderTaskMeta(t domain.Task, body string, width int, s *styles) string {
 //
 // Empty when the task has no acceptance criteria, which is most tasks.
 func criterionRollup(body string, s *styles) string {
-	counts := domain.TallyCriteria(body)
+	counts, err := domain.TallyCriteria(body)
+	if err != nil {
+		return s.fg(theme.ColorYellow, "unavailable: "+terminalText(domain.Reason(err)))
+	}
 	if len(counts) == 0 {
 		return ""
 	}

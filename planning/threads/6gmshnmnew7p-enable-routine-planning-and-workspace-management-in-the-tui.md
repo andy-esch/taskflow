@@ -6,7 +6,7 @@ description: Make routine planning possible without CLI round trips, with native
 goal: Create and maintain planning work and registered entry points through the TUI, using the external editor for prose and the same guarded application services.
 created: "2026-10-17"
 tags: [tui, authoring, spaces, ux]
-tasks: [6ffdv9g01q40, 6g321mybqvfz, 6g3cp32y9149, 6g4ym5y2dkp8, 6gkkzvr92waq, 6gmbfxy96tpw, 6gmshzw7we0m, 6gmshzwfkj62, 6gmshzwphadw, 6gmshzwxxce3, 6gmshzx55n1y, 6gmshzxchdzc, 6gmshzxksjcn, 6gmshzxvgagj, 6gmshzy2ppfb, 6gmy4c0x6e31, 6gmy4c15aj30, 6gp1ytfvm652, 6gp1ytg50tev, 6gp1ytgea8dt, 6gp2qmse4prt, 6gpb4y5yqmjp, 6gpxh6ncaqpw]
+tasks: [6ffdv9g01q40, 6g321mybqvfz, 6g3cp32y9149, 6g4ym5y2dkp8, 6gkkzvr92waq, 6gmbfxy96tpw, 6gmshzw7we0m, 6gmshzwfkj62, 6gmshzwphadw, 6gmshzwxxce3, 6gmshzx55n1y, 6gmshzxchdzc, 6gmshzxksjcn, 6gmshzxvgagj, 6gmshzy2ppfb, 6gmy4c0x6e31, 6gmy4c15aj30, 6gp1ytfvm652, 6gp1ytg50tev, 6gp1ytgea8dt, 6gp2qmse4prt, 6gpb4y5yqmjp, 6gpxh6ncaqpw, 6gq03e44pcyz]
 updated_at: "2026-10-24"
 started_at: "2026-10-18"
 ---

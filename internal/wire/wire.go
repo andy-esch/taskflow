@@ -380,7 +380,15 @@ import (
 // carries optional planning_repair recovery with the same receipt; fixed/skipped
 // rows and exit codes are unchanged. A partial move requires deliberate two-copy
 // reconciliation; filesystem retry hints are false after destination commit.
-const SchemaVersion = "1.89"
+// 1.90: NOT ADDITIVE — criterion reads select one explicit Acceptance criteria
+// heading at level 2–6 (optional parenthetical notes) or Acceptance alias, not H1
+// document titles or narrative mentions. Task info/criterion reads and edits reject
+// duplicate sections or a sole nonstandard heading directly owning a checklist
+// with validation errors instead of empty or first-section success. Completion
+// rejects that structure even with force,
+// previews or no-ops; lint diagnoses it on archived tasks too. Repair headings
+// explicitly; JSON shapes and persisted Markdown are not automatically changed.
+const SchemaVersion = "1.90"
 
 const (
 	// SchemaRevisionScheme is intentionally not "semver"; see ADR-0008.
@@ -395,7 +403,7 @@ const (
 	SchemaRevisionClassificationSince = "1.68"
 	// SchemaRevisionCompatibility classifies the current revision. It must agree
 	// with the current changelog entry; wire_changelog_test.go enforces that.
-	SchemaRevisionCompatibility = "additive"
+	SchemaRevisionCompatibility = "not-additive"
 	// SchemaRevisionCompatibilityDefault is policy, not a guarantee: every
 	// revision still declares its own classification.
 	SchemaRevisionCompatibilityDefault = "additive"

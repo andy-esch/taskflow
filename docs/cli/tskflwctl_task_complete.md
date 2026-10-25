@@ -9,7 +9,9 @@ Move task(s) to completed.
 Refuses a task whose acceptance criteria are still unmet with no reason given —
 the task counterpart of `audit close` requiring terminal findings and complete parsing. A criterion
 carrying a state (`task ac --defer|--wontfix|--tracked|--na`) has been DECIDED and
-does not block; only a silently unticked box does. --force completes anyway.
+does not block; only a silently unticked box does. --force bypasses unmet criteria,
+never ambiguous criterion structure. Duplicate sections or a nonstandard acceptance
+checklist must be repaired first, including for previews and already-completed tasks.
 
 ```
 tskflwctl task complete <task>... [flags]

@@ -69,6 +69,7 @@ var entities = []Descriptor{
 			fmt.Sprintf("description is a single line, ≤%d characters.", MaxDescriptionLen),
 			"at least one tag is required at creation.",
 			"the filename slug is derived from the title; any title is accepted (colons, dashes, arrows, …) and the full title is kept as the body H1.",
+			"use one case-insensitive Acceptance criteria heading at level 2–6 (optional parenthetical notes) or the legacy Acceptance alias. H1 document titles and narrative mentions are not criterion sections; duplicate sections or an unrecognized acceptance heading directly containing a checklist require explicit heading repair. task ac reads/edits and completion refuse ambiguous structure, even with --force; lint diagnoses it without rewriting the body.",
 			// Derived from the vocabulary itself, never retyped beside it: a documented list
 			// that drifts from the code is the failure recorded as finding M3 of the
 			// 2026-08-17 finding-status-surface audit, where a reader of a stale table

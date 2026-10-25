@@ -834,6 +834,12 @@ func (s *Service) Lint() ([]LintResult, []LoadProblem, error) {
 			// Archived tasks skip the field nags but still get the universal checks: a
 			// missing/unrecognized frontmatter status, and a missing stable id.
 			issues = append(domain.FrontmatterStatusIssues(t), domain.MissingIDIssue(t.ID)...)
+			// Structural ambiguity remains diagnostic even on archived tasks;
+			// completion no-ops and criterion reads also refuse it. Ordinary
+			// archived field/criterion-state nags remain excluded.
+			if _, err := domain.ListAcceptanceCriteria(tb.Body); err != nil {
+				issues = append(issues, domain.Issue{Field: "acceptance", Message: domain.Reason(err)})
+			}
 		}
 		issues = append(issues, domain.IDDriftIssue(t.ID, loaded.Source.ID)...)
 		issues = append(issues, graphIssues[taskGraphRecordRefAt(taskIndex)]...)
