@@ -11,7 +11,9 @@ autonomy_level: 3
 tags: [tui, authoring, architecture, identity]
 created: "2026-10-18"
 depends_on: [6gmshzw7we0m]
-updated_at: "2026-10-18"
+updated_at: "2026-10-25"
+audit_sources: [2026-10-25-weekly-task-sweep]
+audited: "2026-10-25"
 ---
 # Guard forgetting a confirmed space registration against label reuse
 
@@ -56,3 +58,33 @@ new registry schema or persistent row IDs, and a generic confirmation/transactio
   [registry adapter](../../internal/spacestore/fs.go) and
   [guarded local registry writes](../../internal/userconfig/spaces.go).
 - [Atlas consumer](6gmshzwfkj62-register-and-forget-existing-space-entry-points-from-atlas.md).
+
+## Sweep refresh (2026-10-25)
+
+2026-10-25: automated weekly sweep — the Evidence and scope section re-verified
+line by line against current code and found still exactly true; one
+cross-cutting observation added.
+
+- `SpaceRegistryService.Forget` (`internal/core/space_registry.go:169`) still
+  passes only the machine-local label down to `store.ForgetSpace(id, dryRun)`.
+  No expected-entry evidence crosses the port.
+- `userconfig.ForgetSpace` (`internal/userconfig/spaces.go:194`) still takes the
+  write lock, reads one snapshot, and selects purely by `e.ID == id`. Its doc
+  comment already promises "the exact entry selected from the same snapshot used
+  for the edit", which protects the *receipt* from racing a second read — but,
+  as the task says, it compares nothing against what the UI confirmed earlier.
+  The guarded-snapshot half of AC 3 is therefore already in place; the missing
+  half is the comparison input.
+- `internal/spacestore/fs.go:85` (`FS.ForgetSpace`) is a thin pass-through to
+  that function, so the new expectation has one obvious seam to thread through.
+
+**Cross-cutting (see PR Findings):** core already has an established
+selected-identity mutation family — `SetSelectedTaskFields`, `MoveSelectedTask`,
+`DeferSelectedTask`, `SetSelectedEpicFields`, `MoveSelectedEpic`,
+`MoveSelectedAudit`, `NewTaskForSelectedEpic` — each taking a `*MutationTarget`
+instead of a human reference. The registry is one of two mutation surfaces with
+no member of that family. Worth deciding deliberately whether this task's
+"explicit expected registration evidence" should be named and shaped as the
+registry's entry in that family rather than as a one-off parameter, so the
+pattern stays recognisable. Not rescoped here — the AC wording already permits
+either, and the choice is the implementer's.
