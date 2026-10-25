@@ -12,7 +12,7 @@ tags: [tui, domain, ux]
 created: "2026-08-24"
 updated_at: "2026-10-24"
 audited: "2026-10-04"
-depends_on: [6gkkzvr92waq, 6gmshzw7we0m, 6gpxh6ncaqpw]
+depends_on: [6gkkzvr92waq, 6gmshzw7we0m, 6gpxh6ncaqpw, 6gq03e44pcyz]
 ---
 # Let the TUI flip an acceptance criterion
 
@@ -35,6 +35,9 @@ The [criterion-section shadowing repair](6gpxh6ncaqpw-prevent-narrative-headings
 is also a prerequisite: narrative headings must not hide the real criterion list
 before this UI starts enumerating and acting on it. It is independent of the
 tracked-reason policy decision.
+The [unreadable-marker completion guard](6gq03e44pcyz-guard-task-completion-against-unreadable-criterion-markers.md)
+is another independent prerequisite: a malformed intended checkbox must not
+disappear from enumeration and completion while this UI offers criterion actions.
 
 Use the core criterion policy and its required reason or destination inputs rather
 than copying a state/reason matrix into the TUI. Long prose remains in $EDITOR.
