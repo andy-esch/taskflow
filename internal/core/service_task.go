@@ -382,13 +382,15 @@ func (s *Service) TaskPath(slug string) (string, error) {
 }
 
 // AcceptanceCriteria lists a task's acceptance criteria (read-only, for `task ac
-// --list`). Returns the canonical slug (for the envelope) and the ordered criteria.
+// --list`). Returns the canonical slug and ordered criteria, or a validation error
+// for ambiguous/unrecognized criterion structure. Raw ShowTask remains repairable.
 func (s *Service) AcceptanceCriteria(slug string) (string, []domain.Criterion, error) {
 	record, err := s.store.ReadTask(slug)
 	if err != nil {
 		return "", nil, err
 	}
-	return record.Value.Task.Slug, domain.ListAcceptanceCriteria(record.Value.Body), nil
+	criteria, err := domain.ListAcceptanceCriteria(record.Value.Body)
+	return record.Value.Task.Slug, criteria, err
 }
 
 // SetAcceptanceCriterion flips a task's nth (1-based) acceptance-criteria checkbox.

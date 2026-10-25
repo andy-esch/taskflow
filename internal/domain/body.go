@@ -244,60 +244,53 @@ func Section(body, name string) (text string, ok bool) {
 }
 
 // scanAcceptanceCheckboxes returns the body split on "\n" (newline-normalized) plus
-// the task-list checkboxes inside its acceptance-criteria section — the first heading
-// whose title contains "acceptance", up to the next heading of the same or higher
-// level. Fence-aware in a single pass (a `##`/`- [ ]` inside a code fence is example
-// prose, not structure). One scanner backs the tally, the list, and the flip.
-func scanAcceptanceCheckboxes(body string) (lines []string, boxes []acCheckbox, sectionEnd int) {
+// the task-list checkboxes inside its uniquely selected criterion section.
+// Selection errors are not empty results. One fence-aware scanner backs every
+// tally, list and edit; general-purpose Section keeps its independent semantics.
+func scanAcceptanceCheckboxes(body string) (lines []string, boxes []acCheckbox, sectionEnd int, err error) {
 	lines = strings.Split(normalizeNewlines(body), "\n")
+	section, err := selectCriterionSection(lines)
+	if err != nil {
+		return lines, nil, -1, err
+	}
+	if section.start < 0 {
+		return lines, nil, -1, nil
+	}
 	var (
-		fence      fenceScanner
-		inSection  bool
-		sectionLvl int
-		open       = -1 // index of the criterion still accepting continuation lines
+		fence fenceScanner
+		open  = -1 // index of the criterion still accepting continuation lines
 	)
-	// One past the last non-blank line of the section: where a new criterion is appended.
-	// -1 until the section is found, so "no section" is distinguishable from "an empty one".
-	sectionEnd = -1
-	for i, ln := range lines {
+	sectionEnd = section.start + 1
+	for i := section.start + 1; i < section.end; i++ {
+		ln := lines[i]
 		if fence.inCode(ln) {
 			open = -1
 			continue
 		}
-		if m := bodyHeadingRe.FindStringSubmatch(ln); m != nil {
+		if bodyHeadingRe.MatchString(ln) {
 			open = -1
-			lvl := len(m[1])
-			switch {
-			case !inSection:
-				if strings.Contains(strings.ToLower(m[2]), "acceptance") {
-					inSection, sectionLvl, sectionEnd = true, lvl, i+1
-				}
-			case lvl <= sectionLvl: // a same-or-higher heading ends the section
-				return lines, boxes, sectionEnd
-			}
+			sectionEnd = i + 1
 			continue
 		}
-		if inSection {
-			if m := bodyCheckboxRe.FindStringSubmatch(ln); m != nil {
-				boxes = append(boxes, acCheckbox{line: i, end: i, checked: m[1] == "x" || m[1] == "X", text: checkboxText(ln)})
-				open = len(boxes) - 1
-				continue
-			}
-			// A wrapped criterion continues on the following indented, non-list lines. A
-			// blank line, a new list item, or a heading ends it — the same rule a markdown
-			// reader applies, kept in this one pass so the fence tracker stays in step.
-			if open >= 0 && isCriterionContinuation(ln) {
-				boxes[open].end = i
-				boxes[open].text += " " + strings.TrimSpace(ln)
-				continue
-			}
-			open = -1
+		if m := bodyCheckboxRe.FindStringSubmatch(ln); m != nil {
+			boxes = append(boxes, acCheckbox{line: i, end: i, checked: m[1] == "x" || m[1] == "X", text: checkboxText(ln)})
+			open = len(boxes) - 1
+			continue
 		}
-		if inSection && strings.TrimSpace(ln) != "" {
+		// A wrapped criterion continues on the following indented, non-list lines. A
+		// blank line, a new list item, or a heading ends it — the same rule a markdown
+		// reader applies, kept in this one pass so the fence tracker stays in step.
+		if open >= 0 && isCriterionContinuation(ln) {
+			boxes[open].end = i
+			boxes[open].text += " " + strings.TrimSpace(ln)
+			continue
+		}
+		open = -1
+		if strings.TrimSpace(ln) != "" {
 			sectionEnd = i + 1
 		}
 	}
-	return lines, boxes, sectionEnd
+	return lines, boxes, sectionEnd, nil
 }
 
 // isCriterionContinuation reports whether ln continues the criterion above it: indented,
@@ -309,10 +302,13 @@ func isCriterionContinuation(ln string) bool {
 	return !acListItemRe.MatchString(ln)
 }
 
-// CountAcceptanceCriteria tallies the acceptance-criteria checkboxes. No such
-// section — or none with checkboxes — yields a zero tally.
-func CountAcceptanceCriteria(body string) ACCount {
-	_, boxes, _ := scanAcceptanceCheckboxes(body)
+// CountAcceptanceCriteria tallies the uniquely selected criterion section. No
+// section or an empty section yields zero; invalid structure returns ErrValidation.
+func CountAcceptanceCriteria(body string) (ACCount, error) {
+	_, boxes, _, err := scanAcceptanceCheckboxes(body)
+	if err != nil {
+		return ACCount{}, err
+	}
 	var c ACCount
 	for _, b := range boxes {
 		c.Total++
@@ -324,7 +320,7 @@ func CountAcceptanceCriteria(body string) ACCount {
 			c.Explained++
 		}
 	}
-	return c
+	return c, nil
 }
 
 // proseWrapWidth is where markdown prose this tool WRITES is hard-wrapped: criteria, and a
@@ -393,7 +389,10 @@ func AddCriterion(body, text string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	lines, boxes, end := scanAcceptanceCheckboxes(body)
+	lines, boxes, end, err := scanAcceptanceCheckboxes(body)
+	if err != nil {
+		return "", err
+	}
 	if end < 0 {
 		return "", fmt.Errorf("%w: task has no `## Acceptance criteria` section to add to — add one with `task append`", ErrValidation)
 	}
@@ -415,7 +414,10 @@ func AddCriterion(body, text string) (string, error) {
 // RemoveCriterion deletes the 1-based nth criterion, all of its lines. Indexes after it
 // shift down, which is why the CLI prints the renumbered list afterwards.
 func RemoveCriterion(body string, n int) (string, error) {
-	lines, boxes, _ := scanAcceptanceCheckboxes(body)
+	lines, boxes, _, err := scanAcceptanceCheckboxes(body)
+	if err != nil {
+		return "", err
+	}
 	box, err := nthCriterion(boxes, n, "remove")
 	if err != nil {
 		return "", err
@@ -444,7 +446,10 @@ func ReplaceCriterionText(body string, n int, text string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	lines, boxes, _ := scanAcceptanceCheckboxes(body)
+	lines, boxes, _, err := scanAcceptanceCheckboxes(body)
+	if err != nil {
+		return "", err
+	}
 	box, err := nthCriterion(boxes, n, "replace")
 	if err != nil {
 		return "", err
@@ -478,15 +483,19 @@ func nthCriterion(boxes []acCheckbox, n int, verb string) (acCheckbox, error) {
 // a bare unticked box. They are the ones that block `task complete`, and the distinction
 // is the whole point of the state vocabulary: a criterion marked `wontfix` or `deferred`
 // has been DECIDED, and a decision should not stand in the way of finishing a task. Only
-// silence should.
-func UnexplainedCriteria(body string) []Criterion {
+// silence should. Invalid section structure returns ErrValidation, not no blockers.
+func UnexplainedCriteria(body string) ([]Criterion, error) {
+	criteria, err := ListAcceptanceCriteria(body)
+	if err != nil {
+		return nil, err
+	}
 	var out []Criterion
-	for _, c := range ListAcceptanceCriteria(body) {
+	for _, c := range criteria {
 		if c.State == CriterionUnmet {
 			out = append(out, c)
 		}
 	}
-	return out
+	return out, nil
 }
 
 // CriterionCount is one state's share of a task's acceptance criteria.
@@ -498,10 +507,15 @@ type CriterionCount struct {
 // TallyCriteria counts a body's acceptance criteria by state, in the vocabulary's own
 // order, omitting states with no members. It is the roll-up's source: a task with a
 // criterion that is deferred rather than merely unticked has made a DECISION, and a bare
-// "3/8" cannot say so — it reads as five things still to do.
-func TallyCriteria(body string) []CriterionCount {
+// "3/8" cannot say so — it reads as five things still to do. Invalid section
+// structure returns ErrValidation, not an empty roll-up.
+func TallyCriteria(body string) ([]CriterionCount, error) {
+	criteria, err := ListAcceptanceCriteria(body)
+	if err != nil {
+		return nil, err
+	}
 	byState := map[CriterionState]int{}
-	for _, c := range ListAcceptanceCriteria(body) {
+	for _, c := range criteria {
 		byState[c.State]++
 	}
 	out := make([]CriterionCount, 0, len(byState))
@@ -510,13 +524,17 @@ func TallyCriteria(body string) []CriterionCount {
 			out = append(out, CriterionCount{State: st, N: n})
 		}
 	}
-	return out
+	return out, nil
 }
 
 // ListAcceptanceCriteria returns the acceptance criteria in body order, 1-based —
-// the `task ac --list` view an agent then flips by index.
-func ListAcceptanceCriteria(body string) []Criterion {
-	_, boxes, _ := scanAcceptanceCheckboxes(body)
+// the `task ac --list` view an agent then flips by index. Invalid section
+// structure returns ErrValidation; a genuinely absent section returns an empty list.
+func ListAcceptanceCriteria(body string) ([]Criterion, error) {
+	_, boxes, _, err := scanAcceptanceCheckboxes(body)
+	if err != nil {
+		return nil, err
+	}
 	out := make([]Criterion, len(boxes))
 	for i, b := range boxes {
 		text, state, reason, suffix := splitCriterion(b.text, b.checked)
@@ -531,7 +549,7 @@ func ListAcceptanceCriteria(body string) []Criterion {
 		}
 		out[i] = c
 	}
-	return out
+	return out, nil
 }
 
 // SetCriterionState sets the 1-based nth criterion to an explicit state, rewriting only
@@ -572,7 +590,10 @@ func SetCriteriaState(body string, ns []int, state CriterionState, reason string
 		return "", fmt.Errorf("%w: %s takes no reason (only %s do)",
 			ErrValidation, state, strings.Join(CriterionSuffixStates(), ", "))
 	}
-	lines, boxes, _ := scanAcceptanceCheckboxes(body)
+	lines, boxes, _, err := scanAcceptanceCheckboxes(body)
+	if err != nil {
+		return "", err
+	}
 	if len(boxes) == 0 {
 		return "", fmt.Errorf("%w: task has no acceptance criteria to set", ErrValidation)
 	}
@@ -659,7 +680,10 @@ func replaceCheckboxLine(line string, checked bool, text string) string {
 // caller can skip the write). ErrValidation when there's no acceptance section or n
 // is out of range.
 func SetAcceptanceCriterion(body string, n int, checked bool) (string, error) {
-	lines, boxes, _ := scanAcceptanceCheckboxes(body)
+	lines, boxes, _, err := scanAcceptanceCheckboxes(body)
+	if err != nil {
+		return "", err
+	}
 	if len(boxes) == 0 {
 		return "", fmt.Errorf("%w: task has no acceptance criteria to %s", ErrValidation, checkWord(checked))
 	}
@@ -674,8 +698,7 @@ func SetAcceptanceCriterion(body string, n int, checked bool) (string, error) {
 	return strings.Join(lines, "\n"), nil
 }
 
-// Misconfiguration guards for `task ac` / the `ac:` tally, which key off the first
-// heading containing "acceptance" and count only well-formed checkboxes. A list item
+// Misconfiguration guards for `task ac` / the `ac:` tally. A list item
 // whose bracket holds only spaces/tabs/x/X but ISN'T the canonical `[ ]`/`[x]`/`[X]`
 // (e.g. `[]`, `[ x]`, `[  ]`) is a botched checkbox that the tally silently drops.
 // The class is deliberately narrow — `[1]`, `[-]`, and `[text](url)` links are NOT
@@ -687,46 +710,26 @@ var (
 )
 
 // LintAcceptanceCriteria reports misconfigurations that would make the acceptance
-// tally / `task ac` list lie: a botched checkbox in the (first) acceptance section
-// that the scanner silently skips, and more than one acceptance section (only the
-// first is used). Empty when the body's acceptance criteria are well-formed. The
-// checks are fence-aware, matching the scanner they guard.
+// tally / `task ac` list lie. Section selection uses the same policy as reads and
+// edits; malformed checkboxes and invalid states remain diagnostic-only here.
 func LintAcceptanceCriteria(body string) []Issue {
 	lines := strings.Split(normalizeNewlines(body), "\n")
-	var (
-		issues     []Issue
-		fence      fenceScanner
-		acSections int
-		inFirst    bool
-		firstLvl   int
-		firstDone  bool
-	)
-	for _, ln := range lines {
+	section, err := selectCriterionSection(lines)
+	if err != nil {
+		return []Issue{{Field: "acceptance", Message: Reason(err)}}
+	}
+	if section.start < 0 {
+		return nil
+	}
+	var issues []Issue
+	var fence fenceScanner
+	for _, ln := range lines[section.start+1 : section.end] {
 		if fence.inCode(ln) {
 			continue
 		}
-		if m := bodyHeadingRe.FindStringSubmatch(ln); m != nil {
-			lvl := len(m[1])
-			isAcc := isAcceptanceSectionHeading(m[2])
-			if isAcc {
-				acSections++
-			}
-			switch {
-			case isAcc && !inFirst && !firstDone:
-				inFirst, firstLvl = true, lvl
-			case inFirst && lvl <= firstLvl:
-				inFirst, firstDone = false, true
-			}
-			continue
+		if bad, ok := malformedCheckbox(ln); ok {
+			issues = append(issues, Issue{Field: "acceptance", Message: fmt.Sprintf("malformed acceptance checkbox %q — use `- [ ]` or `- [x]` (it is not counted as written)", bad)})
 		}
-		if inFirst {
-			if bad, ok := malformedCheckbox(ln); ok {
-				issues = append(issues, Issue{Field: "acceptance", Message: fmt.Sprintf("malformed acceptance checkbox %q — use `- [ ]` or `- [x]` (it is not counted as written)", bad)})
-			}
-		}
-	}
-	if acSections > 1 {
-		issues = append(issues, Issue{Field: "acceptance", Message: fmt.Sprintf("%d acceptance-criteria sections — the tally and `task ac` use the first and ignore the rest; merge them", acSections)})
 	}
 	return append(issues, lintCriterionStates(body)...)
 }
@@ -736,7 +739,11 @@ func LintAcceptanceCriteria(body string) []Issue {
 // agent — to go and find what right looks like (finding M1 of the finding-status audit).
 func lintCriterionStates(body string) []Issue {
 	var issues []Issue
-	for _, c := range ListAcceptanceCriteria(body) {
+	criteria, err := ListAcceptanceCriteria(body)
+	if err != nil {
+		return []Issue{{Field: "acceptance", Message: Reason(err)}}
+	}
+	for _, c := range criteria {
 		switch {
 		case c.Checked && c.Suffix != "":
 			// The bracket and the suffix disagree. Met is met; a met criterion that also
@@ -753,17 +760,6 @@ func lintCriterionStates(body string) []Issue {
 		}
 	}
 	return issues
-}
-
-// isAcceptanceSectionHeading is the PRECISE test the lint guard uses to identify an
-// acceptance-criteria section — the canonical "Acceptance criteria" name, not merely
-// any heading that mentions "acceptance". This is deliberately stricter than the
-// tally scanner's substring match: without it, a "## Progress — notes on acceptance
-// criteria" heading would be miscounted as a second acceptance section (a false
-// positive the guard itself must not raise).
-func isAcceptanceSectionHeading(title string) bool {
-	t := strings.ToLower(strings.TrimSpace(title))
-	return t == "acceptance" || strings.HasPrefix(t, "acceptance criteria") || strings.HasPrefix(t, "acceptance:")
 }
 
 // malformedCheckbox reports whether line is a list item whose leading bracket is a

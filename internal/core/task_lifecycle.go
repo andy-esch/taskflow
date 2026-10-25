@@ -323,6 +323,14 @@ func validateExistingLifecyclePlan(graph *TaskGraph, plan TaskLifecyclePlan, bod
 			return TaskLifecyclePlan{}, TaskLifecycleAnalysis{}, fmt.Errorf("%w: acceptance-criteria override applies only when completing a task", domain.ErrValidation)
 		}
 	}
+	var unmet []domain.Criterion
+	if plan.To == domain.StatusCompleted {
+		var err error
+		unmet, err = domain.UnexplainedCriteria(body)
+		if err != nil {
+			return TaskLifecyclePlan{}, TaskLifecycleAnalysis{}, fmt.Errorf("task %q: %w", task.Slug, err)
+		}
+	}
 	if task.Status == plan.To && plan.RevisitAt == "" {
 		return plan, TaskLifecycleAnalysis{From: task.Status, Before: before, After: before}, nil
 	}
@@ -343,7 +351,7 @@ func validateExistingLifecyclePlan(graph *TaskGraph, plan TaskLifecyclePlan, bod
 	}
 
 	if plan.To == domain.StatusCompleted {
-		if unmet := domain.UnexplainedCriteria(body); len(unmet) > 0 {
+		if len(unmet) > 0 {
 			if plan.Override != TaskLifecycleOverrideAcceptanceCriteria {
 				return TaskLifecyclePlan{}, TaskLifecycleAnalysis{}, fmt.Errorf(
 					"%w: task %q has %d acceptance criterion/criteria still unmet with no reason (%s); tick them, give each a state (`task ac --defer|--wontfix|--tracked|--na`), or pass --force",

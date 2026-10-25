@@ -23,21 +23,21 @@ Some intro prose.
 `
 
 func TestCountAcceptanceCriteria(t *testing.T) {
-	got := CountAcceptanceCriteria(acBody)
+	got := countCriteria(t, acBody)
 	if got.Checked != 2 || got.Total != 3 {
 		t.Fatalf("CountAcceptanceCriteria = %+v, want {Checked:2 Total:3}", got)
 	}
 }
 
 func TestCountAcceptanceCriteria_NoSection(t *testing.T) {
-	if got := CountAcceptanceCriteria("# Title\n\njust prose, no criteria\n"); got != (ACCount{}) {
+	if got := countCriteria(t, "# Title\n\njust prose, no criteria\n"); got != (ACCount{}) {
 		t.Fatalf("no AC section should be zero tally, got %+v", got)
 	}
 }
 
 func TestCountAcceptanceCriteria_IgnoresFencedCheckboxes(t *testing.T) {
 	body := "## Acceptance criteria\n\n- [x] real one\n\n```\n- [ ] fenced example, not real\n```\n"
-	if got := CountAcceptanceCriteria(body); got.Checked != 1 || got.Total != 1 {
+	if got := countCriteria(t, body); got.Checked != 1 || got.Total != 1 {
 		t.Fatalf("fenced checkbox must not count, got %+v", got)
 	}
 }
@@ -102,7 +102,7 @@ func TestFirstH1SkipsFencesAndNormalizesCRLF(t *testing.T) {
 // not blind the heading + checkbox scanners.
 func TestCountAcceptanceCriteria_CRLF(t *testing.T) {
 	body := "# Title\r\n\r\n## Acceptance criteria\r\n\r\n- [x] a\r\n- [ ] b\r\n"
-	if got := CountAcceptanceCriteria(body); got.Checked != 1 || got.Total != 2 {
+	if got := countCriteria(t, body); got.Checked != 1 || got.Total != 2 {
 		t.Fatalf("CRLF body tally = %+v, want {Checked:1 Total:2}", got)
 	}
 }
@@ -132,13 +132,13 @@ func TestFenceScanner_NestedFencesDoNotLeak(t *testing.T) {
 		t.Fatalf("nested fence truncated the section:\n%q", sec)
 	}
 	// ...and the fenced `- [ ]` must not count.
-	if got := CountAcceptanceCriteria(body); got.Checked != 1 || got.Total != 1 {
+	if got := countCriteria(t, body); got.Checked != 1 || got.Total != 1 {
 		t.Fatalf("nested-fence tally = %+v, want {Checked:1 Total:1}", got)
 	}
 }
 
 func TestListAcceptanceCriteria(t *testing.T) {
-	got := ListAcceptanceCriteria(acBody)
+	got := listCriteria(t, acBody)
 	want := []Criterion{
 		{Index: 1, Checked: true, Text: "first is done", State: CriterionMet},
 		{Index: 2, Checked: false, Text: "second is not", State: CriterionUnmet},
@@ -155,7 +155,7 @@ func TestListAcceptanceCriteria(t *testing.T) {
 }
 
 func TestListAcceptanceCriteria_NoSection(t *testing.T) {
-	if got := ListAcceptanceCriteria("# Title\n\njust prose\n"); len(got) != 0 {
+	if got := listCriteria(t, "# Title\n\njust prose\n"); len(got) != 0 {
 		t.Fatalf("no AC section should list nothing, got %+v", got)
 	}
 }
@@ -166,7 +166,7 @@ func TestSetAcceptanceCriterion(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := ListAcceptanceCriteria(out)
+	got := listCriteria(t, out)
 	if !got[1].Checked {
 		t.Errorf("criterion 2 should be checked after the flip:\n%s", out)
 	}
@@ -185,7 +185,7 @@ func TestSetAcceptanceCriterion_Uncheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if ListAcceptanceCriteria(out)[0].Checked {
+	if listCriteria(t, out)[0].Checked {
 		t.Errorf("criterion 1 should be unchecked:\n%s", out)
 	}
 }
@@ -224,7 +224,7 @@ func TestSetAcceptanceCriterion_NoSection(t *testing.T) {
 // "…rather than introducing a" and silently drop the rest of the sentence.
 func TestSetAcceptanceCriterion_MultiLine(t *testing.T) {
 	body := "## Acceptance criteria\n\n- [ ] first criterion spans\n      a continuation line\n- [x] second is done\n"
-	cs := ListAcceptanceCriteria(body)
+	cs := listCriteria(t, body)
 	if len(cs) != 2 || cs[0].Text != "first criterion spans a continuation line" {
 		t.Fatalf("multi-line criterion should count once and read whole: %+v", cs)
 	}
@@ -256,7 +256,7 @@ func TestSetAcceptanceCriterion_RoundTripByteIdentical(t *testing.T) {
 // the real criteria, and a flip targets the real checkbox, never the fenced example.
 func TestAcceptanceCriteria_FenceAware(t *testing.T) {
 	body := "## Acceptance criteria\n\n- [x] real one\n\n```\n- [ ] fenced example, not real\n```\n\n- [ ] real two\n"
-	cs := ListAcceptanceCriteria(body)
+	cs := listCriteria(t, body)
 	if len(cs) != 2 || cs[1].Text != "real two" {
 		t.Fatalf("fenced checkbox must not be listed: %+v", cs)
 	}
@@ -357,12 +357,12 @@ func TestCountAcceptanceCriteriaSeparatesExplainedFromOutstanding(t *testing.T) 
 		"- [ ] still to do\n" +
 		"- [ ] parked · **deferred:** waiting on the ADR\n" +
 		"- [ ] dropped · **n/a:** scope removed\n"
-	got := CountAcceptanceCriteria(body)
+	got := countCriteria(t, body)
 	if got.Total != 4 || got.Checked != 1 || got.Explained != 2 {
 		t.Errorf("tally = %+v; want 4 total, 1 checked, 2 explained", got)
 	}
 	// A body written before the vocabulary existed tallies exactly as it always did.
-	legacy := CountAcceptanceCriteria("# T\n\n## Acceptance criteria\n\n- [x] a\n- [ ] b\n")
+	legacy := countCriteria(t, "# T\n\n## Acceptance criteria\n\n- [x] a\n- [ ] b\n")
 	if legacy.Total != 2 || legacy.Checked != 1 || legacy.Explained != 0 {
 		t.Errorf("legacy tally = %+v; want 2 total, 1 checked, 0 explained", legacy)
 	}
@@ -429,7 +429,7 @@ func TestCriterionSuffixIsTrailingAndSingleLine(t *testing.T) {
 	body := "# T\n\n## Acceptance criteria\n\n" +
 		"- [ ] Tests · **Coverage:** 100% · **deferred:** waiting on harness\n" +
 		"- [ ] No state · **Note:** just prose\n"
-	cs := ListAcceptanceCriteria(body)
+	cs := listCriteria(t, body)
 	if cs[0].State != CriterionDeferred || cs[0].Reason != "waiting on harness" {
 		t.Errorf("trailing suffix missed: state=%q reason=%q", cs[0].State, cs[0].Reason)
 	}
@@ -439,7 +439,7 @@ func TestCriterionSuffixIsTrailingAndSingleLine(t *testing.T) {
 	if cs[1].State != CriterionUnmet || cs[1].Text != "No state · **Note:** just prose" {
 		t.Errorf("a non-state label was treated as a disposition: %+v", cs[1])
 	}
-	if got := CountAcceptanceCriteria(body); got.Explained != 1 {
+	if got := countCriteria(t, body); got.Explained != 1 {
 		t.Errorf("tally lost the explained criterion: %+v", got)
 	}
 	// Re-setting replaces only the trailing disposition, leaving the earlier label alone.
@@ -479,7 +479,7 @@ func TestSetCriterionState_WrappedCriterion(t *testing.T) {
 	if !strings.Contains(deferred, "  parallel one. · **deferred:** not yet\n") {
 		t.Errorf("suffix must land at the end of the criterion, indentation intact:\n%s", deferred)
 	}
-	c := ListAcceptanceCriteria(deferred)[0]
+	c := listCriteria(t, deferred)[0]
 	if c.Text != whole || c.State != CriterionDeferred || c.Reason != "not yet" {
 		t.Errorf("round-trip: text=%q state=%q reason=%q", c.Text, c.State, c.Reason)
 	}
@@ -524,7 +524,7 @@ func TestListAcceptanceCriteria_ContinuationBounds(t *testing.T) {
 		"- [ ] third\n" +
 		"## Next section\n" +
 		"  not a criterion either\n"
-	cs := ListAcceptanceCriteria(body)
+	cs := listCriteria(t, body)
 	want := []string{"wraps onto here", "next one", "third"}
 	if len(cs) != len(want) {
 		t.Fatalf("got %d criteria, want %d: %+v", len(cs), len(want), cs)
@@ -547,7 +547,7 @@ func TestTallyCriteria(t *testing.T) {
 		"- [ ] abandoned · **wontfix:** superseded\n" +
 		"- [ ] moved · **tracked:** carried by 6g3ag8py12y9\n" +
 		"- [ ] moot · **n/a:** the tile grid was dropped\n"
-	got := TallyCriteria(body)
+	got := tallyCriteria(t, body)
 	want := []CriterionCount{
 		{CriterionMet, 2}, {CriterionUnmet, 1}, {CriterionDeferred, 1},
 		{CriterionWontFix, 1}, {CriterionTracked, 1}, {CriterionNA, 1},
@@ -561,11 +561,11 @@ func TestTallyCriteria(t *testing.T) {
 		}
 	}
 	// States with no members are omitted rather than rendered as zeroes.
-	if n := len(TallyCriteria("## Acceptance criteria\n\n- [x] only one\n")); n != 1 {
+	if n := len(tallyCriteria(t, "## Acceptance criteria\n\n- [x] only one\n")); n != 1 {
 		t.Errorf("a single-state body should tally one entry, got %d", n)
 	}
 	// No section, no tally — which is most tasks.
-	if n := len(TallyCriteria("# Title\n\nprose\n")); n != 0 {
+	if n := len(tallyCriteria(t, "# Title\n\nprose\n")); n != 0 {
 		t.Errorf("a body with no criteria should tally nothing, got %d", n)
 	}
 }
@@ -600,7 +600,7 @@ func TestCriterionEvolution(t *testing.T) {
 			}
 		}
 		// Wrapped or not, it reads back as ONE criterion with its text intact.
-		cs := ListAcceptanceCriteria(got)
+		cs := listCriteria(t, got)
 		if len(cs) != 3 || cs[2].Text != long {
 			t.Errorf("wrapped criterion did not round-trip: %+v", cs)
 		}
@@ -621,7 +621,7 @@ func TestCriterionEvolution(t *testing.T) {
 		if strings.Contains(got, "wraps here") {
 			t.Errorf("the continuation must go with its criterion:\n%s", got)
 		}
-		if cs := ListAcceptanceCriteria(got); len(cs) != 1 || cs[0].Text != "two" {
+		if cs := listCriteria(t, got); len(cs) != 1 || cs[0].Text != "two" {
 			t.Errorf("after removing #1, #2 becomes #1: %+v", cs)
 		}
 	})
@@ -637,7 +637,7 @@ func TestCriterionEvolution(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		c := ListAcceptanceCriteria(got)[1]
+		c := listCriteria(t, got)[1]
 		if c.Text != "reworded" || c.State != CriterionDeferred || c.Reason != "waiting on the ADR" {
 			t.Errorf("state must survive a reword: text=%q state=%q reason=%q", c.Text, c.State, c.Reason)
 		}
@@ -646,7 +646,7 @@ func TestCriterionEvolution(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if c := ListAcceptanceCriteria(checked)[0]; !c.Checked {
+		if c := listCriteria(t, checked)[0]; !c.Checked {
 			t.Errorf("rewording must not untick a met criterion: %+v", c)
 		}
 	})

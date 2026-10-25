@@ -333,7 +333,10 @@ func newTaskInfoCmd(app *App) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			ac := domain.CountAcceptanceCriteria(record.Value.Body)
+			ac, err := domain.CountAcceptanceCriteria(record.Value.Body)
+			if err != nil {
+				return err
+			}
 			path := ""
 			if app.Svc.HasLocalPath(core.EntityTask) {
 				resolved, err := app.Svc.TaskPath(record.Source.ID)
@@ -444,6 +447,11 @@ func newTaskAcCmd(app *App) *cobra.Command {
 			"Checkboxes in fenced code blocks are ignored, and a missing section or an " +
 			"out-of-range index is a validation error (exit 11) that rejects the whole " +
 			"request before writing, so a bad index never leaves a half-applied body.\n\n" +
+			"Use one level 2–6 `Acceptance criteria` heading (case-insensitive; parenthetical " +
+			"notes are allowed), or the legacy `Acceptance` alias. H1 document titles and " +
+			"narrative mentions are ignored. " +
+			"Duplicate sections or a nonstandard acceptance checklist refuse reads and edits " +
+			"with exit 11; use lint and explicitly repair the headings.\n\n" +
 			"A `tracked` criterion additionally REQUIRES --to <task>, the destination it was " +
 			"handed to. The reference is resolved to that task's stable id at write time and " +
 			"the id is what gets recorded, so a later rename of the destination cannot break " +
@@ -889,7 +897,9 @@ func newTransitionCmd(app *App, use, short string, to domain.Status) *cobra.Comm
 			"Refuses a task whose acceptance criteria are still unmet with no reason given —\n" +
 			"the task counterpart of `audit close` requiring terminal findings and complete parsing. A criterion\n" +
 			"carrying a state (`task ac --defer|--wontfix|--tracked|--na`) has been DECIDED and\n" +
-			"does not block; only a silently unticked box does. --force completes anyway."
+			"does not block; only a silently unticked box does. --force bypasses unmet criteria,\n" +
+			"never ambiguous criterion structure. Duplicate sections or a nonstandard acceptance\n" +
+			"checklist must be repaired first, including for previews and already-completed tasks."
 		cmd.Flags().BoolVar(&force, "force", false, "complete even with unmet, unexplained acceptance criteria")
 	}
 	return cmd

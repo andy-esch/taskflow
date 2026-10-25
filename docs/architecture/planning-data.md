@@ -116,6 +116,35 @@ See [record tests](../../internal/core/entity_read_test.go),
 [source-boundary tests](../../internal/core/thread_source_boundary_test.go) and
 [wire mappings](../../internal/wire/envelopes_test.go).
 
+## Criterion section selection
+
+[The domain selector](../../internal/domain/criterion_section.go) owns criterion
+structure for reads, edits, lint and lifecycle checks. Exactly one case-insensitive
+`Acceptance criteria` heading at level 2–6, optionally with parenthetical notes,
+or the legacy `Acceptance` alias selects a section; narrative mentions never shadow it.
+H1 document titles are never criterion sections, regardless of their text.
+Fenced headings are examples; deeper subsections remain inside a recognized section.
+The general-purpose `Section` helper retains its separate substring semantics.
+
+Multiple recognized sections are ambiguous. With none recognized, an acceptance
+heading directly containing a checklist requires explicit heading repair rather
+than a success-shaped zero tally. Domain readers return validation errors, criterion
+transforms refuse before effects under the existing CAS guard, and lint reports
+structural defects even on archived tasks. Raw body reads/replacement and editor
+repair remain available; there is no automatic Markdown migration.
+An ordinary child heading owns its checklist, not an unknown acceptance ancestor;
+repair diagnostics name the actual checklist-owning heading and line.
+
+Completion validates structure before same-status no-ops. Its `--force` can bypass
+known unmet criteria, not a structure the tool cannot interpret. The TUI retains
+the task body and shows an unavailable-criteria diagnostic instead of hiding the
+failure as 0/0. [Domain](../../internal/domain/criterion_section_test.go),
+[portable core](../../internal/core/criterion_section_test.go),
+[real CLI](../../internal/cli/task_criterion_section_test.go) and
+[TUI](../../internal/tui/criterion_section_test.go) regressions pin these boundaries.
+Machine revision/classification belongs to [wire](../../internal/wire/wire.go),
+not the persisted frontmatter schema.
+
 ## Capability binding and snapshots
 
 [NewService](../../internal/core/service.go) checks every selected planning-data
