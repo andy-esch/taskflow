@@ -38,8 +38,7 @@ func newAuditCreateForm(origin *core.Service, gen, session uint64, destination s
 	f := auditCreateForm{creationState: creationState{active: true, kind: entityAudits,
 		origin: origin, gen: gen, session: session, destination: destination}}
 	for i := range f.inputs {
-		f.inputs[i] = textinput.New()
-		f.inputs[i].Prompt, f.inputs[i].CharLimit = "", 0
+		f.inputs[i] = newCreationInput()
 	}
 	f.inputs[auditCreateArea].Placeholder = "Required: what is being reviewed"
 	f.inputs[auditCreateDate].Placeholder = "YYYY-MM-DD · blank uses today at creation"

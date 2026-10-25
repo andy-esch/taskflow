@@ -3,9 +3,14 @@ package tui
 import (
 	"fmt"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 )
+
+func init() {
+	creationBlinkSpeed = time.Millisecond
+}
 
 func createKey(m Model, key string) (Model, tea.Cmd) {
 	msg := press(key)
@@ -65,6 +70,9 @@ func settleCreationCommands(m Model, cmd tea.Cmd, budget int) (Model, error) {
 		inner := msg
 		if scoped, ok := inner.(sessionMsg); ok {
 			inner = scoped.msg
+		}
+		if creationWidgetMaintenance(inner) {
+			return m, nil
 		}
 		if widget, ok := inner.(creationWidgetMsg); ok && creationWidgetMaintenance(widget.msg) {
 			return m, nil

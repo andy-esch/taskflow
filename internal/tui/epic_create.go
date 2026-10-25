@@ -59,8 +59,7 @@ func newEpicCreateForm(origin *core.Service, gen, session uint64, destination st
 	f := epicCreateForm{creationState: creationState{active: true, kind: entityEpics,
 		origin: origin, gen: gen, session: session, destination: destination}}
 	for i := range f.inputs {
-		f.inputs[i] = textinput.New()
-		f.inputs[i].Prompt, f.inputs[i].CharLimit = "", 0
+		f.inputs[i] = newCreationInput()
 	}
 	f.inputs[epicCreateTitle].Placeholder = "Epic title"
 	f.inputs[epicCreateDescription].Placeholder = "Required: what this epic organizes"

@@ -92,9 +92,7 @@ func newTaskCreateForm(origin *core.Service, gen, session uint64, destination st
 	f := taskCreateForm{creationState: creationState{active: true, kind: entityTasks, gen: gen, session: session,
 		origin: origin, destination: destination}, epic: epic, initialEpic: epic}
 	for i := range f.inputs {
-		f.inputs[i] = textinput.New()
-		f.inputs[i].Prompt = ""
-		f.inputs[i].CharLimit = 0 // core owns validation; resizing never changes input
+		f.inputs[i] = newCreationInput()
 	}
 	f.inputs[taskCreateTitle].Placeholder = "Task title"
 	f.inputs[taskCreateTags].Placeholder = "comma-separated, at least one"
@@ -103,9 +101,8 @@ func newTaskCreateForm(origin *core.Service, gen, session uint64, destination st
 	f.inputs[taskCreateEffort].Placeholder = "Unknown (core default)"
 	f.inputs[taskCreateTier].Placeholder = "3 (core default)"
 	f.inputs[taskCreateAutonomy].Placeholder = "3 (core default)"
-	f.query = textinput.New()
+	f.query = newCreationInput()
 	f.query.Prompt = "Search epics: "
-	f.query.CharLimit = 0
 	return f
 }
 

@@ -50,7 +50,7 @@ type palette struct {
 }
 
 func newPalette() palette {
-	ti := textinput.New()
+	ti := newCreationInput()
 	ti.Prompt = "› "
 	ti.Placeholder = "jump to anything / run a command…"
 	ti.CharLimit = 64

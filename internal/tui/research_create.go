@@ -42,8 +42,7 @@ func newResearchCreateForm(origin *core.Service, gen, session uint64, destinatio
 	f := researchCreateForm{creationState: creationState{active: true, kind: entityResearch,
 		origin: origin, gen: gen, session: session, destination: destination}}
 	for i := range f.inputs {
-		f.inputs[i] = textinput.New()
-		f.inputs[i].Prompt, f.inputs[i].CharLimit = "", 0
+		f.inputs[i] = newCreationInput()
 	}
 	f.inputs[researchCreateTitle].Placeholder = "Research title"
 	f.inputs[researchCreateDescription].Placeholder = "Optional: a short summary"

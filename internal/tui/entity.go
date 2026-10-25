@@ -433,6 +433,11 @@ func newEntityTabs(st *styles) []*entityTab {
 		// Default filter is fuzzy (list.DefaultFilter); the prompt advertises the
 		// mode, which `F` toggles to substring at runtime.
 		l.FilterInput.Prompt = filterPrompt(false)
+		if creationBlinkSpeed > 0 {
+			styles := l.FilterInput.Styles()
+			styles.Cursor.BlinkSpeed = creationBlinkSpeed
+			l.FilterInput.SetStyles(styles)
+		}
 		l.SetShowHelp(false)
 		l.SetShowStatusBar(false)
 		// The embedded list must never quit the program itself: its default Quit

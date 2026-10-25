@@ -4,6 +4,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/cursor"
 	"charm.land/bubbles/v2/textinput"
@@ -12,6 +13,22 @@ import (
 	"github.com/andy-esch/taskflow/internal/core"
 	"github.com/andy-esch/taskflow/internal/domain"
 )
+
+// Zero keeps Bubbles' default ~530ms virtual-cursor blink in production;
+// package tests lower it so synchronous command settling and blink-continuation
+// checks do not sleep 530ms on every focus or edit.
+var creationBlinkSpeed time.Duration
+
+func newCreationInput() textinput.Model {
+	input := textinput.New()
+	input.Prompt, input.CharLimit = "", 0
+	if creationBlinkSpeed > 0 {
+		styles := input.Styles()
+		styles.Cursor.BlinkSpeed = creationBlinkSpeed
+		input.SetStyles(styles)
+	}
+	return input
+}
 
 // Staged creation shares primary-adapter mechanics, not an entity schema or
 // universal mutation port. Each form retains fixed-size widget structs,
