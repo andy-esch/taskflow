@@ -1,4 +1,4 @@
-FROM golang:1.26.10-bookworm
+FROM golang:1.27.3-bookworm
 
 # Tool installation and qualification must use the pinned compiler.
 ENV GOTOOLCHAIN=local
