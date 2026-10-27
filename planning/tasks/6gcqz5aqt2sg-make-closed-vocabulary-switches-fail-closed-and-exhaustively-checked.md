@@ -10,8 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [correctness, lint, testing]
 created: "2026-09-22"
-audit_sources: [planning/audits/6gch6xep2mh2-2026-09-22-correctness-and-errors.md, planning/audits/6g8zy840z6gj-2026-09-11-test-rigour.md, planning/audits/6gh1frgyz2fh-2026-10-06-adapter-hygiene.md]
-updated_at: "2026-10-23"
+audit_sources: [planning/audits/6gch6xep2mh2-2026-09-22-correctness-and-errors.md, planning/audits/6g8zy840z6gj-2026-09-11-test-rigour.md, planning/audits/6gh1frgyz2fh-2026-10-06-adapter-hygiene.md, planning/audits/6gqg5zc9yx5f-2026-10-26-arch-hexagonal-boundaries.md]
+updated_at: "2026-10-26"
 ---
 
 # Make closed-vocabulary switches fail closed and exhaustively checked
@@ -66,3 +66,5 @@ blanket suppressions.
 - Audit [2026-09-22 correctness and errors](../audits/6gch6xep2mh2-2026-09-22-correctness-and-errors.md), findings L1 and L2
 - Audit [2026-09-11 test rigour](../audits/6g8zy840z6gj-2026-09-11-test-rigour.md), finding M2
 - Audit [2026-10-06 adapter hygiene](../audits/6gh1frgyz2fh-2026-10-06-adapter-hygiene.md), finding L1
+
+Reinforced by audit 2026-10-26-arch-hexagonal-boundaries: L2. The epic transition table's destinations are already validity-checked by TestTransitionTablesValidStates; the uncovered half is coverage, and wire/schema_descriptions_test.go is the in-repo precedent for the assertion shape.
