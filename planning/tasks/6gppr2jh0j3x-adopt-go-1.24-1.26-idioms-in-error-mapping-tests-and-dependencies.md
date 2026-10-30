@@ -11,7 +11,7 @@ autonomy_level: 3
 tags: [modernization, go, testing]
 created: "2026-10-23"
 audit_sources: [planning/audits/6ga5dr4g73zq-2026-09-14-go-1-27-modernization.md]
-updated_at: "2026-10-23"
+updated_at: "2026-10-30"
 ---
 # Adopt Go 1.24-1.26 idioms in error mapping, tests, and dependencies
 
@@ -40,3 +40,5 @@ refactors: behavior and machine output must not change.
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
 - Audit [2026-09-14 Go 1.27 modernization](../audits/6ga5dr4g73zq-2026-09-14-go-1-27-modernization.md), findings H1, M5, L1, L2
 - Coordinate the watcher evidence with [watcher session binding](6gmbfxy96tpw-bind-tui-watcher-health-and-reload-messages-to-their-originating-session.md)
+
+Partially reinforced by audit 2026-10-30-simplification: M2. Two of this task's named idioms — `new(expr)` and `wg.Go` — are automated by the Go 1.26 `go fix` modernizers `newexpr` and `waitgroup`, which `go.mod`'s current 1.26.0 minimum already supports. `go fix -diff ./internal/core/... ./internal/store/...` additionally flags `stringsseq` and `slicescontains` sites in 10 production files that this task's hand-enumerated list does not include. Finding M2 stays open and proposes coordinating with this task rather than duplicating it; consider whether the site inventory should come from `go fix -diff` instead of a typed list.
