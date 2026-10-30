@@ -10,8 +10,8 @@ priority: medium
 autonomy_level: 3
 tags: [tui, threads, design]
 created: "2026-10-23"
-audit_sources: [planning/audits/6ga93gvffkpc-2026-09-15-adapter-hygiene.md]
-updated_at: "2026-10-23"
+audit_sources: [planning/audits/6ga93gvffkpc-2026-09-15-adapter-hygiene.md, planning/audits/6gqsr11m7krb-2026-10-27-adapter-hygiene.md]
+updated_at: "2026-10-27"
 ---
 # Stop branding readable broken-gate Thread members as unreadable
 
@@ -39,3 +39,5 @@ the broken record is a prerequisite that may not be on screen. A fix was approve
 - Epic [18-tui-bubble-tea-interactive-planning-browser](../epics/18-tui-bubble-tea-interactive-planning-browser.md)
 - Audit [2026-09-15 adapter hygiene](../audits/6ga93gvffkpc-2026-09-15-adapter-hygiene.md), findings M2 and L2
 - Thread [Refine Thread and TUI navigation](../threads/6g90h4pg0q7n-refine-thread-and-tui-navigation.md)
+
+Cross-referenced by audit 2026-10-27-adapter-hygiene: L1 (partial overlap, left open). That finding reports a second recomputed partition in three of the same files — `Role == core.RoleInFlight` at internal/tui/item.go:239, internal/tui/detail.go:1310 and internal/tui/thread_spatial.go:429, plus internal/cli/render/thread.go:206. It is adjacent to this task's 'one TUI helper over core state' criterion but is a different predicate from the readable/gate-sound pair, so it is scoped separately rather than folded into these acceptance criteria without a decision.
