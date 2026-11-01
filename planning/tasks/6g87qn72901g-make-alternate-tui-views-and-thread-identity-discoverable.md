@@ -11,7 +11,9 @@ autonomy_level: 3
 tags: [tui, threads, ux, navigation, discoverability]
 created: "2026-09-08"
 depends_on: [6g6dw5js81f3, 6g8vxcnezktm]
-updated_at: "2026-09-10"
+updated_at: "2026-11-01"
+audit_sources: [2026-11-01-weekly-task-sweep]
+audited: "2026-11-01"
 ---
 # Make alternate TUI views and Thread identity discoverable
 
@@ -67,3 +69,35 @@ global help.
 Follow the spatial prototype so all three Thread presentations are available as the first complete
 test case. It may proceed independently of dense edge routing and one-hop focus; coordinate only at
 the shared detail footer/view-discovery and action-target seams.
+
+## Sweep annotation (2026-11-01)
+
+AC4 (view discovery without global help) is **partially addressed** for Thread
+detail and is left unticked. The detail footer already advertises the next
+presentation: `view.go` appends `keyHint(keys.View, next)` whenever
+`m.detail.nextViewName()` is non-empty (`internal/tui/view.go` ≈L374–376,
+backed by `internal/tui/detail.go` ≈L364–370), and the `v` binding's help text
+is already "cycle this screen's alternate views" (`internal/tui/keys.go:68`).
+That surfaces only the *next* view, not the current view plus the full set of
+available ones, which is what AC4 asks for — hence no checkbox change.
+
+AC5 (reusable shell-level presentation contract) is **not met**, and the
+counter-example is specific: Thread detail goes through the generic
+`detailPane.nextViewName()` seam, while Atlas hardcodes its own view labels in
+the shell — `keyHint(keys.View, "spaces")` and `keyHint(keys.View, "work")` at
+`internal/tui/view.go:454` and `:463`, plus a literal
+`keys.View.Help().Key + " for spaces."` string at `internal/tui/atlas.go:1075`.
+These are the "bespoke labels in the Thread graph and Atlas renderers" the
+criterion names, so the Atlas half of AC4/AC5 is genuinely outstanding.
+
+Prerequisite note: `6g6dw5js81f3` (two-dimensional Thread graph prototype) is now
+**completed**, so all three Thread presentations the Sequencing section waits on
+are available; the remaining gate is `6g8vxcnezktm` (navigation reassessment,
+`next-up`).
+
+## Progress Log
+
+- 2026-11-01: automated weekly sweep — recorded that the detail footer already
+  advertises the next view generically while Atlas still hardcodes its view
+  labels (`view.go:454`/`:463`, `atlas.go:1075`), leaving AC4 partial and AC5
+  outstanding; prototype prerequisite has completed.

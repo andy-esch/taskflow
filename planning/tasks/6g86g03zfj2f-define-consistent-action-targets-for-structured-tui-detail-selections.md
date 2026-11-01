@@ -11,7 +11,9 @@ autonomy_level: 3
 tags: [tui, navigation, ux, architecture, threads]
 created: "2026-09-08"
 depends_on: [6g6dw5js81f3, 6g8vxcnezktm]
-updated_at: "2026-09-13"
+updated_at: "2026-11-01"
+audit_sources: [2026-11-01-weekly-task-sweep]
+audited: "2026-11-01"
 ---
 
 # Define consistent action targets for structured TUI detail selections
@@ -51,3 +53,30 @@ reusable by future structured entity presentations.
 - Coordinate with the
   [reusable TUI Back action](6g86016qvk5d-add-a-reusable-back-action-for-tui-entity-navigation.md)
 - Thread [Refine Thread and TUI navigation](../threads/6g90h4pg0q7n-refine-thread-and-tui-navigation.md)
+
+## Sweep annotation (2026-11-01)
+
+The task's founding premise re-verified as **still accurate**: there is no shared
+action-target resolver. Each binding resolves its own target independently in
+`internal/tui/model.go` — `keys.Edit` via `m.selectedTask()` / `m.selectedEpic()`
+/ `m.selectedRef()` (≈L928–951), `keys.Yank` via `m.selectedYankRef()` (L965),
+`keys.YankPath` via `m.yankSelectedPath()` (L968) — which is exactly the
+"root-model actions individually special-cased" condition AC2 asks to remove.
+
+Partial, unticked progress on AC3's second half: the `keys.Edit` path on a Thread
+with a structured child selection now explains itself rather than silently acting
+on the parent, emitting "no inline edit here — press E to edit in $EDITOR" and
+two sibling messages for the loading and no-local-path cases
+(`internal/tui/model.go` ≈L940–948). AC3 also requires footer/help text naming
+the operative target, which does not exist yet, so the criterion is left
+unchecked deliberately rather than judged met.
+
+Prerequisite note: `6g6dw5js81f3` (two-dimensional Thread graph prototype) is now
+**completed**, so the "Discovered while refining `y`" citation is historical; the
+remaining gate is `6g8vxcnezktm` (navigation reassessment, `next-up`).
+
+## Progress Log
+
+- 2026-11-01: automated weekly sweep — premise re-verified against current
+  `model.go`; recorded that AC3's self-explaining half has partially landed while
+  AC2's shared resolver has not, and that one of two prerequisites has completed.
