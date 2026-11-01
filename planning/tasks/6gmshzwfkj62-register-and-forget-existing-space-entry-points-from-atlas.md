@@ -3,7 +3,7 @@ schema: 1
 id: 6gmshzwfkj62
 status: ready-to-start
 epic: 18-tui-bubble-tea-interactive-planning-browser
-description: Let a user maintain the Atlas registry without leaving the TUI while preserving the distinction between a planning space and its registered entry points.
+description: Maintain the Atlas registry from inside the TUI while keeping a planning space distinct from its registered entry points.
 effort: 1-2 days
 tier: 2
 priority: high
@@ -11,7 +11,8 @@ autonomy_level: 3
 tags: [tui, authoring, ux]
 created: "2026-10-17"
 depends_on: [6gmshzw7we0m, 6gmy4c15aj30]
-updated_at: "2026-10-18"
+updated_at: "2026-11-01"
+audited: "2026-11-01"
 ---
 # Register and forget existing space entry points from Atlas
 
@@ -61,3 +62,14 @@ Initializing a planning repo, linking implementation repos, renaming labels, del
 - [Owning space_registry.go](../../internal/core/space_registry.go).
 - [Owning atlas.go](../../internal/tui/atlas.go).
 - [Owning model.go](../../internal/tui/model.go).
+
+## Progress Log
+
+- 2026-11-01: automated weekly sweep — all four cited refs verified accurate
+  (`internal/core/space_registry.go`, `internal/tui/atlas.go`,
+  `internal/tui/model.go`, the authoring Thread); no register/forget action
+  surface exists in `atlas.go` yet, so the task is unstarted rather than
+  partially shipped. Prerequisite `6gmshzw7we0m` (action contract) is now
+  **completed**; `6gmy4c15aj30` (confirmed-registration foundation) is still
+  `ready-to-start`, so the gate remains `blocked` and the Design-attention
+  sequencing still names the right owner.

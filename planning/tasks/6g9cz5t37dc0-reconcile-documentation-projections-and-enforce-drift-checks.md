@@ -11,7 +11,9 @@ autonomy_level: 4
 tags: [documentation, ci, agents, maintainability]
 created: "2026-09-12"
 depends_on: [6g63hjm7cp6w, 6g6x7e2ef37r, 6g9cz5sv6kck, 6ggxymjbf86r]
-updated_at: "2026-10-12"
+updated_at: "2026-11-01"
+audit_sources: [2026-11-01-weekly-task-sweep]
+audited: "2026-11-01"
 ---
 # Reconcile documentation projections and enforce drift checks
 
@@ -91,3 +93,53 @@ and example integration. Do not tick its broader criteria just because the extra
 ## External-review coverage handoff (2026-10-12)
 
 The extraction review fixed false-positive index/back-links (fences, inline code and bare mentions), wrapped link labels, and retained index anchors referenced by tasks/Threads. The new incoming-route check derives links from planning/tasks and planning/threads, not a duplicate heading inventory. Historical audits with source-line citations, routines, reference-style Markdown/HTML, full package inventory and semantic claim-to-test agreement remain outside that bounded guard. Check those deliberately in this reconciliation rather than claiming a green navigation test proves repository-wide or semantic fidelity. A nearby userconfig compiler-enforcement claim was corrected to the actual depguard rule; continue auditing package overviews under the sibling task.
+
+## Sweep annotation (2026-11-01)
+
+Citations re-verified: `docs/ARCHITECTURE.md` (the `## Planning-data change
+checklist` anchor at L58 resolves, as does `docs/architecture/planning-data.md`
+`## Change checklist` at L251), the bounded navigation test at
+`internal/tools/architecturecheck/architecture_test.go`, the ownership research
+and the owning Thread all exist. The body's claim that the repository has
+"neither `CLAUDE.md` nor `GEMINI.md`" still holds.
+
+AC3 inventory, measured rather than assumed — three of its four clauses have
+partial owners already, so it stays unticked:
+
+- Generated-docs freshness: **covered**. `docs-check: docs` runs
+  `git diff --exit-code docs/cli` (`Justfile` ≈L91) and CI invokes it
+  (`.github/workflows/ci.yml:53`) — but it checks `docs/cli` only, not the wider
+  projection set this task owns.
+- Package/import inventory freshness: **partially covered** by
+  `internal/tools/architecturecheck/imports_test.go`, `imports_cache_test.go`
+  and `imports_format_test.go` (prerequisite `6g63hjm7cp6w` is completed).
+- Proportionate internal-link check: **partially covered** by the bounded
+  `architecture_test.go` route check already described in the extraction handoff.
+- Compiling Go examples: **not covered**; still owned by the open prerequisite
+  `6g9cz5sv6kck` (`ready-to-start`).
+
+Prerequisite state: `6g63hjm7cp6w` and `6g6x7e2ef37r` are **completed**;
+`6g9cz5sv6kck` and `6ggxymjbf86r` remain `ready-to-start`, so `gate: blocked`
+is correct.
+
+### Routine policy conflict named in the Agent-routing handoff
+
+The handoff asks that `routines/weekly-task-sweep.md`'s tier/priority conflict be
+"resolved explicitly rather than silently choosing either instruction". That
+conflict is **still present** in the spec as of this run: the SCOPE block lists
+"any task's `status`, `tier`, `priority`, or scope" as forbidden with no
+exceptions, while step 8 says "Adjust `tier` / `priority` only if the urgency
+calculus has materially changed".
+
+This run resolved it by following the stricter SCOPE prohibition and wrote no
+`tier` or `priority` field on any task. That is a per-run choice, not the
+explicit resolution this criterion asks for — the spec text itself still needs
+one of the two instructions corrected by a human.
+
+## Progress Log
+
+- 2026-11-01: automated weekly sweep — citations re-verified; measured AC3's four
+  clauses against `Justfile`, CI and `internal/tools/architecturecheck/` (three
+  partially covered, Go-example compilation not); confirmed the sweep-spec
+  tier/priority conflict this task owns is still unresolved and recorded how this
+  run handled it.

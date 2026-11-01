@@ -3,7 +3,7 @@ schema: 1
 id: 6gmshzy2ppfb
 status: ready-to-start
 epic: 18-tui-bubble-tea-interactive-planning-browser
-description: Close the authoring Thread with a bounded, repeatable human workflow and accurate capability documentation rather than a collection of individually green forms.
+description: Close the authoring Thread with a bounded, repeatable human workflow and accurate capability docs, not a set of individually green forms.
 effort: half day
 tier: 2
 priority: medium
@@ -11,7 +11,8 @@ autonomy_level: 3
 tags: [tui, authoring, ux]
 created: "2026-10-17"
 depends_on: [6ffdv9g01q40, 6g321mybqvfz, 6g3cp32y9149, 6g4ym5y2dkp8, 6gmbfxy96tpw, 6gmshzwfkj62, 6gmshzwphadw, 6gmshzwxxce3, 6gmshzx55n1y, 6gmshzxchdzc, 6gmshzxksjcn, 6gmshzxvgagj]
-updated_at: "2026-10-18"
+updated_at: "2026-11-01"
+audited: "2026-11-01"
 ---
 # Prove routine TUI planning without CLI round trips
 
@@ -48,3 +49,13 @@ A new release, fixture/GIF restyling, full CLI parity, benchmarks or universal e
 - [Authoring capability boundary and sequencing](../threads/6gmshnmnew7p-enable-routine-planning-and-workspace-management-in-the-tui.md).
 - [Owning tui.md](../../docs/architecture/tui.md).
 - [Owning README.md](../../assets/README.md).
+
+## Progress Log
+
+- 2026-11-01: automated weekly sweep — cited refs verified accurate
+  (`docs/architecture/tui.md`, `assets/README.md`, the authoring Thread, and the
+  watcher/session closeout prerequisite). Closeout remains correctly gated: 2 of
+  12 prerequisites are `completed` (`6g4ym5y2dkp8` create-tasks-from-the-TUI,
+  `6gmshzwphadw` extend-creation-to-other-kinds); the other 10 are still
+  `ready-to-start`, so `gate: blocked` matches the body's sequencing. No scope or
+  framing drift found.
