@@ -9,8 +9,9 @@ autonomy_level: 3
 tags: [web, architecture, research]
 created: "2026-06-13"
 id: 6fbwhsw00a4b
-updated_at: "2026-09-06"
-audited: "2026-09-06"
+updated_at: "2026-11-08"
+audited: "2026-11-08"
+audit_sources: [2026-11-08-weekly-task-sweep]
 ---
 
 # Research doc: web companion directions (serve, shared core, GitHub-backed store)
@@ -127,6 +128,44 @@ read-only framing of that slice more important, not less.
 The `1-2 days` effort is unchanged: the deliverable is still a research doc, and
 these corrections are inputs to it rather than extra scope.
 
+> **Update 2026-11-08**: the count is now **31**, not 34 — `TaskStore` 9, `EpicStore` 7,
+> `AuditStore` 8, `ResearchStore` 7 (`internal/core/store.go:435`). The October
+> identity-binding refactor (`33d6284`, `a05faad`, `db7ad6b`, `84a58c9`) folded the
+> separate "selected" write methods into target-carrying signatures such as
+> `SetFields(target TaskMutationTarget, …)`, which is why the surface shrank without
+> losing capability. `ThreadStore` is still 2 methods, but now at `store.go:251`, not
+> `:137`. The conclusion is unchanged: 31 is still ~2.6× the "~12 methods" the task
+> assumes, so the bias toward a read-only `serve` first slice holds.
+
+## Sweep verification (2026-11-08)
+
+Automated weekly sweep. The deliverable is **still outstanding**: no web-companion
+research doc exists under `planning/research/` — nothing matching web, serve,
+companion or github. ACs 1–3 remain unmet and nothing is ticked. Epic
+`19-web-companion-apps-over-a-shared-core` is still `active` at 50% (1/2), so the
+committed project context has not moved either.
+
+Both substantive points from the 2026-09-06 block still stand, with the one number
+corrected in the blockquote above:
+
+- ADR-0003's flat, id-led layout is unchanged, so the "file moves on status changes"
+  half of the motivating concern stays retired, and the first clause (GitHub's flat
+  listing is a poor browsing UI for 300+ id-led filenames) is still live. The task
+  tree has grown to 459 files under `planning/tasks/`, which if anything strengthens
+  the `BOARD.md` baseline the task already names as the comparator.
+- `core.Store` is still far larger than the "~12 methods" the task assumes, and the
+  narrow `SummaryStore` / `Fixer` / `Linter` ports (1 method each, `store.go:444`,
+  `:450`, `:467`) sit beside it as before.
+
+One housekeeping defect in the prior block, recorded for re-checkability rather than
+actioned: it anchors its verification to "HEAD `84b3798`", which is not reachable in
+this repository (`git show 84b3798` → unknown revision). The same hash is cited by
+the 2026-09-06 blocks on `6g50ry3dhgw7` and `6g63jj1dh0sb` and by `6fes83r03rhs`.
+Sweep annotations should cite a date, or a hash that survives on `main`.
+
 ## Progress Log
 
 - 2026-09-06: automated weekly sweep — doc still unwritten; recorded that ADR-0003 retired the "file moves on status changes" premise and that `core.Store` is now 34 methods (+ThreadStore), not ~12.
+- 2026-11-08: automated weekly sweep — doc still unwritten; corrected the `core.Store`
+  surface from 34 to 31 methods and `ThreadStore` to `store.go:251`, and flagged that
+  the prior block's `84b3798` anchor is unreachable on `main`.

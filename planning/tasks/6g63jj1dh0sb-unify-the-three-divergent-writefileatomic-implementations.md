@@ -10,9 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [store, config, architecture, robustness]
 created: "2026-09-02"
-updated_at: "2026-09-06"
-audit_sources: [planning/audits/6g6qvrj15x97-2026-09-04-concurrency-and-atomicity.md]
-audited: "2026-09-06"
+updated_at: "2026-11-08"
+audit_sources: [planning/audits/6g6qvrj15x97-2026-09-04-concurrency-and-atomicity.md, 2026-11-08-weekly-task-sweep]
+audited: "2026-11-08"
 ---
 # Unify the three divergent writeFileAtomic implementations
 
@@ -136,6 +136,77 @@ review — the code did not grow, the task simply enumerated a subset.
 
 No acceptance criterion was ticked: none is demonstrably met.
 
+> **Update 2026-11-08**: the count is now **18**, not 14. The five new production call
+> sites are `fix_relocation.go:40`, `graphrepair.go:142`, `rename.go:102`,
+> `rename.go:132` and `rename.go:135`; `fix.go`'s write moved to `fix.go:137` and
+> `auditstore.go` to `:169`, `body.go` to `:79`, `create.go` to `:129`,
+> `epicstore.go` to `:155`/`:214`, `fsstore.go` to `:333`, `lifecyclemutation.go` to
+> `:135`, `researchstore.go` to `:201`, `threadmutation.go` to `:107`. AC 3's real
+> surface is therefore ~18 decisions and still growing at roughly one a month, which
+> makes the `4-6 hours` estimate harder to defend, not easier. Still left unchanged
+> pending human review.
+
+## Sweep verification (2026-11-08)
+
+Automated weekly sweep. The core premise is **fully intact**: three packages still
+define divergent unexported `writeFileAtomic` helpers, and the durability/symlink
+table in the Objective still matches the code exactly. Several line references have
+drifted and are corrected below; the call-site count is corrected in the blockquote
+above.
+
+### Line references — corrected against `main` at `ba6e95d`
+
+| Cited | Actual today | Note |
+| --- | --- | --- |
+| `store/atomic.go:48` | `atomic.go:48` | accurate — `writeFileAtomic`, `os.Stat` (not symlink-preserving) |
+| `store/atomic.go:68` (`syncDir`) | `atomic.go:68` | accurate — still store-only |
+| `config/config.go:1148` | **`config.go:1205`** | moved |
+| `config.go:1146–1147` (rationale) | **`config.go:1203`** | moved; text unchanged |
+| `userconfig/paths.go:71` | `paths.go:71` | accurate |
+| `userconfig/paths.go:70` (bad comment) | `paths.go:70` | accurate — AC 6 still unmet, comment verbatim |
+| `rename.go:119` | **`rename.go:102`/`:132`/`:135`** | moved; line 119 is now `testHookBeforeTaskRenameWrite` |
+| `graphmutation.go:100` | `graphmutation.go:100` | accurate |
+| `fix.go:92` / `fix.go:117` | **`fix.go:137`** | moved and consolidated to one write |
+| `threadapply.go:134` | `threadapply.go:134` | accurate |
+| `store/resolve.go:23` (`markdownDoc`) | `resolve.go:23` | accurate — still gates on `e.Type().IsRegular()` |
+
+### The exclusive-create family has grown — AC 8 now covers three functions
+
+AC 8 pins the semantics of `createFileAtomic` as "a CAS primitive, not just a
+writer". That claim re-verifies: the doc comment at `atomic.go:81` still states the
+exclusive create **is** the version-CAS `ifVersion == ""` precondition, and
+`cas.go:126` still branches on it.
+
+But `createFileAtomic` is now a thin wrapper. The implementation moved to
+`createFileAtomicWithMode` (`atomic.go:96`), with a second public-to-package entry
+point `createFileAtomicExactMode` (`atomic.go:92`) that preserves the source's
+effective permission bits for relocation, used at `fix_relocation.go:40` and
+`rename.go:135`. AC 8 should be read as covering all three, since unifying the writer
+must not disturb either the O_EXCL CAS precondition or the exact-mode guarantee.
+
+### The 2026-11-06 audit reaffirms this task as the tracker
+
+`planning/audits/6gv0qm4src7v-2026-11-06-concurrency-and-atomicity.md` reviewed
+`internal/store/atomic.go` independently and found the store side **clean** (L141–146:
+correct temp → fsync → chmod → rename → directory-fsync ordering, with
+`createFileAtomicWithMode` cleaning up partial new files). At L201–202 it names this
+task, `6g63jj1dh0sb`, as the destination for "`writeFileAtomic` replacing a symlink
+rather than its target". That is a second, independent confirmation that the
+unification is still wanted and that `store`'s missing symlink handling (AC 4) is the
+live half.
+
+Note that the audit's verdict and this task are not in conflict: the audit judges
+`store/atomic.go` correct *for its own stated contract*, while the task's complaint
+is that three contracts exist under one name and that `store`'s omits symlink
+preservation. Appending that audit to `audit_sources:` is left to human review, since
+this sweep only appends its own entry.
+
+No acceptance criterion ticked — none is demonstrably met.
+
 ## Progress Log
 
 - 2026-09-06: automated weekly sweep — all cited paths/lines re-verified against HEAD; flagged that AC 3 covers ~14 store call sites, not the 5 enumerated.
+- 2026-11-08: automated weekly sweep — premise and durability table re-verified;
+  corrected six drifted line refs, raised AC 3's call-site count from 14 to 18, noted
+  that AC 8 now spans three exclusive-create functions, and linked the 2026-11-06
+  concurrency audit that names this task as the symlink tracker.
