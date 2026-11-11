@@ -11,7 +11,8 @@ autonomy_level: 3
 tags: [tui, authoring, architecture, identity]
 created: "2026-10-18"
 depends_on: [6gmshzw7we0m]
-updated_at: "2026-10-18"
+updated_at: "2026-11-08"
+audited: "2026-11-08"
 ---
 # Guard forgetting a confirmed space registration against label reuse
 
@@ -56,3 +57,36 @@ new registry schema or persistent row IDs, and a generic confirmation/transactio
   [registry adapter](../../internal/spacestore/fs.go) and
   [guarded local registry writes](../../internal/userconfig/spaces.go).
 - [Atlas consumer](6gmshzwfkj62-register-and-forget-existing-space-entry-points-from-atlas.md).
+
+## Sweep verification (2026-11-08)
+
+Automated weekly sweep — first recorded audit for this task. The founding premise is
+**fully intact** and every cited path still exists.
+
+- `SpaceRegistryStore.ForgetSpace(id string, dryRun bool)`
+  (`internal/core/space_registry.go:19`) and `SpaceRegistryService.Forget`
+  (`space_registry.go:169`) still select by machine-local label only. No
+  expected-registration parameter exists anywhere on the port, so AC 1 is unmet.
+- The guarded adapter write matches the Evidence section exactly:
+  `userconfig.ForgetSpace` (`internal/userconfig/spaces.go:194`) takes
+  `lockRegistryForWrite` and then `readRegistry`, and its own doc comment states it
+  returns "the exact entry selected from the same snapshot used for the edit". That
+  protects the mutation's *receipt* from racing a second read, but it still never
+  compares that row against an entry a UI confirmed earlier — which is precisely the
+  gap this task describes. The distinction is worth keeping in view during
+  implementation, because the existing comment reads like the guarantee is already
+  there.
+- `internal/spacestore/fs.go` (147 lines) remains the registry adapter seam, and
+  `internal/core/space_registry.go` still performs no planning-tree reads — the
+  Catalog/Resolve/Forget trio is unchanged in shape.
+- Prerequisite `6gmshzw7we0m` (TUI authoring and workspace action contract) is
+  **completed** (2026-10-18) and `task blockers` reports `role: candidate`,
+  `gate: clear`, `eligible: true`. The task is startable, and its body makes no
+  contrary claim, so there is no prose/graph disagreement to record.
+
+No acceptance criterion ticked — none is demonstrably met.
+
+## Progress Log
+
+- 2026-11-08: automated weekly sweep — first audit; premise and all cited paths
+  verified accurate against current code, prerequisite confirmed completed.

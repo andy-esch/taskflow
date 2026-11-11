@@ -10,8 +10,9 @@ priority: medium
 autonomy_level: 3
 tags: [design, palette]
 created: "2026-08-29"
-updated_at: "2026-09-06"
-audited: "2026-09-06"
+updated_at: "2026-11-08"
+audited: "2026-11-08"
+audit_sources: [2026-11-08-weekly-task-sweep]
 ---
 # Resolve the CLI body palette from the terminal background
 
@@ -100,6 +101,44 @@ task wants to imitate is intact at `root.go:470–474`, so the recommended shape
 
 No acceptance criterion ticked — none is met.
 
+> **Update 2026-11-08**: the `root.go` line numbers in this table have drifted again —
+> the file is now 569 lines (was ~480). Current: the `setStyle` `WithPalette(a.Th.Dark)`
+> is `root.go:107` (was 101), the post-`config.Discover` re-skin is **`root.go:477`**
+> (was 407), the glamour markdown resolution is **`root.go:543`** (was 474), and the
+> LAZY comment is **`root.go:539`** (was 470–471), its text unchanged. `tui.go:36` and
+> `prompt/tty.go:142` are both still exact. Nothing moved in substance: both `a.Th.Dark`
+> sites and the lazy-markdown precedent are intact, so option 1 remains the right shape.
+
+## Sweep verification (2026-11-08)
+
+Automated weekly sweep. The premise is **still fully intact** — the CLI body palette
+is hardcoded to `a.Th.Dark` at both sites and remains the only surface that ignores
+the terminal background. The line references drifted a second time and are corrected
+in the blockquote above; `internal/cli/root.go` has absorbed ~90 lines since
+2026-09-06 without touching either `Th.Dark` call.
+
+The two sites, verified verbatim:
+
+- `root.go:107` — `render.NewStyle(wantColor(…)).…WithPalette(a.Th.Dark)` in
+  `setStyle`, immediately after `a.resolveTheme()`, whose own comment notes the repo
+  `[theme]` folds in later.
+- `root.go:477` — `a.Style = a.Style.WithPalette(a.Th.Dark)` in the
+  post-`config.Discover` re-skin, where the comment explains the re-skin exists so a
+  config-selected theme takes effect. Both are theme-aware and background-blind,
+  exactly as the Objective describes.
+
+The tradeoff the task says to settle first is also unchanged: `root.go:539–543` still
+resolves the markdown style lazily through
+`a.Th.For(lipgloss.HasDarkBackground(os.Stdin, os.Stdout)).Markdown`, with the LAZY
+comment the task quotes still present word for word. So the precedent the task wants
+to imitate is live, and AC 2's "no background query on the machine paths" is still
+the binding constraint rather than a hypothetical one.
+
+No acceptance criterion ticked — none is met.
+
 ## Progress Log
 
 - 2026-09-06: automated weekly sweep — premise re-confirmed; corrected three stale `root.go` line refs (352→407, 409→474, 405→470) after the 2026-09-05 cli churn.
+- 2026-11-08: automated weekly sweep — premise re-confirmed; corrected four `root.go`
+  line refs for the second time (101→107, 407→477, 474→543, 470→539) after October's
+  cli churn, with both `Th.Dark` sites unchanged in substance.

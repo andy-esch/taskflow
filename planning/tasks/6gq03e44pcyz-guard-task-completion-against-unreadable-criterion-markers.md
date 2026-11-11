@@ -10,6 +10,9 @@ priority: high
 autonomy_level: 2
 tags: [criteria, validation, lint, tui]
 created: "2026-10-24"
+updated_at: "2026-11-08"
+audit_sources: [2026-11-08-weekly-task-sweep]
+audited: "2026-11-08"
 ---
 # Guard task completion against unreadable criterion markers
 
@@ -59,3 +62,53 @@ Criterion-section selection, tracked-reason policy, bulk rewriting and TUI edito
 - [TUI criterion actions](6g3cp32y9149-let-the-tui-flip-an-acceptance-criterion.md): establish readable criteria before extending native authoring.
 - [Historical lint guard](6fpfcecdymca-structure-aware-body-mutation-and-metadata-reads.md): malformed-checkbox detection exists, but is currently diagnostic-only.
 - [Domain body policy](../../internal/domain/body.go) and [completion policy](../../internal/core/task_lifecycle.go).
+
+## Sweep verification (2026-11-08)
+
+Automated weekly sweep — first recorded audit. The defect **still reproduces** on a
+binary built from this checkout, and one part of it has been narrowed by code that
+landed the day after this task was filed.
+
+### Reproduction re-run (isolated planning tree outside this repo)
+
+A task whose canonical `## Acceptance criteria` section contains only
+`- [] intended criterion`:
+
+| Command | Result |
+| --- | --- |
+| `lint --json` | diagnoses `malformed acceptance checkbox "[]"` |
+| `lint` | exits **11** |
+| `task complete --dry-run` | `would move … -> completed`, exits **0** |
+
+The Reproduction section is therefore accurate as filed, and ACs 1–4 are all unmet.
+`LintAcceptanceCriteria` still says so in its own words at
+`internal/domain/body.go:712–714`: "malformed checkboxes and invalid states remain
+diagnostic-only here." The completion guard counts only `domain.UnexplainedCriteria`
+(`internal/core/task_lifecycle.go:329`), which enumerates canonical markers, so the
+malformed line is invisible to it.
+
+### What moved since 2026-10-24: the live gap is narrower than filed
+
+`fix(criteria): make section selection explicit and fail closed` (`67492d6`,
+2026-10-25 — the same repair whose self-review surfaced this task) added
+`malformedCheckbox` to the section-selection scan at
+`internal/domain/criterion_section.go:62–65`, so a malformed marker now marks its
+span as a checklist. Re-running the reproduction with the heading renamed to
+`## AcceptanceCriteria` confirms the consequence:
+
+- **non-canonical heading + malformed marker** → now fails closed on both
+  `task info` and `task complete --dry-run`: "unrecognized acceptance checklist
+  heading … rename it to `Acceptance criteria`".
+- **canonical heading + malformed marker** → still silently completable.
+
+The live hole is therefore exactly the canonical-heading case. That sharpens the
+Policy checkpoint rather than changing it: the detector is already trusted to
+*select* a section, so trusting it to *refuse a read* is a smaller step than it was
+when this was filed. Scope and ACs unchanged; recorded here rather than rewritten
+into the Reproduction section, which stays as filed.
+
+## Progress Log
+
+- 2026-11-08: automated weekly sweep — defect re-reproduced end to end; recorded
+  that the 2026-10-25 section-selection repair already fails closed for
+  non-canonical headings, narrowing the live gap to the canonical-heading case.
