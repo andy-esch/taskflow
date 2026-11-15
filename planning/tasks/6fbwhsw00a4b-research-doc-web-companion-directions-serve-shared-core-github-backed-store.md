@@ -9,8 +9,9 @@ autonomy_level: 3
 tags: [web, architecture, research]
 created: "2026-06-13"
 id: 6fbwhsw00a4b
-updated_at: "2026-09-06"
-audited: "2026-09-06"
+updated_at: "2026-11-15"
+audited: "2026-11-15"
+audit_sources: [2026-11-15-weekly-task-sweep]
 ---
 
 # Research doc: web companion directions (serve, shared core, GitHub-backed store)
@@ -127,6 +128,54 @@ read-only framing of that slice more important, not less.
 The `1-2 days` effort is unchanged: the deliverable is still a research doc, and
 these corrections are inputs to it rather than extra scope.
 
+> **Update 2026-11-15** (automated weekly sweep): the 34-method figure above no longer
+> matches the code — `Store` composes 31 (`TaskStore` 9 · `EpicStore` 7 · `AuditStore` 8 ·
+> `ResearchStore` 7) as of `5513c3d`, and `ThreadStore` has moved from `store.go:137` to
+> `:251`. The conclusion drawn here is unaffected. See the 2026-11-15 block below.
+
+## Sweep verification 2026-11-15
+
+Automated weekly sweep, re-checked against `main` (`5513c3d`).
+
+**The deliverable is still outstanding.** No web-companion research doc exists: the
+corpus is 35 docs under `planning/research/` and none covers this ground. Three mention
+adjacent material in passing —
+[`6ff3hpm000vp-tui-v2-feature-wins-decisions`](../research/6ff3hpm000vp-tui-v2-feature-wins-decisions.md),
+[`6ffdv9g00d53-task-storage-model-files-logs-or-versioned-db`](../research/6ffdv9g00d53-task-storage-model-files-logs-or-versioned-db.md)
+(the read-side seed epic 19 already names) and
+[`6ffdv9g01b6b-remote-planning-repos-backends-and-sync`](../research/6ffdv9g01b6b-remote-planning-repos-backends-and-sync.md)
+— but none is the doc AC 1 asks for. AC 1–3 all unmet; nothing ticked. `effort`
+(`1-2 days`) still fits a research doc and is unchanged.
+
+**Correction to the 2026-09-06 block's method count.** That block recorded `core.Store`
+as 34 methods (`TaskStore` 10 · `EpicStore` 7 · `AuditStore` 10 · `ResearchStore` 7).
+Counted directly against `5513c3d`, `Store` (`internal/core/store.go:435`) composes
+**31**:
+
+- `TaskStore` — 9 (`store.go:47`) · `EpicStore` — 7 (`:312`)
+- `AuditStore` — 8 (`:364`) · `ResearchStore` — 7 (`:406`)
+
+plus the separate `ThreadStore` — 2, now at **`store.go:251`** (the 2026-09-06 block
+cited `:137`), and the narrow `SummaryStore` (`:444`), `Fixer` (`:450`) and `Linter`
+(`:467`) ports beside it.
+
+The three-method difference is in `TaskStore` and `AuditStore`, both of which now take
+an explicit mutation target (`TaskMutationTarget` / `AuditMutationTarget`) on their
+field- and body-writing methods. The identity-binding commits that touched `store.go`
+between 2026-10-15 and 2026-10-20 (`db7ad6b`, `33d6284`, `84a58c9`) are the plausible
+cause — consolidating per-ref methods into target-bound ones. **This sweep could not
+confirm the exact transition:** the working clone is shallow (history begins
+2026-10-06), so the 2026-09-06 shape is not retrievable here. Either way the
+correction's direction is unchanged and the point stands — the port is ~2.5× the
+"~12 methods" the Ideas section assumes, so the bias toward a read-only
+`tskflwctl serve` first slice is if anything reinforced.
+
+**Unchanged from 2026-09-06:** the ADR-0003 correction still holds — storage is flat
+and id-led, `status` lives in frontmatter, and no lifecycle verb moves a file, so the
+Objective's "force file moves on status changes" clause remains retired while its
+GitHub-browsing clause survives.
+
 ## Progress Log
 
 - 2026-09-06: automated weekly sweep — doc still unwritten; recorded that ADR-0003 retired the "file moves on status changes" premise and that `core.Store` is now 34 methods (+ThreadStore), not ~12.
+- 2026-11-15: automated weekly sweep — doc still unwritten (35 research docs, none covering it); corrected the method count to 31 across the four `Store` interfaces (+`ThreadStore`, now `store.go:251`), with the shallow clone preventing confirmation of the 34→31 transition.

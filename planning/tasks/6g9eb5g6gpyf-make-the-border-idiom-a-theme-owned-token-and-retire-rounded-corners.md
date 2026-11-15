@@ -10,8 +10,9 @@ priority: high
 autonomy_level: 3
 tags: [tui, design, theme, chrome]
 created: "2026-09-12"
-audited: "2026-09-13"
-updated_at: "2026-09-13"
+audited: "2026-11-15"
+updated_at: "2026-11-15"
+audit_sources: [2026-11-15-weekly-task-sweep]
 ---
 # Make the border idiom a theme-owned token and retire rounded corners
 
@@ -95,6 +96,34 @@ deliberate choice. `miami-vice` now needs the same decision, and it is the theme
 whole point is the 80s idiom this task introduces. Widening a criterion is a scope
 change, so this sweep flagged it rather than editing it.
 
+> **Update 2026-11-15** (automated weekly sweep): this block's line references were
+> re-verified and remain exact, with one exception — the `newStyles` call sites recorded
+> above as `model.go:174,176`/`175,177` are now at `internal/tui/model.go:176,178`.
+
+## Sweep verification 2026-11-15
+
+Automated weekly sweep. Every code citation re-checked against `main` (`5513c3d`).
+
+**Verified accurate (2026-11-15):** all six literal border calls are unchanged —
+`RoundedBorder()` at `internal/tui/style.go:69,70,78,86,87` and `NormalBorder()` at
+`:93`. The frame-size comment AC 6 names is still at `style.go:55-57`, and its
+"border STYLES are theme-independent" claim is still at `:56-57`. `Theme.For()` still
+returns a `Palette` by value (`design/palette.go:100`) and `design/palette.go` still
+imports lipgloss (`:19`), so the design note's chosen approach holds unchanged.
+`latteAA` is still shared by exactly three themes — `neon` (`design/theme.go:201`),
+`catppuccin` (`:204`), `miami-vice` (`:209`) — confirming the 2026-09-13 correction.
+`newStyles` call sites in `tui.go:36,41` are exact.
+
+**Drifted — minor, line numbers only.** The `newStyles` call sites the 2026-09-13 block
+recorded as `model.go:175,177` are now at `internal/tui/model.go:176,178`. Substance
+unchanged: both are still `newStyles(design.Default().Dark)`.
+
+**Still open, unchanged:** no acceptance criterion is met — the border idiom is still
+per-call-literal, so nothing was ticked. AC 4's `catppuccin`-only framing still
+undercounts now that `miami-vice` shares `latteAA`; widening a criterion remains a
+scope change, so it stays flagged rather than edited.
+
 ## Progress log
 
 - 2026-09-13: automated weekly sweep — all six `RoundedBorder`/`NormalBorder` sites and the `style.go:57` comment re-verified; `latteAA` is now shared by three themes (`miami-vice` landed 2026-09-12), so the "put it on `Theme`, not `Palette`" argument strengthens and AC 4 undercounts.
+- 2026-11-15: automated weekly sweep — all citations re-verified against `5513c3d` (six border literals, the `style.go:55-57` frame comment, three-way `latteAA` sharing); the only drift is the `newStyles` call sites moving to `model.go:176,178`; AC 4 still undercounts `miami-vice`.

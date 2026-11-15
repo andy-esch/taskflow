@@ -10,6 +10,9 @@ priority: high
 autonomy_level: 2
 tags: [criteria, validation, lint, tui]
 created: "2026-10-24"
+updated_at: "2026-11-15"
+audit_sources: [2026-11-15-weekly-task-sweep]
+audited: "2026-11-15"
 ---
 # Guard task completion against unreadable criterion markers
 
@@ -59,3 +62,49 @@ Criterion-section selection, tracked-reason policy, bulk rewriting and TUI edito
 - [TUI criterion actions](6g3cp32y9149-let-the-tui-flip-an-acceptance-criterion.md): establish readable criteria before extending native authoring.
 - [Historical lint guard](6fpfcecdymca-structure-aware-body-mutation-and-metadata-reads.md): malformed-checkbox detection exists, but is currently diagnostic-only.
 - [Domain body policy](../../internal/domain/body.go) and [completion policy](../../internal/core/task_lifecycle.go).
+
+## Sweep verification 2026-11-15
+
+First automated weekly sweep of this task (no prior `audited:`). The reproduction was
+re-run with a binary built from `main` (`5513c3d`) against a throwaway planning tree
+outside this repository — no task in `planning/` was touched by the reproduction.
+
+**Verified accurate (2026-11-15) — the gap is still open, exactly as described.**
+With a canonical criterion section containing `- [] intended criterion`:
+
+| Surface | Observed |
+| --- | --- |
+| `task info --json` | `"ac":{"checked":0,"total":0}` — the intended criterion is invisible |
+| `lint --json` | diagnoses `malformed acceptance checkbox "[]"`, exits **11** |
+| `task complete --dry-run` | `would move … -> completed`, exits **0** |
+
+Code citations hold: `malformedCheckbox` exists at `internal/domain/body.go:768` and is
+consumed only by `LintAcceptanceCriteria` (`:715`, call site `:730`) and the
+section classifier `criterion_section.go:62` — it is still diagnostic-only and is not consulted by
+criterion enumeration. The completion guard reads
+`domain.UnexplainedCriteria` (`internal/core/task_lifecycle.go:329`, defined at
+`body.go:487`), which sees no unmet criteria, so the refusal at `task_lifecycle.go:355-358`
+never fires.
+
+**Finding — the reproduction understates the impact.** The Reproduction section records
+only that `--dry-run` permits completion ("No task was actually completed by the
+reproduction"). This sweep ran the real verb in the throwaway tree: `task complete`
+succeeded with exit 0 and wrote `status: completed`. The malformed marker is therefore
+not merely a preview-level gap; a task whose only intended criterion is unreadable can
+actually be completed. This strengthens AC 2 rather than changing it.
+
+**Detector conservatism — evidence for AC 3.** The current detector already behaves the
+way the Policy checkpoint asks. In the same throwaway tree, `- [-] dash marker`,
+`- [1] numeric marker` and a link-only bullet (`- see [docs](../y.md) …`) were all left
+alone — neither diagnosed nor counted as criteria — while `- [x ] trailing space in
+marker` was diagnosed as malformed and excluded from the tally (`checked:0, total:1`
+beside one valid criterion). So the `[1]`/`[-]`/Markdown-link edges AC 3 names are
+already safe today, and `[x ]` is a second instance of the same uncounted-but-diagnosed
+class as `[]`.
+
+**Nothing ticked.** AC 1 is owner-approval-gated and the policy is undecided, so no
+criterion was checked or given a state.
+
+## Progress log
+
+- 2026-11-15: automated weekly sweep — first audit; reproduction re-run on `5513c3d` in a throwaway tree and extended: the real `task complete` (not just `--dry-run`) completes a task whose only criterion is `- []`, and the detector is already conservative around `[-]`/`[1]`/links.

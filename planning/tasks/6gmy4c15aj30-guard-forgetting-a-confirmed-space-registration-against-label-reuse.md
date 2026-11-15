@@ -11,7 +11,8 @@ autonomy_level: 3
 tags: [tui, authoring, architecture, identity]
 created: "2026-10-18"
 depends_on: [6gmshzw7we0m]
-updated_at: "2026-10-18"
+updated_at: "2026-11-15"
+audited: "2026-11-15"
 ---
 # Guard forgetting a confirmed space registration against label reuse
 
@@ -56,3 +57,34 @@ new registry schema or persistent row IDs, and a generic confirmation/transactio
   [registry adapter](../../internal/spacestore/fs.go) and
   [guarded local registry writes](../../internal/userconfig/spaces.go).
 - [Atlas consumer](6gmshzwfkj62-register-and-forget-existing-space-entry-points-from-atlas.md).
+
+## Sweep verification 2026-11-15
+
+First automated weekly sweep of this task (no prior `audited:`). Every citation
+re-checked against `main` (`5513c3d`).
+
+**Verified accurate (2026-11-15) — the premise fully holds.** All three cited files
+exist: [registry service/port](../../internal/core/space_registry.go),
+[registry adapter](../../internal/spacestore/fs.go) and
+[guarded local registry writes](../../internal/userconfig/spaces.go). The removal path
+is still label-only at every layer:
+`SpaceRegistryService.Forget(id string, dryRun bool)` (`internal/core/space_registry.go:169`)
+→ `FS.ForgetSpace(id string, dryRun bool)` (`internal/spacestore/fs.go:85`)
+→ `userconfig.ForgetSpace(id string, dryRun bool)` (`internal/userconfig/spaces.go:194`).
+No parameter carries expected-registration evidence, and the `SpaceRegistryStore` port
+(`space_registry.go:15-20`) declares no selected-entry variant — a repository-wide search
+for `Expected`/`Selected` in the three cited files returns nothing. `Resolve` still
+re-looks-up by machine-local label (`space_registry.go:46`), which is exactly the
+re-resolution AC 1 wants replaced.
+
+**Dependency state.** `depends_on: [6gmshzw7we0m]`
+([define-the-tui-authoring-and-workspace-action-contract](6gmshzw7we0m-define-the-tui-authoring-and-workspace-action-contract.md))
+is now `completed` with 5/5 criteria met, so `task blockers` reports
+`role=candidate gate=clear eligible=True` and this task is startable. The body never
+claimed to be blocked, so there is no prose/graph contradiction to correct.
+
+**Nothing ticked.** No acceptance criterion is met; the guard does not exist yet.
+
+## Progress log
+
+- 2026-11-15: automated weekly sweep — first audit; premise fully verified against `5513c3d` (label-only `Forget` at all three layers, no expected-registration evidence anywhere in the port), and the prerequisite contract task is now completed so the gate is clear.
