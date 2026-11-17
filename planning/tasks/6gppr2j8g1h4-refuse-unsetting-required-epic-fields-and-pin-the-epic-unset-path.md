@@ -11,7 +11,7 @@ autonomy_level: 3
 tags: [core, validation, testing]
 created: "2026-10-23"
 audit_sources: [planning/audits/6g8zy840z6gj-2026-09-11-test-rigour.md]
-updated_at: "2026-10-23"
+updated_at: "2026-11-17"
 ---
 # Refuse unsetting required epic fields and pin the epic unset path
 
@@ -38,3 +38,5 @@ surface, make `TestService_NewEpic`'s failure table assert the predicate each ca
 - Epic [21-code-quality-architecture-hardening](../epics/21-code-quality-architecture-hardening.md)
 - Audit [2026-09-11 test rigour](../audits/6g8zy840z6gj-2026-09-11-test-rigour.md), findings M1 and L2
 - Precedent: [task-set follow-ups](6fbj87001d81-task-set-follow-ups-sentinels-unknown-keys-canonical-field-table.md)
+
+Cross-referenced by audit 2026-11-17-adapter-hygiene: M1 (partial overlap, left open). M1 reports that NewEpic defaults nothing while prepareTaskCreation (internal/core/service_task.go:966-982) defaults the task analog and states that rule explicitly, so both adapters replicate epic status/priority. Verified: `epic new --priority ""` exits 11 where the equivalent `task new` exits 0. This task does not own that change, but its third AC is already rewriting TestService_NewEpic's failure table — the natural home for a blank-input defaulting test. Scoping call for a human; no status or scope changed here.

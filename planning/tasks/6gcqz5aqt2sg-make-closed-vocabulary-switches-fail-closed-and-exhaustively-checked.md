@@ -11,7 +11,7 @@ autonomy_level: 3
 tags: [correctness, lint, testing]
 created: "2026-09-22"
 audit_sources: [planning/audits/6gch6xep2mh2-2026-09-22-correctness-and-errors.md, planning/audits/6g8zy840z6gj-2026-09-11-test-rigour.md, planning/audits/6gh1frgyz2fh-2026-10-06-adapter-hygiene.md, planning/audits/6gqg5zc9yx5f-2026-10-26-arch-hexagonal-boundaries.md, planning/audits/6gqsr11m7krb-2026-10-27-adapter-hygiene.md]
-updated_at: "2026-10-27"
+updated_at: "2026-11-17"
 ---
 
 # Make closed-vocabulary switches fail closed and exhaustively checked
@@ -70,3 +70,5 @@ blanket suppressions.
 Reinforced by audit 2026-10-26-arch-hexagonal-boundaries: L2. The epic transition table's destinations are already validity-checked by TestTransitionTablesValidStates; the uncovered half is coverage, and wire/schema_descriptions_test.go is the in-repo precedent for the assertion shape.
 
 Reinforced by audit 2026-10-27-adapter-hygiene: L2. The archived-task filter negation named in scope is `dropArchivedRecords` at internal/tui/commands.go:322; the domain-side owner to reuse is `domain.Status.IsActive` (internal/domain/status.go:81), whose `default: false` is the fail-closed behaviour the negation lacks.
+
+Cross-referenced by audit 2026-11-17-adapter-hygiene: L2 (partial overlap, left open). Scope item 5 and AC 7 already own the TUI epic/audit view tables and action.go:63's epicTransitions, so this run did not re-report them. L2 names two sites outside that scope which cannot be pinned to a domain vocabulary yet: editEnumOptions (internal/tui/edit.go:95) hardcodes the priority and tier/autonomy choice sets because validPriorities is unexported and the 1-5 bound lives only inside ValidateTier, and findingStatusOrder (internal/cli/render/render.go:823) re-declares domain.findingStatusSpecs' lifecycle order because FindingStatuses() sorts it alphabetically. Those need a new domain accessor, not a coverage test, so folding them in would widen this task's scope.
