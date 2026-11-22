@@ -10,9 +10,9 @@ priority: medium
 autonomy_level: 2
 tags: [architecture, integrity, store, design]
 created: "2026-09-07"
-updated_at: "2026-10-19"
-audited: "2026-09-20"
-audit_sources: [2026-09-20-weekly-task-sweep, planning/audits/6gc7jd9aq1q9-2026-09-21-arch-failure-and-recovery.md, planning/audits/6gn83987gt45-2026-10-19-arch-failure-and-recovery.md]
+updated_at: "2026-11-22"
+audited: "2026-11-22"
+audit_sources: [2026-09-20-weekly-task-sweep, planning/audits/6gc7jd9aq1q9-2026-09-21-arch-failure-and-recovery.md, planning/audits/6gn83987gt45-2026-10-19-arch-failure-and-recovery.md, 2026-11-22-weekly-task-sweep]
 ---
 # Define the next shared entity-integrity foundations
 
@@ -209,3 +209,84 @@ own implementation, so the linked unification task's premise holds.
 - 2026-09-20: automated weekly sweep — all six foundation links and all four newly observed questions re-verified against current code; Q3 narrowed to process-death recovery only; noted the completed shared-create-guard related link.
 
 Reinforced by audit 2026-10-19-arch-failure-and-recovery: M1. Q5's CLI-error-contract clause now has its per-branch inventory — three of eight WriteError recovery branches suppress the transient filesystem retry hint after durable work (exit.go:158-163, :176-181, :190-197); the dependency, graph-repair, lifecycle, thread-apply and thread-mutation branches do not, although all five receipts already carry Committed or an applied-prefix slice.
+
+## Sweep verification (2026-11-22)
+
+Automated weekly sweep against `main` (`6abe9de`). The 2026-09-20 block above is
+explicitly a historical capture; this one supersedes its line references only.
+`internal/` last changed 2026-10-25. **Two findings change what this design pass
+has left to reconcile; one symbol citation is stale.**
+
+**Finding 1 — Q5's entire referenced follow-up family has shipped.** Q5 says
+[strict task retry targeting](6gkmexz4vh23-bind-task-mutation-retries-to-strict-source-identities.md)
+"now owns a concrete correctness gap" and that this design pass "must not block
+that bounded production fix", then names three further reproduced drifts. **All
+four are now `completed`:**
+
+- `6gkmexz4vh23` bind-task-mutation-retries-to-strict-source-identities — completed
+- `6gkt3fphx1ts` pin-non-task-mutation-retries-to-selected-source-identities — completed
+- `6gkt3fpsfdd7` keep-graph-and-thread-retry-endpoints-fixed-during-replanning — completed
+- `6gkt3fq0pv26` preserve-selected-tui-task-identities-through-service-actions — completed
+
+So the "do not block the bounded fix" caveat is spent, and the selected-identity
+boundary Q5 asks this pass to reconcile with a shared retry contract is no longer a
+proposal to be sequenced around — it is shipped behaviour to be *described*. Q5's
+remaining undecided surface is the shared durability predicate, the rename carveout,
+the CLI error contract, and research's `ErrConflict`/ID-collision conflation. This
+narrows Q5 substantially; it does not resolve it. Left for human judgment rather
+than rewritten, since which of Q5's clauses survive is a scoping call.
+
+**Finding 2 — one symbol in Q3's survey list does not exist.** Q3 asks to "survey
+the remaining `Stat` preflights in `createEntityFile`, `materializeThreadCreation`,
+`materializeTaskLifecycleCreation`, and `repairInvalidID`". Three resolve:
+`createEntityFile` (`store/create.go:70`), `materializeThreadCreation`
+(`store/threadcreation.go:128`), `repairInvalidID` (`store/fix.go:224`).
+**`materializeTaskLifecycleCreation` matches nothing in the tree.** The lifecycle
+creation materializer is **`materializeCreateAndStart`**
+(`store/lifecyclemutation.go:235`), reached through
+`prepareTaskLifecycleMaterialization` (`:190`). Surveying Q3 against the named
+symbol would silently skip the lifecycle path, so the intended target is recorded
+here rather than left to the implementer to rediscover.
+
+> **Update 2026-11-22**: Q3's fourth survey target should read
+> `materializeCreateAndStart` (`internal/store/lifecyclemutation.go:235`);
+> `materializeTaskLifecycleCreation` has never existed under that name in this tree.
+> The other three symbols resolve as written. `verifyFixPath` is at
+> `internal/store/fix_relocation.go:82`.
+
+**Reconcile list — one entry is no longer open.** "Adapter-neutral repository lint
+diagnostics" (`6g5vm4efjcdv`) is `completed`. The 2026-10-04 progress entry below
+already records it as a completed input; noting it here so the bullet list itself is
+not read as outstanding work. The other six reconcile entries are all still open:
+frontmatter-schema ADR (`next-up`), reserved document-schema enforcement, bounded
+lock acquisition, atomic-write unification, markdown-durability reassessment, and
+`os.Root` containment (all `ready-to-start`).
+
+**Q1-Q4 re-verified, with refreshed line references:**
+
+| citation | 2026-09-20 | now |
+| --- | --- | --- |
+| `repositoryGuards.byRoot` | `lock.go:28` | **`lock.go:30-31`** |
+| `FS.writeLock` | `lock.go:103` | `lock.go:103` (exact) |
+| `checkedWriteLock` | `lock.go:111` | **`lock.go:115`** |
+| `createFileAtomicWithMode` | `atomic.go:96` | `atomic.go:96` (exact) |
+| `sweepStaleTemps` | `atomic.go` | `atomic.go:142` |
+
+Q1's two-tier split, Q2's un-evicted process-wide guard map, Q3's
+process-death-only residual window, and Q4's unfired conformance-suite trigger are
+all unchanged. The three-way atomic-write divergence underneath the linked
+unification task also still holds.
+
+**The 2026-10-19 M1 annotation re-verified.** Three of the `WriteError` recovery
+branches still suppress the transient filesystem retry hint after durable work —
+`createdErr` (`internal/cli/exit.go:163`), `planningErr` (`:180`), `renameErr`
+(`:197`) — and the dependency, graph-repair, lifecycle, thread-creation and
+thread-mutation branches still do not. The claim is intact; its cited ranges
+(`:158-163`, `:176-181`, `:190-197`) have each drifted by a few lines.
+
+No acceptance criterion was ticked: this is a design pass whose deliverable is the
+decision table and roadmap, and neither exists yet.
+
+## Progress Log
+
+- 2026-11-22: automated weekly sweep — Q5's four referenced retry follow-ups (`6gkmexz4vh23`, `6gkt3fphx1ts`, `6gkt3fpsfdd7`, `6gkt3fq0pv26`) are all completed, so its "do not block the bounded fix" caveat is spent; Q3's `materializeTaskLifecycleCreation` target does not exist and is actually `materializeCreateAndStart` (`lifecyclemutation.go:235`); adapter-neutral lint diagnostics in the reconcile list is completed; `lock.go` citations refreshed and the 2026-10-19 M1 branch inventory re-verified.

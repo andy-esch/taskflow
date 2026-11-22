@@ -3,15 +3,16 @@ schema: 1
 id: 6g95m4eyvf4k
 status: ready-to-start
 epic: 25-design-system-coherent-palette-and-selectable-themes
-description: Weigh the three web mockup board directions against the TUI, core.Board and core.Summary — data organization plus a more thoroughly 80s chrome — and document what transfers before deciding.
+description: Weigh the web mockup board directions against the TUI, core.Board and core.Summary — data organization and 80s chrome — and record what transfers.
 effort: M
 tier: 2
 priority: medium
 autonomy_level: 2
 tags: [tui, design, theme, ux, board]
 created: "2026-09-11"
-audited: "2026-09-13"
-updated_at: "2026-09-13"
+audited: "2026-11-22"
+updated_at: "2026-11-22"
+audit_sources: [2026-09-13-weekly-task-sweep, 2026-11-22-weekly-task-sweep]
 ---
 # Mine the web mockup directions for the TUI: data organization and a more 80s chrome
 
@@ -236,3 +237,64 @@ completable.
 ## Progress log
 
 - 2026-09-13: automated weekly sweep — the `latteAA` light-variant guardrail was answered by shipped code (`miami-vice`, 2026-09-12); two axis-B items are now filed as tasks; `segBar`/`twoPane` line citations refreshed. Flagged as possibly completable.
+
+## Sweep audit 2026-11-22
+
+Automated weekly sweep against `main` (`6abe9de`). The 2026-09-13 block above ran
+against `1ca31b9`; `internal/` last changed 2026-10-25. **No claim in this task
+has been invalidated. One citation is wrong in a way that matters, and seven
+others moved.**
+
+**One citation is substantively wrong, not just drifted.** Axis B item 2 says
+"`RoundedBorder()` is hardcoded in six places in `newStyles`
+(`style.go:69,70,78,86,87,93`)". There are **five** `RoundedBorder()` literals
+(`style.go:69,70,78,86,87`); `style.go:93` is `editAreaBox`, which uses
+`lipgloss.NormalBorder()`. So the border inventory is six hardcoded border
+literals of **two** kinds, not six rounded ones. The sibling task this item spun
+out to —
+[make-the-border-idiom-a-theme-owned-token-and-retire-rounded-corners](6g9eb5g6gpyf-make-the-border-idiom-a-theme-owned-token-and-retire-rounded-corners.md)
+— already records the split correctly, so only this task's copy is inaccurate.
+Left as-is rather than rewritten: the count is load-bearing for nothing here, and
+the owning task has it right.
+
+> **Update 2026-11-22**: item 2's "six places" is five `RoundedBorder()` sites plus
+> one `NormalBorder()` site (`style.go:93`, `editAreaBox`). The argument — that the
+> border idiom is hardcoded in `newStyles` and cannot be themed — is unaffected and
+> if anything broader, since a second border *kind* is hardcoded too.
+
+**Drifted citations (code moved under them, claims still true):**
+
+| citation | 2026-09-13 | now |
+| --- | --- | --- |
+| `overlay()` | `help.go:349` | **`help.go:350`** |
+| `relDateCells` | `column.go:14` | **`column.go:25`** |
+| `segBar` in `item.go` | `:437` | **`:436`** |
+| `segBar` in `detail.go` | `:841`, `:1702` | **`:845`, `:1730`** |
+| `sortEligibleFirst` | `board.go:84-87` | **`board.go:87`** (declaration) |
+| borders comment | `style.go:57` | **`style.go:55-56`** (within the 55-57 range the sibling task uses) |
+
+**Verified accurate (2026-11-22):** `core.Board` still has exactly one consumer and
+it is still `internal/cli/board.go:20` (`app.Svc.Board()`, the only call to
+`Service.Board` in the tree) — so **the board still has no TUI surface at all**, the
+one structural idea the mockups contribute. `Board.Blocked` is still
+`map[string]bool` (`core/board.go:29`), so naming the gating edge still means
+widening the projection. `taskDelegate.Height()` is still `1` (`item.go:74`), so the
+two-line-card tradeoff stands. `twoPane` is still `>= 90` (`view.go:39`). `overlay()`
+still composes via `lipgloss.NewCompositor`, so the drop-shadow argument holds.
+`TestChromeSurfaceContrastAA` is still at `design_test.go:316` and still loops the
+registry. `miami-vice` is still `Theme{Name: "miami-vice", Dark: miamiViceDark,
+Light: latteAA}` at `design/theme.go:209`, with the deliberate-`latteAA` rationale
+at `:205-208`. `Palette.Gradient` is still a `[]Hue` stop list
+(`design/palette.go:75`).
+
+**Criterion 5 is still the only thing genuinely outstanding, and it has not moved
+in ten weeks.** Both axis-B items the September sweep recorded as filed —
+border idiom and modal drop shadow — are still `ready-to-start`, so the de facto
+"takes" are still unfiled as explicit take/defer/reject marks in this body.
+Criteria 1-4 remain satisfied by the write-ups above; criterion 6 (no code changed)
+holds for this sweep too. No box was ticked: whether the body *is* the deliverable
+is the author's call. Re-flagged as possibly completable.
+
+## Progress log
+
+- 2026-11-22: automated weekly sweep — corrected axis-B item 2's border inventory (five `RoundedBorder()` + one `NormalBorder()`, not six rounded); refreshed six drifted citations; re-verified that `core.Board` still has one consumer and no TUI surface; criterion 5 still the only outstanding one, re-flagged as possibly completable.
