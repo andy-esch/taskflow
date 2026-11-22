@@ -4,15 +4,15 @@ id: 6g63jj1dh0sb
 status: ready-to-start
 epic: 21-code-quality-architecture-hardening
 description: store/config/userconfig each define writeFileAtomic with different durability and symlink guarantees; unify behind a foundations package
-effort: 4-6 hours
+effort: 1-2 days
 tier: 2
 priority: medium
 autonomy_level: 3
 tags: [store, config, architecture, robustness]
 created: "2026-09-02"
-updated_at: "2026-09-06"
-audit_sources: [planning/audits/6g6qvrj15x97-2026-09-04-concurrency-and-atomicity.md]
-audited: "2026-09-06"
+updated_at: "2026-11-22"
+audit_sources: [planning/audits/6g6qvrj15x97-2026-09-04-concurrency-and-atomicity.md, 2026-09-06-weekly-task-sweep, 2026-11-22-weekly-task-sweep]
+audited: "2026-11-22"
 ---
 # Unify the three divergent writeFileAtomic implementations
 
@@ -139,3 +139,75 @@ No acceptance criterion was ticked: none is demonstrably met.
 ## Progress Log
 
 - 2026-09-06: automated weekly sweep — all cited paths/lines re-verified against HEAD; flagged that AC 3 covers ~14 store call sites, not the 5 enumerated.
+
+## Sweep verification (2026-11-22)
+
+Automated weekly sweep, re-checked against `main` (`6abe9de`). The last change to
+`internal/` was 2026-10-25; the 2026-09-06 sweep above ran against `84b3798`.
+**Every substantive claim still holds. The line references moved and the call-site
+count grew.**
+
+**Verified accurate (2026-11-22) — the Objective's guarantee table is unchanged:**
+`store/atomic.go`'s `writeFileAtomic` (`:48`) still resolves via `os.Stat` (`:49`,
+so no symlink preservation) and still calls `syncDir` (`:68`) after the rename.
+`config` and `userconfig` still both resolve via their own
+`atomicWriteDestination` (`config.go:1237`, `userconfig/paths.go:100`) and neither
+fsyncs the directory. The three-way divergence is intact, so the premise of every
+criterion stands.
+
+**Verified accurate:** the inaccurate comment AC 6 names is still at
+`userconfig/paths.go:70`, verbatim — "Mirrors store/atomic.go's contract for the
+planning tree". AC 6 remains unmet. `markdownDoc`'s `e.Type().IsRegular()` gate,
+which keeps the symlink divergence latent, is still there (`store/resolve.go:24`,
+one line down from the `:23` recorded in September).
+
+**Line references that drifted (claims unaffected):**
+
+| citation | September | now |
+| --- | --- | --- |
+| `config` `writeFileAtomic` | `config.go:1148` | **`config.go:1205`** |
+| `config`'s "can't import store" rationale | `config.go:1146-1147` | **`config.go:1203-1204`** |
+| `markdownDoc` | `resolve.go:23` | **`resolve.go:24`** |
+| bulk: `rename.go` | `:119` | **`:102`, `:132`, `:135`** |
+| bulk: `fix.go` | `:92` and `:117` | **`:137` only** |
+| bulk: `graphmutation.go` | `:100` | `:100` (exact) |
+| bulk: `threadapply.go` | `:134` | `:134` (exact) |
+
+`config.go` additionally carries a **second** copy of the same rationale at
+`:1259`, on `createFileAtomic` — so the comment the Objective quotes once now
+appears twice.
+
+**The AC 3 surface grew again: 14 → 18 production call sites.** The September sweep
+counted fourteen `writeFileAtomic`/`createFileAtomic` call sites inside `store`.
+There are now **eighteen** (excluding `atomic.go` itself and all `_test.go`):
+`auditstore.go:169`, `body.go:79`, `create.go:129`, `edit.go:133`,
+`epicstore.go:155`, `epicstore.go:214`, `fix.go:137`, `fix_relocation.go:40`,
+`fsstore.go:333`, `graphmutation.go:100`, `graphrepair.go:142`,
+`lifecyclemutation.go:135`, `rename.go:102`, `rename.go:132`, `rename.go:135`,
+`researchstore.go:201`, `threadapply.go:134`, `threadmutation.go:107`. The two
+files that are new to the list are `fix_relocation.go` and `graphrepair.go`.
+
+**AC 8's surface widened too, and this is the one framing change worth a human
+look.** AC 8 protects "`store`'s exclusive-create path (`createFileAtomic`, which
+carries the version-CAS `ifVersion == ""` precondition)". `createFileAtomic` is now
+a **one-line wrapper**: the implementation is `createFileAtomicWithMode`
+(`atomic.go:96`) and there is a second public-to-the-package entry point,
+`createFileAtomicExactMode` (`atomic.go:92`), which chmods the destination to the
+source's exact bits and is used by the two relocation paths (`rename.go:135`,
+`fix_relocation.go:40`). The `ifVersion == ""` CAS comment is still on
+`createFileAtomic` (`atomic.go:81`, paired with `cas.go:126`), so the guarantee AC 8
+names is unchanged — but "keeps its current semantics exactly" now covers three
+entry points with two mode policies rather than one function.
+
+**`effort` raised `4-6 hours` → `1-2 days`.** AC 3 requires a recorded guarantee
+decision per call site. That is 18 decisions plus three create entry points, not
+the five the Objective enumerates. The September sweep flagged the undercount and
+left the estimate pending human review; the surface has since grown by four more
+call sites, so the estimate is now corrected rather than re-deferred. Scope is
+unchanged — only the estimate.
+
+No acceptance criterion was ticked: none is demonstrably met.
+
+## Progress Log
+
+- 2026-11-22: automated weekly sweep — guarantee table and AC 6 re-verified against `6abe9de`; refreshed six drifted citations (`config.go:1148→1205`, rationale `1146-1147→1203-1204`, `resolve.go:23→24`, `rename.go:119→102/132/135`, `fix.go:92`+`117`→`137`); store call sites 14 → 18; flagged that AC 8 now spans three create entry points; effort raised to 1-2 days on the measured AC 3 surface.
