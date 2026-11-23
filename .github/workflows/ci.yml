@@ -30,7 +30,7 @@ jobs:
         id: go
         uses: actions/setup-go@v7
         with:
-          go-version: "1.26"
+          go-version: "1.27"
           # Without this, setup-go keeps the runner image's PREINSTALLED Go when it
           # satisfies the "1.26" range, instead of fetching the newest patch. That
           # silently pins CI to a stale patch release — which govulncheck then reports
@@ -101,7 +101,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v7
         with:
-          go-version: "1.26"
+          go-version: "1.27"
           check-latest: true
           cache-dependency-path: go.sum
 
