@@ -11,7 +11,7 @@ autonomy_level: 3
 tags: [architecture, docs, adr]
 created: "2026-10-03"
 depends_on: [6gcwcf8rxe72]
-updated_at: "2026-10-03"
+updated_at: "2026-11-23"
 ---
 ## Objective
 
@@ -56,3 +56,5 @@ The composition extraction now provides a concrete baseline rather than a broad 
 
 - A package/module rewrite or new product feature.
 - Accepting an ADR without the user's sign-off.
+
+Cross-referenced by audit 2026-11-23-arch-hexagonal-boundaries: M1 (partial overlap, left open). The 2026-09-28 run recorded this task as the home for the missing layering ADR; M1 is the enforcement half and is filed separately rather than folded in. Evidence for whoever writes the policy: of 28 packages under internal/ and cmd/, only eleven match a depguard rule, and two of those (internal/config, internal/appwiring) carry a narrow single-package deny rather than a catch-all. A policy that states "secondary adapters are driven, never driving" would today be unenforceable for the six packages it most describes.

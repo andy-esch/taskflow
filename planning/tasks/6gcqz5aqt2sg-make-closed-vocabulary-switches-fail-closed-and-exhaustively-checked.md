@@ -11,7 +11,7 @@ autonomy_level: 3
 tags: [correctness, lint, testing]
 created: "2026-09-22"
 audit_sources: [planning/audits/6gch6xep2mh2-2026-09-22-correctness-and-errors.md, planning/audits/6g8zy840z6gj-2026-09-11-test-rigour.md, planning/audits/6gh1frgyz2fh-2026-10-06-adapter-hygiene.md, planning/audits/6gqg5zc9yx5f-2026-10-26-arch-hexagonal-boundaries.md, planning/audits/6gqsr11m7krb-2026-10-27-adapter-hygiene.md]
-updated_at: "2026-11-17"
+updated_at: "2026-11-23"
 ---
 
 # Make closed-vocabulary switches fail closed and exhaustively checked
@@ -72,3 +72,5 @@ Reinforced by audit 2026-10-26-arch-hexagonal-boundaries: L2. The epic transitio
 Reinforced by audit 2026-10-27-adapter-hygiene: L2. The archived-task filter negation named in scope is `dropArchivedRecords` at internal/tui/commands.go:322; the domain-side owner to reuse is `domain.Status.IsActive` (internal/domain/status.go:81), whose `default: false` is the fail-closed behaviour the negation lacks.
 
 Cross-referenced by audit 2026-11-17-adapter-hygiene: L2 (partial overlap, left open). Scope item 5 and AC 7 already own the TUI epic/audit view tables and action.go:63's epicTransitions, so this run did not re-report them. L2 names two sites outside that scope which cannot be pinned to a domain vocabulary yet: editEnumOptions (internal/tui/edit.go:95) hardcodes the priority and tier/autonomy choice sets because validPriorities is unexported and the 1-5 bound lives only inside ValidateTier, and findingStatusOrder (internal/cli/render/render.go:823) re-declares domain.findingStatusSpecs' lifecycle order because FindingStatuses() sorts it alphabetically. Those need a new domain accessor, not a coverage test, so folding them in would widen this task's scope.
+
+Cross-referenced by audit 2026-11-23-arch-hexagonal-boundaries: M2 (partial overlap, left open). Same remedy as the findingStatusOrder site this task already scoped out in its 2026-11-17 note — a domain accessor, not a coverage test — at a different and less protected site. internal/core/finding.go:38 declares `actionableStatuses = []string{"open","in-progress"}` claiming to be "the single definition of actionable", and :55-59 re-switches on the same two literals, while domain already publishes the complement as TerminalFindingStatus (internal/domain/finding.go:478) over the canonical map at :483. Unlike findingStatusOrder, whose set is pinned both ways by internal/cli/render/render_test.go:28-51, neither core spelling appears in any test. The exhaustive analyzer planned in AC 5 cannot reach either site: it requires an enumerated type with constant cases, and domain.Finding.Status is a bare string (internal/domain/finding.go:20).

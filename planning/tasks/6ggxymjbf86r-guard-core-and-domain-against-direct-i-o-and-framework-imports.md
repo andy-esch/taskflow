@@ -11,7 +11,7 @@ autonomy_level: 3
 tags: [architecture, lint, tests]
 created: "2026-10-05"
 depends_on: [6gg7e59mm68g]
-updated_at: "2026-10-05"
+updated_at: "2026-11-23"
 ---
 # Guard core and domain against direct I/O and framework imports
 
@@ -63,3 +63,5 @@ production imports comply; this is an enforcement gap, not a discovered runtime 
 - [ ] Contributor guidance identifies the implemented enforcement, its limits,
   and the governing ADR without claiming behavioral or security guarantees from
   import checks.
+
+Cross-referenced by audit 2026-11-23-arch-hexagonal-boundaries: M1 (partial overlap, left open). This task covers the *vertical* purity of core/domain (standard-library effect packages and third-party frameworks). M1 names the orthogonal gap: fifteen production packages — the six-package secondary-adapter family, five presentation leaves, and four pure foundations — match no depguard rule at all, so the outward direction (a secondary adapter importing a primary adapter) has no fitness function and is caught only by the descriptive internal-import-map tripwire. depguard's own README documents the mechanism this would use (an `$all`-scoped shared list), which is absent from .golangci.yml. Folding it in would widen this task from "make core/domain pure" to "make every package import-ruled".
