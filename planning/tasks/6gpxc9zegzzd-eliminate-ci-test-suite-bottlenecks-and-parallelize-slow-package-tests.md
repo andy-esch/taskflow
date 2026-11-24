@@ -10,7 +10,7 @@ priority: high
 autonomy_level: 4
 tags: [ci, testing, performance, tui, domain]
 created: "2026-10-24"
-updated_at: "2026-10-24"
+updated_at: "2026-11-24"
 started_at: "2026-10-24"
 ---
 
@@ -92,3 +92,5 @@ Reduce the CI `Tests` job runtime (`go test -p 4 -race -coverprofile=coverage.ou
 ## Progress Log
 
 - 2026-10-24: Completed Slice 1 (`internal/tui` cursor-blink settling). Added `newCreationInput()` with configurable `creationBlinkSpeed` (1ms in package tests; 0/default ~530ms in production) and stopped unwrapped maintenance ticks in `settleCreationCommands`, dropping `go test -race -count=1 ./internal/tui` from `208.63s` to `37.58s` locally while keeping `TestCreationHiddenWidgetKeepsBlinkContinuation` and `TestCreationHarnessStopsMaintenanceAndBoundsWork` verifying real `cursor.BlinkMsg` continuation.
+
+Cross-referenced by audit 2026-10-26-arch-hexagonal-boundaries: L1 (partial overlap, left open). Slice 1 of this task introduced `creationBlinkSpeed` (internal/tui/staged_creation.go:20) as a mutable package global, read by two production constructors (`newCreationInput` and the entity-registry input builder at internal/tui/entity.go:436) and written only by tests, including a package-wide `init()` in staged_creation_helpers_test.go:11. That finding reports it as the one mutable package-level var across internal/cli, internal/tui and internal/configui, and as a standing obstacle to this task own Slice 4 (`t.Parallel()` in internal/tui): adopting parallelism there under -race requires carrying the blink speed on the widget struct or a textinput factory first. Re-verified live at 2026-11-24 HEAD. Scoped separately rather than folded into these acceptance criteria.
