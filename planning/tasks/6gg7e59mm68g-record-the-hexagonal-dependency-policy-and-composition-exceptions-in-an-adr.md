@@ -11,7 +11,7 @@ autonomy_level: 3
 tags: [architecture, docs, adr]
 created: "2026-10-03"
 depends_on: [6gcwcf8rxe72]
-updated_at: "2026-11-23"
+updated_at: "2026-11-24"
 ---
 ## Objective
 
@@ -58,3 +58,5 @@ The composition extraction now provides a concrete baseline rather than a broad 
 - Accepting an ADR without the user's sign-off.
 
 Cross-referenced by audit 2026-11-23-arch-hexagonal-boundaries: M1 (partial overlap, left open). The 2026-09-28 run recorded this task as the home for the missing layering ADR; M1 is the enforcement half and is filed separately rather than folded in. Evidence for whoever writes the policy: of 28 packages under internal/ and cmd/, only eleven match a depguard rule, and two of those (internal/config, internal/appwiring) carry a narrow single-package deny rather than a catch-all. A policy that states "secondary adapters are driven, never driving" would today be unenforceable for the six packages it most describes.
+
+Cross-referenced by audit 2026-10-26-arch-hexagonal-boundaries: M3 (partial overlap, left open). This task scopes "source-set checks" in the policy it records; M3 reports the enforcement half, which is not covered here. `validateSourceSets` (internal/core/service.go:408-430) checks a hand-typed slice of 20 `{name, value}` pairs, while `Service` carries 21 interface-typed capability fields — `templates` (TemplateSource) is silently exempt, and the construction test at source_set_test.go:63-96 enumerates the options by hand too, so it grows the same blind spot. The exemption is correct today (builtinTemplates addresses no corpus) but indistinguishable from an omission, and epic 22 repo-local template source would land in that exempt slot. Re-verified live at 2026-11-24 HEAD: 20 rows listed, 21 fields present. The finding proposes the policy record state that the witness requirement applies to every independently injectable planning-data capability, with explicit justified exemptions and checked rather than maintained coverage; the reflection-based coverage test itself is filed separately.
